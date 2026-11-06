@@ -8,7 +8,7 @@ All notable changes to Device Inspector are documented in this file.
 
 ### Fixed
 
-- Stop `Invoke-DeviceInspector.ps1` after the first error. A device name that is not valid gave a second error from the report step.
+- Check the input of `Invoke-DeviceInspector.ps1` first. A device name that is not valid stops the script with one message, the same text as the window, and exit code 1. Before, a second error came from the report step.
 
 ## [2026.11.06.0001] - 2026-11-06
 

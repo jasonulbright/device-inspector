@@ -70,10 +70,14 @@ param (
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
 
 $strModulePath = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath 'Module') -ChildPath 'DeviceInspectorCommon.psd1'
 Import-Module -Name $strModulePath -Force -ErrorAction Stop
+
+$objInputCheck = Test-DeviceInspectorInput -ComputerName $ComputerName -SiteServer $SiteServer -SiteCode $SiteCode
+if (-not $objInputCheck.IsValid) {
+    throw ($objInputCheck.Errors -join ' ')
+}
 
 $hashtableArgument = @{ ComputerName = $ComputerName }
 foreach ($strName in @('SiteServer', 'SiteCode', 'Credential')) {

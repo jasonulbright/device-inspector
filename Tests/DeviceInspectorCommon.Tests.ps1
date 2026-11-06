@@ -421,7 +421,7 @@ Describe 'Invoke-DeviceInspector.ps1' {
         @($objJson.Problems | Where-Object { $_ -like 'Site:*' }).Count | Should -Be 1
     }
 
-    It 'stops with one error and exit code 1 for a device name that is not valid' {
+    It 'stops with one error and one message and exit code 1 for a device name that is not valid' {
         $strHost = (Get-Process -Id $PID).Path
         $strErrorFile = Join-Path -Path $TestDrive -ChildPath 'error.txt'
         $strOutFile = Join-Path -Path $TestDrive -ChildPath 'out.txt'
@@ -429,7 +429,7 @@ Describe 'Invoke-DeviceInspector.ps1' {
         $objProcess = Start-Process -FilePath $strHost -ArgumentList $arrArgument -Wait -PassThru -NoNewWindow -RedirectStandardError $strErrorFile -RedirectStandardOutput $strOutFile
         $objProcess.ExitCode | Should -Be 1
         $strError = Get-Content -LiteralPath $strErrorFile -Raw
-        $strError | Should -BeLike '*does not match*'
+        $strError | Should -BeLike '*Enter the device name*'
         $strError | Should -Not -BeLike '*ConvertTo-DeviceInspectionReport*'
     }
 
