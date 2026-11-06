@@ -415,15 +415,21 @@ function Save-TextExport {
         [Parameter(Mandatory)][string]$Filter, [Parameter(Mandatory)][scriptblock]$GetText
     )
     if (-not $script:Inspection) { Add-LogLine ('Export {0}: inspect a device first.' -f $Kind); return }
-    $sfd = New-Object Microsoft.Win32.SaveFileDialog
-    $sfd.Filter = $Filter
-    $sfd.FileName = ('DeviceInspector-{0}-{1}.{2}' -f $script:Inspection.ComputerName, (Get-Date -Format 'yyyyMMdd-HHmmss'), $Extension)
-    $reportsDir = Join-Path $PSScriptRoot 'Reports'
-    if (-not (Test-Path -LiteralPath $reportsDir)) { New-Item -ItemType Directory -Path $reportsDir -Force | Out-Null }
-    $sfd.InitialDirectory = $reportsDir
-    if ($sfd.ShowDialog() -eq $true) {
-        $written = Write-DeviceInspectionFile -Path $sfd.FileName -Text (& $GetText)
-        Add-LogLine ('Exported {0}: {1}' -f $Kind, $written)
+    try {
+        $sfd = New-Object Microsoft.Win32.SaveFileDialog
+        $sfd.Filter = $Filter
+        $sfd.FileName = ('DeviceInspector-{0}-{1}.{2}' -f $script:Inspection.ComputerName, (Get-Date -Format 'yyyyMMdd-HHmmss'), $Extension)
+        $reportsDir = Join-Path $PSScriptRoot 'Reports'
+        if (-not (Test-Path -LiteralPath $reportsDir)) { New-Item -ItemType Directory -Path $reportsDir -Force | Out-Null }
+        $sfd.InitialDirectory = $reportsDir
+        if ($sfd.ShowDialog() -eq $true) {
+            $written = Write-DeviceInspectionFile -Path $sfd.FileName -Text (& $GetText)
+            Add-LogLine ('Exported {0}: {1}' -f $Kind, $written)
+        }
+    }
+    catch {
+        Add-LogLine ('Export {0} failed: {1}' -f $Kind, $_.Exception.Message)
+        [void](Show-ThemedMessage -Owner $window -Title 'Export' -Message ([string]$_.Exception.Message) -Icon Error)
     }
 }
 $btnExportJson.Add_Click({ Save-TextExport -Kind 'JSON' -Extension 'json' -Filter 'JSON files (*.json)|*.json' -GetText { ConvertTo-DeviceInspectionJson -Inspection $script:Inspection } })

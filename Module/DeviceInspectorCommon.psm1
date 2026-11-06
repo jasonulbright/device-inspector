@@ -494,9 +494,12 @@ function Get-SiteFact {
         if ($listCollectionId.Count -gt 0) {
             $strCollectionFilter = (($listCollectionId | ForEach-Object { "CollectionID = '{0}'" -f $_ }) -join ' OR ')
             try {
-                $strNameQuery = 'SELECT CollectionID, Name FROM SMS_Collection WHERE {0}' -f $strCollectionFilter
-                foreach ($objRow in @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strNameQuery)) {
-                    $hashtableCollectionName[[string]$objRow.CollectionID] = [string]$objRow.Name
+                for ($intNameOffset = 0; $intNameOffset -lt $listCollectionId.Count; $intNameOffset += 50) {
+                    $strNameFilter = ((@($listCollectionId | Select-Object -Skip $intNameOffset -First 50) | ForEach-Object { "CollectionID = '{0}'" -f $_ }) -join ' OR ')
+                    $strNameQuery = 'SELECT CollectionID, Name FROM SMS_Collection WHERE {0}' -f $strNameFilter
+                    foreach ($objRow in @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strNameQuery)) {
+                        $hashtableCollectionName[[string]$objRow.CollectionID] = [string]$objRow.Name
+                    }
                 }
             } catch {
                 Write-Debug -Message $_.Exception.Message
@@ -726,11 +729,15 @@ function Get-DeviceFact {
             $listClientApplication = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
             try {
                 foreach ($objApplication in @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName CCM_Application)) {
+                    $strLastEvaluation = $null
+                    if ($null -ne $objApplication.LastEvalTime) {
+                        $strLastEvaluation = ([datetime]$objApplication.LastEvalTime).ToUniversalTime().ToString($strFormat, $objCulture)
+                    }
                     $listClientApplication.Add([pscustomobject]@{
                             Name            = [string]$objApplication.Name
                             InstallState    = [string]$objApplication.InstallState
                             EvaluationState = [int]$objApplication.EvaluationState
-                            LastEvaluation  = ([datetime]$objApplication.LastEvalTime).ToUniversalTime().ToString($strFormat, $objCulture)
+                            LastEvaluation  = $strLastEvaluation
                         })
                 }
             } catch {
@@ -1161,7 +1168,7 @@ function Test-DeviceInspectorInput {
         $strComputer = $ComputerName.Trim()
         $strServer = $SiteServer.Trim()
         $strCode = $SiteCode.Trim()
-        if ($strComputer -notmatch '^[A-Za-z0-9_.-]{1,255}$') {
+        if ($strComputer -notmatch '^[A-Za-z0-9_.-]{1,255}$' -or $strComputer.StartsWith('.')) {
             $listError.Add('Enter the device name. Use letters, digits, dots, hyphens and underscores.')
         }
         if (-not [string]::IsNullOrEmpty($strServer) -and $strServer -notmatch '^[A-Za-z0-9_.-]{1,255}$') {

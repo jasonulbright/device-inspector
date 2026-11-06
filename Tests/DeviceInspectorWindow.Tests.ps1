@@ -1,4 +1,4 @@
-[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake computer names.')]
+﻿[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake computer names.')]
 param ()
 
 BeforeAll {
@@ -73,6 +73,8 @@ Describe 'Test-DeviceInspectorInput' {
         (Test-DeviceInspectorInput -ComputerName '').IsValid | Should -BeFalse
         (Test-DeviceInspectorInput -ComputerName "a' OR 1=1 --").IsValid | Should -BeFalse
         (Test-DeviceInspectorInput -ComputerName 'a\b').IsValid | Should -BeFalse
+        (Test-DeviceInspectorInput -ComputerName '..').IsValid | Should -BeFalse
+        (Test-DeviceInspectorInput -ComputerName '.hidden').IsValid | Should -BeFalse
     }
 
     It 'refuses a bad site server, a bad site code and a site code without a site server' {
@@ -245,6 +247,13 @@ Describe 'Update facts' {
             $objDevice.PendingUpdates[0].State | Should -Be 'Installing'
             $objDevice.PendingUpdates[1].State | Should -Be 'State 99'
             $objDevice.PendingUpdates[1].Deadline | Should -Be '2026-11-09T00:00:00Z'
+        }
+    }
+
+    It 'keeps an application whose evaluation time is missing' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-Command { [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @([pscustomobject]@{ Name = 'App'; InstallState = 'Installed'; EvaluationState = 1; LastEvaluation = $null }); Problems = @() } }
+            @((Get-DeviceFact -ComputerName 'CLIENT01').ClientApplications).Count | Should -Be 1
         }
     }
 

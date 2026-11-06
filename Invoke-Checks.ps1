@@ -63,7 +63,7 @@ $objConfiguration.Run.PassThru = $true
 $objConfiguration.Output.Verbosity = 'Normal'
 $objResult = Invoke-Pester -Configuration $objConfiguration
 
-if ($arrFinding.Count -gt 0 -or $intAnalyzerFailure -gt 0 -or $objResult.FailedCount -gt 0) {
+if ($arrFinding.Count -gt 0 -or $intAnalyzerFailure -gt 0 -or $objResult.FailedCount -gt 0 -or $objResult.TotalCount -eq 0 -or $objResult.Result -ne 'Passed') {
     exit 1
 }
 exit 0

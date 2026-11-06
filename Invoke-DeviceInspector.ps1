@@ -90,6 +90,7 @@ ConvertTo-DeviceInspectionReport -Inspection $objInspection -MaximumListedItems 
 if ($PSBoundParameters.ContainsKey('JsonPath')) {
     $strJsonFullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($JsonPath)
     $strJson = (($objInspection | ConvertTo-Json -Depth 8) -replace "`r`n", "`n") + "`n"
+    [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($strJsonFullPath))
     $objUtf8NoBomEncoding = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
     [System.IO.File]::WriteAllText($strJsonFullPath, $strJson, $objUtf8NoBomEncoding)
     Write-Verbose -Message ('JSON written to {0}' -f $strJsonFullPath)
