@@ -1,0 +1,6 @@
+Logs/
+Reports/
+TestResults/
+*.prefs.json
+*.windowstate.json
+*.local.*
