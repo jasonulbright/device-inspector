@@ -20,7 +20,7 @@
 # .NOTES
 # Positional parameters: none.
 #
-# Version: 2026.11.06.0002
+# Version: 2026.11.06.0003
 [CmdletBinding(PositionalBinding = $false)]
 [OutputType([void])]
 param ()

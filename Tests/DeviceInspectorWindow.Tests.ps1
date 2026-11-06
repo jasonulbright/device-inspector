@@ -6,6 +6,7 @@ BeforeAll {
     $script:strRepositoryRoot = Split-Path -Path $strTestsFolder -Parent
     $script:strManifestPath = Join-Path -Path (Join-Path -Path $script:strRepositoryRoot -ChildPath 'Module') -ChildPath 'DeviceInspectorCommon.psd1'
     Import-Module -Name $script:strManifestPath -Force
+    . (Join-Path -Path $strTestsFolder -ChildPath 'CMStubs.ps1')
 
     function New-WindowTestInspection {
         [pscustomobject]@{
@@ -54,6 +55,7 @@ BeforeAll {
 
 AfterAll {
     Remove-Module -Name DeviceInspectorCommon -Force -ErrorAction SilentlyContinue
+    Remove-CMTestStub
 }
 
 Describe 'Test-DeviceInspectorInput' {
@@ -77,8 +79,14 @@ Describe 'Test-DeviceInspectorInput' {
         (Test-DeviceInspectorInput -ComputerName '.hidden').IsValid | Should -BeFalse
     }
 
+    It 'refuses a site server without a site code' {
+        $objInput = Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'cm01'
+        $objInput.IsValid | Should -BeFalse
+        $objInput.Errors | Should -Contain 'A site server needs a site code. Enter it in Options.'
+    }
+
     It 'refuses a bad site server, a bad site code and a site code without a site server' {
-        (Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'cm01;calc').IsValid | Should -BeFalse
+        (Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'cm01;calc' -SiteCode 'ABC').IsValid | Should -BeFalse
         (Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'cm01' -SiteCode 'ABCD').IsValid | Should -BeFalse
         $objInput = Test-DeviceInspectorInput -ComputerName 'a' -SiteCode 'ABC'
         $objInput.IsValid | Should -BeFalse
@@ -192,18 +200,16 @@ Describe 'Reports' {
 Describe 'Update facts' {
     It 'reads the updates that the site lists as required, without expired ones' {
         InModuleScope DeviceInspectorCommon {
+            Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 5; IsClient = $true; ClientVersion = '1'; IsActive = $true; DeviceOS = 'x'; LastLogonUser = 'u'; LastHardwareScan = $null } }
             Mock Invoke-SiteQuery {
-                switch -Wildcard ($Query) {
-                    '*FROM SMS_R_System*' { [pscustomobject]@{ ResourceId = 5; Name = 'A'; Client = 1; ClientVersion = '1'; Active = 1; OperatingSystemNameandVersion = 'x'; LastLogonUserName = 'u' } }
-                    '*SMS_UpdateComplianceStatus*' { [pscustomobject]@{ CI_ID = 11 }; [pscustomobject]@{ CI_ID = 12 } }
-                    '*FROM SMS_SoftwareUpdate*' {
-                        [pscustomobject]@{ CI_ID = 11; ArticleID = '5001'; LocalizedDisplayName = 'Live'; Severity = 10; IsExpired = $false; IsSuperseded = $false }
-                        [pscustomobject]@{ CI_ID = 12; ArticleID = '5002'; LocalizedDisplayName = 'Expired'; Severity = 8; IsExpired = $true; IsSuperseded = $true }
-                    }
-                }
+                if ($Query -like '*SMS_UpdateComplianceStatus*') { [pscustomobject]@{ CI_ID = 11 }; [pscustomobject]@{ CI_ID = 12 } }
+            }
+            Mock Get-CMSoftwareUpdate {
+                [pscustomobject]@{ CI_ID = 11; ArticleID = '5001'; LocalizedDisplayName = 'Live'; Severity = 10; IsExpired = $false; IsSuperseded = $false }
+                [pscustomobject]@{ CI_ID = 12; ArticleID = '5002'; LocalizedDisplayName = 'Expired'; Severity = 8; IsExpired = $true; IsSuperseded = $true }
             }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $objSite = Get-SiteFact -CimSession 'x' -SiteCode 'MCM' -ComputerName 'A' -Problems $listProblem
+            $objSite = Get-SiteFact -ComputerName 'A' -Problems $listProblem
             @($objSite.RequiredUpdates).Count | Should -Be 1
             $objSite.RequiredUpdates[0].Title | Should -Be 'Live'
             $objSite.RequiredUpdates[0].Severity | Should -Be 'Critical'
@@ -214,14 +220,12 @@ Describe 'Update facts' {
 
     It 'records a failed update query as a problem and keeps the other site facts' {
         InModuleScope DeviceInspectorCommon {
+            Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 5; IsClient = $true; ClientVersion = '1'; IsActive = $true; DeviceOS = 'x'; LastLogonUser = 'u'; LastHardwareScan = $null } }
             Mock Invoke-SiteQuery {
                 if ($Query -like '*SMS_UpdateComplianceStatus*') { throw 'compliance failed' }
-                if ($Query -like '*FROM SMS_R_System*') {
-                    [pscustomobject]@{ ResourceId = 5; Name = 'A'; Client = 1; ClientVersion = '1'; Active = 1; OperatingSystemNameandVersion = 'x'; LastLogonUserName = 'u' }
-                }
             }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $objSite = Get-SiteFact -CimSession 'x' -SiteCode 'MCM' -ComputerName 'A' -Problems $listProblem
+            $objSite = Get-SiteFact -ComputerName 'A' -Problems $listProblem
             $objSite.Found | Should -BeTrue
             @($objSite.RequiredUpdates).Count | Should -Be 0
             @($listProblem | Where-Object { $_ -like 'Site required updates:*compliance failed*' }).Count | Should -Be 1
@@ -307,6 +311,15 @@ Describe 'Window files' {
                 ForEach-Object { $_.GetCommandName() } | Where-Object { $null -ne $_ } | Sort-Object -Unique)
         $arrCommand.Count | Should -BeGreaterThan 0
         @($arrCommand | Where-Object { $arrForbidden -contains $_ }) | Should -BeNullOrEmpty
+    }
+
+    It 'checks for the console module before it builds the window, and stops with a message' {
+        $strText = Get-Content -LiteralPath $script:strStartPath -Raw
+        $intCheck = $strText.IndexOf('Test-DeviceInspectorConsole')
+        $intWindow = $strText.IndexOf('XamlReader]::Load')
+        $intCheck | Should -BeGreaterThan 0
+        $intCheck | Should -BeLessThan $intWindow
+        $strText | Should -Match '(?s)if \(-not \$__console\.Available\) \{.*?MessageBox.*?exit 2'
     }
 
     It 'keeps the version equal in the manifest, the start script and the changelog' {

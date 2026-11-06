@@ -16,6 +16,9 @@ function ConvertTo-InspectionTimestamp {
     # .DESCRIPTION
     # Gives the same text in Windows PowerShell 5.1 and PowerShell 7, because
     # ConvertTo-Json formats [datetime] values differently in the two versions.
+    # A value with Kind Unspecified is read as UTC. The ConfigurationManager cmdlets
+    # return the inventory dates of the site this way (checked on the lab: the
+    # last hardware scan of Get-CMDevice equals the cycle time on the device).
     #
     # .PARAMETER Value
     # A [datetime] value, or $null.
@@ -49,7 +52,61 @@ function ConvertTo-InspectionTimestamp {
         if ($null -eq $Value) {
             return $null
         }
-        return ([datetime]$Value).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', [System.Globalization.CultureInfo]::InvariantCulture)
+        $datetimeValue = [datetime]$Value
+        if ($datetimeValue.Kind -eq [System.DateTimeKind]::Unspecified) {
+            $datetimeValue = [datetime]::SpecifyKind($datetimeValue, [System.DateTimeKind]::Utc)
+        }
+        return $datetimeValue.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+}
+
+function ConvertTo-InspectionDeploymentTime {
+    # .SYNOPSIS
+    # Converts a deployment deadline to text, or returns $null.
+    #
+    # .DESCRIPTION
+    # The site stores a deployment time as the local time that the administrator
+    # entered, with no zone (checked on the lab with a test deployment). A value with
+    # Kind Unspecified is therefore written without a zone: yyyy-MM-ddTHH:mm:ss. A
+    # value with a zone goes through ConvertTo-InspectionTimestamp.
+    #
+    # .PARAMETER Value
+    # A [datetime] value, or $null.
+    #
+    # .EXAMPLE
+    # $strText = ConvertTo-InspectionDeploymentTime -Value ([datetime]'2026-12-04T17:00:00')
+    #
+    # # $strText = '2026-12-04T17:00:00'
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] The text, or $null when Value is $null.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
+    # return shape, and positional contract may change without notice.
+    #
+    # Positional parameters: internal-caller contract only. Position 0 is Value.
+    #
+    # Version: 1.0.20261106.0
+    [CmdletBinding()]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $false, Position = 0)]
+        [object]$Value
+    )
+
+    process {
+        if ($null -eq $Value) {
+            return $null
+        }
+        $datetimeValue = [datetime]$Value
+        if ($datetimeValue.Kind -eq [System.DateTimeKind]::Unspecified) {
+            return $datetimeValue.ToString('yyyy-MM-ddTHH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
+        }
+        return ConvertTo-InspectionTimestamp -Value $datetimeValue
     }
 }
 
@@ -299,33 +356,81 @@ function Select-ListedEntry {
     }
 }
 
-function Invoke-SiteQuery {
+function Test-DeviceInspectorConsole {
     # .SYNOPSIS
-    # Runs one read-only WQL SELECT query against the ConfigMgr provider.
+    # Checks that the ConfigurationManager PowerShell module is installed on this computer.
     #
     # .DESCRIPTION
-    # The only path from this module to the site. It refuses every query that
-    # does not start with SELECT, so the module cannot change the site.
-    #
-    # .PARAMETER CimSession
-    # An open CIM session to the site server.
-    #
-    # .PARAMETER SiteCode
-    # The three-character site code. The query runs in root\SMS\site_<SiteCode>.
-    #
-    # .PARAMETER Query
-    # The WQL query. It must start with SELECT.
+    # The module comes only with the Configuration Manager console. The function finds
+    # ConfigurationManager.psd1 with Resolve-ConfigurationManagerModulePath (SuiteCommon)
+    # and returns a plain message when the console is not installed. It changes nothing.
     #
     # .EXAMPLE
-    # $arrRows = @(Invoke-SiteQuery -CimSession $objSession -SiteCode 'MCM' -Query 'SELECT Name FROM SMS_R_System')
+    # $objCheck = Test-DeviceInspectorConsole
     #
-    # # $arrRows holds one CIM instance per device.
+    # # $objCheck.Available = $true when the console is installed.
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [object] One CIM instance for each row.
+    # [pscustomobject] Properties: Available, Path, Message.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261106.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param ()
+
+    process {
+        $strPath = Resolve-ConfigurationManagerModulePath
+        if ([string]::IsNullOrEmpty($strPath)) {
+            return [pscustomobject]@{
+                Available = $false
+                Path      = ''
+                Message   = 'The Configuration Manager console is not installed on this computer. Device Inspector reads the site with the ConfigurationManager PowerShell module, which comes only with the console. Install the console, then start Device Inspector again.'
+            }
+        }
+        [pscustomobject]@{
+            Available = $true
+            Path      = $strPath
+            Message   = ''
+        }
+    }
+}
+
+function Connect-InspectorSite {
+    # .SYNOPSIS
+    # Imports the ConfigurationManager module and opens the site drive.
+    #
+    # .DESCRIPTION
+    # Imports ConfigurationManager.psd1, creates a CMSite PSDrive named after the site
+    # code with the site server as root, and sets the location to the drive. The
+    # ConfigurationManager cmdlets work only from the site drive. The function throws
+    # a plain message when the module is missing or the site is not reachable. Pass
+    # the returned object to Disconnect-InspectorSite.
+    #
+    # .PARAMETER SiteServer
+    # The computer that runs the SMS Provider.
+    #
+    # .PARAMETER SiteCode
+    # The three-character site code.
+    #
+    # .PARAMETER Credential
+    # An optional credential for the site drive.
+    #
+    # .EXAMPLE
+    # $objConnection = Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM'
+    #
+    # # The current location is now MCM:
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties: SiteCode, SiteServer, PreviousLocation, CreatedDrive.
     #
     # .NOTES
     # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
@@ -333,29 +438,157 @@ function Invoke-SiteQuery {
     #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261105.0
+    # Version: 1.0.20261106.0
     [CmdletBinding(PositionalBinding = $false)]
-    [OutputType([object])]
+    [OutputType([pscustomobject])]
     param (
         [Parameter(Mandatory = $true)]
-        [object]$CimSession,
+        [ValidateNotNullOrEmpty()]
+        [string]$SiteServer,
 
         [Parameter(Mandatory = $true)]
         [ValidatePattern('^[A-Za-z0-9]{3}$')]
         [string]$SiteCode,
 
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    process {
+        $objCheck = Test-DeviceInspectorConsole
+        if (-not $objCheck.Available) {
+            throw $objCheck.Message
+        }
+        $objPrevious = Get-Location
+        $strSiteDrive = '{0}:' -f $SiteCode
+        $boolCreated = $false
+        try {
+            if (-not (Get-Module -Name 'ConfigurationManager')) {
+                Import-Module -Name $objCheck.Path -DisableNameChecking -ErrorAction Stop
+            }
+            $objDrive = Get-PSDrive -Name $SiteCode -PSProvider 'CMSite' -ErrorAction SilentlyContinue
+            if ($null -ne $objDrive -and (($objDrive.Root -ne $SiteServer) -or $PSBoundParameters.ContainsKey('Credential'))) {
+                Set-Location -LiteralPath $env:SystemDrive
+                Remove-PSDrive -Name $SiteCode -PSProvider 'CMSite' -Force -ErrorAction SilentlyContinue
+                $objDrive = $null
+            }
+            if ($null -eq $objDrive) {
+                $hashtableDrive = @{ Name = $SiteCode; PSProvider = 'CMSite'; Root = $SiteServer; Scope = 'Global'; ErrorAction = 'Stop' }
+                if ($PSBoundParameters.ContainsKey('Credential')) {
+                    $hashtableDrive['Credential'] = $Credential
+                }
+                [void](New-PSDrive @hashtableDrive)
+                $boolCreated = $true
+            }
+            Set-Location -LiteralPath $strSiteDrive -ErrorAction Stop
+            [void](Get-CMSite -SiteCode $SiteCode -ErrorAction Stop)
+        } catch {
+            Write-Debug -Message ('Connect-InspectorSite failed: {0}' -f $_.Exception.Message)
+            Set-Location -LiteralPath $objPrevious.Path -ErrorAction SilentlyContinue
+            if ($boolCreated) {
+                Remove-PSDrive -Name $SiteCode -PSProvider 'CMSite' -Force -ErrorAction SilentlyContinue
+            }
+            throw ('Cannot open site {0} on {1}. Check the site code and the site server name, and the account rights. {2}' -f $SiteCode, $SiteServer, $_.Exception.Message)
+        }
+        [pscustomobject]@{
+            SiteCode         = $SiteCode
+            SiteServer       = $SiteServer
+            PreviousLocation = $objPrevious.Path
+            CreatedDrive     = $boolCreated
+        }
+    }
+}
+
+function Disconnect-InspectorSite {
+    # .SYNOPSIS
+    # Leaves the site drive that Connect-InspectorSite opened.
+    #
+    # .DESCRIPTION
+    # Sets the location back to the folder it had before Connect-InspectorSite and
+    # removes the site drive when Connect-InspectorSite created it. It never throws.
+    #
+    # .PARAMETER Connection
+    # The object that Connect-InspectorSite returns. A null value is ignored.
+    #
+    # .EXAMPLE
+    # Disconnect-InspectorSite -Connection $objConnection
+    #
+    # # The location is the folder from before.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # None.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
+    # return shape, and positional contract may change without notice.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261106.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([void])]
+    param (
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [pscustomobject]$Connection
+    )
+
+    process {
+        if ($null -eq $Connection) {
+            return
+        }
+        Set-Location -LiteralPath $Connection.PreviousLocation -ErrorAction SilentlyContinue
+        if ($Connection.CreatedDrive) {
+            Remove-PSDrive -Name $Connection.SiteCode -PSProvider 'CMSite' -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Invoke-SiteQuery {
+    # .SYNOPSIS
+    # Runs one WQL query on the site with Invoke-CMWmiQuery. Read only.
+    #
+    # .DESCRIPTION
+    # Used only where no ConfigurationManager cmdlet returns the data: the hardware
+    # inventory classes, the collection memberships of one device and the update
+    # status of one device. Invoke-CMWmiQuery is a ConfigurationManager cmdlet. It
+    # uses the open site drive and the role based access of the account. It exists
+    # as a function so that tests can replace the only point of this kind.
+    #
+    # .PARAMETER Query
+    # The WQL query. It must be a SELECT.
+    #
+    # .EXAMPLE
+    # $arrRow = @(Invoke-SiteQuery -Query 'SELECT CollectionID FROM SMS_FullCollectionMembership WHERE ResourceID = 16777221')
+    #
+    # # One object for each row.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [object] One object for each row.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
+    # return shape, and positional contract may change without notice.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 2.0.20261106.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([object])]
+    param (
         [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
+        [ValidatePattern('^\s*SELECT\s')]
         [string]$Query
     )
 
     process {
-        if ($Query -notmatch '^\s*SELECT\s') {
-            throw ('Refused: only SELECT queries are allowed. Query: {0}' -f $Query)
-        }
-        $strNamespace = 'root\SMS\site_{0}' -f $SiteCode
-        Write-Debug -Message ('Site query in {0}: {1}' -f $strNamespace, $Query)
-        Get-CimInstance -CimSession $CimSession -Namespace $strNamespace -Query $Query -ErrorAction Stop
+        Invoke-CMWmiQuery -Query $Query -Option 'Lazy' -ErrorAction Stop
     }
 }
 
@@ -364,15 +597,15 @@ function Get-SiteFact {
     # Collects the facts that the ConfigMgr site holds about one device.
     #
     # .DESCRIPTION
-    # Runs SELECT queries only. A failure in one part (inventory, collections,
-    # deployments) is added to the Problems list and the other parts continue.
-    # A failure of the device resource lookup throws.
+    # Read only. The site drive must be open (Connect-InspectorSite). A failure in one
+    # part (inventory, collections, deployments) is added to the Problems list and the
+    # other parts continue. A failure of the device lookup throws.
     #
-    # .PARAMETER CimSession
-    # An open CIM session to the site server.
-    #
-    # .PARAMETER SiteCode
-    # The three-character site code.
+    # Cmdlets: Get-CMDevice (device record and last hardware scan),
+    # Get-CMDeviceCollection (collection names), Get-CMDeployment (deployments),
+    # Get-CMSoftwareUpdate (update details). Three reads have no cmdlet
+    # and use Invoke-CMWmiQuery: the installed applications from hardware inventory,
+    # the collection memberships of the device and the required updates of the device.
     #
     # .PARAMETER ComputerName
     # The device name, without a domain suffix.
@@ -381,7 +614,7 @@ function Get-SiteFact {
     # A list that receives one text line for each part that failed.
     #
     # .EXAMPLE
-    # $objSite = Get-SiteFact -CimSession $objSession -SiteCode 'MCM' -ComputerName 'CLIENT01' -Problems $listProblem
+    # $objSite = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
     #
     # # $objSite.Found is $true when the site knows the device.
     #
@@ -396,20 +629,14 @@ function Get-SiteFact {
     # return shape, and positional contract may change without notice.
     #
     # Non-throwing contract: a failure in one part is recorded in Problems and
-    # the part gets an empty value. Only the resource lookup throws.
+    # the part gets an empty value. Only the device lookup throws.
     #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261105.0
+    # Version: 2.0.20261106.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
-        [Parameter(Mandatory = $true)]
-        [object]$CimSession,
-
-        [Parameter(Mandatory = $true)]
-        [string]$SiteCode,
-
         [Parameter(Mandatory = $true)]
         [ValidatePattern('^[A-Za-z0-9_-]{1,63}$')]
         [string]$ComputerName,
@@ -420,8 +647,7 @@ function Get-SiteFact {
     )
 
     process {
-        $strResourceQuery = "SELECT ResourceId, Name, Client, ClientVersion, Active, OperatingSystemNameandVersion, LastLogonUserName FROM SMS_R_System WHERE Name = '{0}'" -f $ComputerName
-        $arrResource = @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strResourceQuery)
+        $arrResource = @(Get-CMDevice -Name $ComputerName -Fast -DisableWildcardHandling -ErrorAction Stop)
         if ($arrResource.Count -eq 0) {
             return [pscustomobject]@{
                 Found                 = $false
@@ -442,25 +668,15 @@ function Get-SiteFact {
             $Problems.Add(('Site: {0} resource records share the name {1}. The first one is used.' -f $arrResource.Count, $ComputerName))
         }
         $objResource = $arrResource[0]
-        $intResourceId = [int]$objResource.ResourceId
+        $intResourceId = [int]$objResource.ResourceID
 
-        $strLastHardwareInventory = $null
-        try {
-            $strStatusQuery = 'SELECT LastHardwareScan FROM SMS_G_System_WORKSTATION_STATUS WHERE ResourceID = {0}' -f $intResourceId
-            $arrStatus = @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strStatusQuery)
-            if ($arrStatus.Count -gt 0) {
-                $strLastHardwareInventory = ConvertTo-InspectionTimestamp -Value $arrStatus[0].LastHardwareScan
-            }
-        } catch {
-            Write-Debug -Message $_.Exception.Message
-            $Problems.Add(('Site hardware inventory date: {0}' -f $_.Exception.Message))
-        }
+        $strLastHardwareInventory = ConvertTo-InspectionTimestamp -Value $objResource.LastHardwareScan
 
         $listApplication = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
         foreach ($strClass in @('SMS_G_System_ADD_REMOVE_PROGRAMS', 'SMS_G_System_ADD_REMOVE_PROGRAMS_64')) {
             try {
                 $strApplicationQuery = 'SELECT DisplayName, Version, Publisher FROM {0} WHERE ResourceID = {1}' -f $strClass, $intResourceId
-                foreach ($objRow in @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strApplicationQuery)) {
+                foreach ($objRow in @(Invoke-SiteQuery -Query $strApplicationQuery)) {
                     if (-not [string]::IsNullOrWhiteSpace([string]$objRow.DisplayName)) {
                         $listApplication.Add([pscustomobject]@{
                                 Name      = [string]$objRow.DisplayName
@@ -478,7 +694,7 @@ function Get-SiteFact {
         $listCollectionId = New-Object -TypeName 'System.Collections.Generic.List[string]'
         try {
             $strMembershipQuery = 'SELECT CollectionID FROM SMS_FullCollectionMembership WHERE ResourceID = {0}' -f $intResourceId
-            foreach ($objRow in @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strMembershipQuery)) {
+            foreach ($objRow in @(Invoke-SiteQuery -Query $strMembershipQuery)) {
                 if (([string]$objRow.CollectionID) -match '^[A-Za-z0-9]{8}$') {
                     $listCollectionId.Add([string]$objRow.CollectionID)
                 }
@@ -488,37 +704,38 @@ function Get-SiteFact {
             $Problems.Add(('Site collection membership: {0}' -f $_.Exception.Message))
         }
 
+        # Each of the next three reads is one call for the whole site, then a filter.
+        # One call for each collection or update took about ten times longer on the lab.
         $hashtableCollectionName = @{}
-        $listCollection = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
-        $listDeployment = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
         if ($listCollectionId.Count -gt 0) {
-            $strCollectionFilter = (($listCollectionId | ForEach-Object { "CollectionID = '{0}'" -f $_ }) -join ' OR ')
             try {
-                for ($intNameOffset = 0; $intNameOffset -lt $listCollectionId.Count; $intNameOffset += 50) {
-                    $strNameFilter = ((@($listCollectionId | Select-Object -Skip $intNameOffset -First 50) | ForEach-Object { "CollectionID = '{0}'" -f $_ }) -join ' OR ')
-                    $strNameQuery = 'SELECT CollectionID, Name FROM SMS_Collection WHERE {0}' -f $strNameFilter
-                    foreach ($objRow in @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strNameQuery)) {
-                        $hashtableCollectionName[[string]$objRow.CollectionID] = [string]$objRow.Name
-                    }
+                foreach ($objCollection in @(Get-CMDeviceCollection -ErrorAction Stop)) {
+                    $hashtableCollectionName[[string]$objCollection.CollectionID] = [string]$objCollection.Name
                 }
             } catch {
                 Write-Debug -Message $_.Exception.Message
                 $Problems.Add(('Site collection names: {0}' -f $_.Exception.Message))
             }
-            foreach ($strCollectionId in $listCollectionId) {
-                $strCollectionName = $null
-                if ($hashtableCollectionName.ContainsKey($strCollectionId)) {
-                    $strCollectionName = $hashtableCollectionName[$strCollectionId]
-                }
-                $listCollection.Add([pscustomobject]@{
-                        CollectionId = $strCollectionId
-                        Name         = $strCollectionName
-                    })
+        }
+        $listCollection = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
+        foreach ($strCollectionId in $listCollectionId) {
+            $strCollectionName = $null
+            if ($hashtableCollectionName.ContainsKey($strCollectionId)) {
+                $strCollectionName = $hashtableCollectionName[$strCollectionId]
             }
+            $listCollection.Add([pscustomobject]@{
+                    CollectionId = $strCollectionId
+                    Name         = $strCollectionName
+                })
+        }
 
+        $listDeployment = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
+        if ($listCollectionId.Count -gt 0) {
             try {
-                $strDeploymentQuery = 'SELECT DeploymentID, CollectionID, CollectionName, SoftwareName, FeatureType, DeploymentIntent, EnforcementDeadline FROM SMS_DeploymentSummary WHERE {0}' -f $strCollectionFilter
-                foreach ($objRow in @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strDeploymentQuery)) {
+                foreach ($objRow in @(Get-CMDeployment -WarningAction SilentlyContinue -ErrorAction Stop)) {
+                    if ($listCollectionId -notcontains [string]$objRow.CollectionID) {
+                        continue
+                    }
                     $listDeployment.Add([pscustomobject]@{
                             DeploymentId        = [string]$objRow.DeploymentID
                             CollectionId        = [string]$objRow.CollectionID
@@ -526,7 +743,7 @@ function Get-SiteFact {
                             Name                = [string]$objRow.SoftwareName
                             Type                = ConvertTo-DeploymentTypeName -FeatureType ([int]$objRow.FeatureType)
                             Intent              = ConvertTo-DeploymentIntentName -DeploymentIntent ([int]$objRow.DeploymentIntent)
-                            EnforcementDeadline = ConvertTo-InspectionTimestamp -Value $objRow.EnforcementDeadline
+                            EnforcementDeadline = ConvertTo-InspectionDeploymentTime -Value $objRow.EnforcementDeadline
                         })
                 }
             } catch {
@@ -539,20 +756,18 @@ function Get-SiteFact {
         try {
             $listUpdateId = New-Object -TypeName 'System.Collections.Generic.List[int]'
             $strRequiredQuery = 'SELECT CI_ID FROM SMS_UpdateComplianceStatus WHERE MachineID = {0} AND Status = 2' -f $intResourceId
-            foreach ($objRow in @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strRequiredQuery)) {
+            foreach ($objRow in @(Invoke-SiteQuery -Query $strRequiredQuery)) {
                 $listUpdateId.Add([int]$objRow.CI_ID)
             }
-            for ($intOffset = 0; $intOffset -lt $listUpdateId.Count; $intOffset += 50) {
-                $strUpdateFilter = ((@($listUpdateId | Select-Object -Skip $intOffset -First 50) | ForEach-Object { 'CI_ID = {0}' -f $_ }) -join ' OR ')
-                $strUpdateQuery = 'SELECT CI_ID, ArticleID, LocalizedDisplayName, Severity, IsExpired, IsSuperseded FROM SMS_SoftwareUpdate WHERE {0}' -f $strUpdateFilter
-                foreach ($objRow in @(Invoke-SiteQuery -CimSession $CimSession -SiteCode $SiteCode -Query $strUpdateQuery)) {
-                    if (-not [bool]$objRow.IsExpired) {
+            if ($listUpdateId.Count -gt 0) {
+                foreach ($objUpdate in @(Get-CMSoftwareUpdate -Fast -IncludeUpgrade -ErrorAction Stop)) {
+                    if ($listUpdateId -contains [int]$objUpdate.CI_ID -and -not [bool]$objUpdate.IsExpired) {
                         $listRequiredUpdate.Add([pscustomobject]@{
-                                CIId         = [int]$objRow.CI_ID
-                                ArticleId    = [string]$objRow.ArticleID
-                                Title        = [string]$objRow.LocalizedDisplayName
-                                Severity     = ConvertTo-UpdateSeverityName -Severity ([int]$objRow.Severity)
-                                IsSuperseded = [bool]$objRow.IsSuperseded
+                                CIId         = [int]$objUpdate.CI_ID
+                                ArticleId    = [string]$objUpdate.ArticleID
+                                Title        = [string]$objUpdate.LocalizedDisplayName
+                                Severity     = ConvertTo-UpdateSeverityName -Severity ([int]$objUpdate.Severity)
+                                IsSuperseded = [bool]$objUpdate.IsSuperseded
                             })
                     }
                 }
@@ -564,11 +779,11 @@ function Get-SiteFact {
         [pscustomobject]@{
             Found                 = $true
             ResourceId            = $intResourceId
-            ClientInstalled       = ([int]$objResource.Client -eq 1)
+            ClientInstalled       = [bool]$objResource.IsClient
             ClientVersion         = [string]$objResource.ClientVersion
-            Active                = ([int]$objResource.Active -eq 1)
-            OperatingSystem       = [string]$objResource.OperatingSystemNameandVersion
-            LastLogonUserName     = [string]$objResource.LastLogonUserName
+            Active                = [bool]$objResource.IsActive
+            OperatingSystem       = [string]$objResource.DeviceOS
+            LastLogonUserName     = [string]$objResource.LastLogonUser
             LastHardwareInventory = $strLastHardwareInventory
             InstalledApplications = @($listApplication | Sort-Object -Property Name, Version -Unique)
             Collections           = @($listCollection | Sort-Object -Property Name, CollectionId)
@@ -815,8 +1030,8 @@ function Get-DeviceInspection {
     # Collects the facts of one device from a ConfigMgr site and from the device.
     #
     # .DESCRIPTION
-    # Read-only. Queries the site provider with SELECT statements through a CIM
-    # session and reads the device through one WinRM script block. It never
+    # Read-only. Reads the site with the ConfigurationManager cmdlets (the console
+    # module) and reads the device live through one WinRM script block. It never
     # changes the site or the device. A part that fails is listed in Problems
     # and the other parts still run.
     #
@@ -833,7 +1048,7 @@ function Get-DeviceInspection {
     # The site server (SMS Provider) name. Omit it to skip the site facts.
     #
     # .PARAMETER SiteCode
-    # The three-character site code. Omit it to read it from the provider.
+    # The three-character site code. It is required with SiteServer.
     #
     # .PARAMETER Credential
     # An optional credential for the site server and the device.
@@ -842,12 +1057,12 @@ function Get-DeviceInspection {
     # Skip the facts from the device itself.
     #
     # .EXAMPLE
-    # $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' -Credential $objCredential
+    # $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' -Credential $objCredential
     #
     # # $objInspection.Site.Collections lists the collections of CLIENT01.
     #
     # .EXAMPLE
-    # Get-DeviceInspection -ComputerName 'CLIENT01' -SkipDevice -SiteServer 'cm01.contoso.com' | ConvertTo-Json -Depth 6
+    # Get-DeviceInspection -ComputerName 'CLIENT01' -SkipDevice -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' | ConvertTo-Json -Depth 6
     #
     # # Prints the site facts as JSON. The device is not contacted.
     #
@@ -893,6 +1108,9 @@ function Get-DeviceInspection {
         if ($SkipDevice.IsPresent -and -not $PSBoundParameters.ContainsKey('SiteServer')) {
             throw 'Nothing to inspect: SiteServer is omitted and SkipDevice is set.'
         }
+        if ($PSBoundParameters.ContainsKey('SiteServer') -and -not $PSBoundParameters.ContainsKey('SiteCode')) {
+            throw 'SiteCode is required with SiteServer.'
+        }
 
         $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
         $strShortName = $ComputerName.Split('.')[0]
@@ -901,27 +1119,18 @@ function Get-DeviceInspection {
         $objDevice = $null
 
         if ($PSBoundParameters.ContainsKey('SiteServer')) {
-            $objSession = $null
+            $objConnection = $null
             try {
-                $hashtableSession = @{
-                    ComputerName = $SiteServer
-                    ErrorAction  = 'Stop'
+                $strResolvedSiteCode = $SiteCode
+                $hashtableConnect = @{
+                    SiteServer = $SiteServer
+                    SiteCode   = $SiteCode
                 }
                 if ($PSBoundParameters.ContainsKey('Credential')) {
-                    $hashtableSession['Credential'] = $Credential
+                    $hashtableConnect['Credential'] = $Credential
                 }
-                $objSession = New-CimSession @hashtableSession
-                if ($PSBoundParameters.ContainsKey('SiteCode')) {
-                    $strResolvedSiteCode = $SiteCode
-                } else {
-                    $arrLocation = @(Get-CimInstance -CimSession $objSession -Namespace 'root\SMS' -ClassName SMS_ProviderLocation -ErrorAction Stop)
-                    if ($arrLocation.Count -eq 0) {
-                        throw 'The provider reports no site code.'
-                    }
-                    $strResolvedSiteCode = [string]$arrLocation[0].SiteCode
-                }
-                Write-Verbose -Message ('Site code: {0}' -f $strResolvedSiteCode)
-                $objSite = Get-SiteFact -CimSession $objSession -SiteCode $strResolvedSiteCode -ComputerName $strShortName -Problems $listProblem
+                $objConnection = Connect-InspectorSite @hashtableConnect
+                $objSite = Get-SiteFact -ComputerName $strShortName -Problems $listProblem
                 if (-not $objSite.Found) {
                     $listProblem.Add(('Site: no device named {0} exists in site {1}.' -f $strShortName, $strResolvedSiteCode))
                 }
@@ -929,12 +1138,9 @@ function Get-DeviceInspection {
                 Write-Debug -Message $_.Exception.Message
                 $listProblem.Add(('Site: {0}' -f $_.Exception.Message))
             } finally {
-                if ($null -ne $objSession) {
-                    Remove-CimSession -CimSession $objSession
-                }
+                Disconnect-InspectorSite -Connection $objConnection
             }
         }
-
         if (-not $SkipDevice.IsPresent) {
             try {
                 $hashtableDevice = @{ ComputerName = $ComputerName }
@@ -984,7 +1190,7 @@ function ConvertTo-DeviceInspectionReport {
     # The most entries to print in each list. The default is 25.
     #
     # .EXAMPLE
-    # Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' | ConvertTo-DeviceInspectionReport
+    # Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' | ConvertTo-DeviceInspectionReport
     #
     # # Prints the report.
     #
@@ -1133,7 +1339,7 @@ function Test-DeviceInspectorInput {
     # The site code as typed. May be empty.
     #
     # .EXAMPLE
-    # $objInput = Test-DeviceInspectorInput -ComputerName 'client01' -SiteServer 'cm01.contoso.com'
+    # $objInput = Test-DeviceInspectorInput -ComputerName 'client01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM'
     #
     # # $objInput.IsValid = $true
     #
@@ -1179,6 +1385,9 @@ function Test-DeviceInspectorInput {
         }
         if ([string]::IsNullOrEmpty($strServer) -and -not [string]::IsNullOrEmpty($strCode)) {
             $listError.Add('A site code needs a site server.')
+        }
+        if (-not [string]::IsNullOrEmpty($strServer) -and [string]::IsNullOrEmpty($strCode)) {
+            $listError.Add('A site server needs a site code. Enter it in Options.')
         }
         [pscustomobject]@{
             IsValid = ($listError.Count -eq 0)
@@ -1674,4 +1883,4 @@ function Write-DeviceInspectionFile {
 
 #endregion Window support
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile'

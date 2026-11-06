@@ -17,11 +17,13 @@
       - .NET Framework 4.7.2+
       - MahApps.Metro DLLs in .\Lib\
       - DeviceInspectorCommon module under .\Module\
-      - WinRM access to the device and to the site server
+      - Configuration Manager console on this computer (it provides the
+        ConfigurationManager PowerShell module)
+      - WinRM access to the device, and access to the site server
 
 .NOTES
     ScriptName : start-deviceinspector.ps1
-    Version    : 2026.11.06.0002
+    Version    : 2026.11.06.0003
     Updated    : 2026-11-06
 #>
 
@@ -59,6 +61,16 @@ Get-ChildItem -LiteralPath $libDir -File -ErrorAction SilentlyContinue | Unblock
 $__modulePath = Join-Path $PSScriptRoot 'Module\DeviceInspectorCommon.psd1'
 if (-not (Test-Path -LiteralPath $__modulePath)) { throw "Shared module not found at: $__modulePath" }
 Import-Module -Name $__modulePath -Force -DisableNameChecking
+
+# The site is read with the ConfigurationManager module, which comes only with the
+# Configuration Manager console. Without it the tool stops here with a plain message.
+$__console = Test-DeviceInspectorConsole
+if (-not $__console.Available) {
+    Write-Warning -Message $__console.Message
+    [void][System.Windows.MessageBox]::Show($__console.Message, 'Device Inspector', [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+    try { Stop-Transcript | Out-Null } catch { $null = $_ }
+    exit 2
+}
 
 $global:PrefsPath = Join-Path $PSScriptRoot 'DeviceInspector.prefs.json'
 function Get-DiPreferences {
@@ -369,7 +381,7 @@ function Invoke-Inspect {
         try {
             $p = @{ ComputerName = $A.Device }
             if ($A.Server) { $p['SiteServer'] = $A.Server; $State.Step = 'Reading the site and the device...' } else { $State.Step = 'Reading the device...' }
-            if ($A.Server -and $A.Code) { $p['SiteCode'] = $A.Code }
+            if ($A.Server) { $p['SiteCode'] = $A.Code }
             if ($A.SiteOnly) { $p['SkipDevice'] = $true }
             $State.Result = Get-DeviceInspection @p
         }
@@ -498,10 +510,10 @@ function Show-OptionsDialog {
                 <TextBlock Text="Site server (SMS Provider FQDN)" FontSize="11" Margin="0,4,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
                 <TextBox x:Name="txtSmsProvider" FontSize="12" Padding="6,4,6,4"
                          Controls:TextBoxHelper.Watermark="e.g. cm01.contoso.com"/>
-                <TextBlock Text="Site Code (optional)" FontSize="11" Margin="0,12,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
+                <TextBlock Text="Site Code" FontSize="11" Margin="0,12,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
                 <TextBox x:Name="txtSiteCode" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="e.g. MCM. Empty reads it from the provider." Width="240" HorizontalAlignment="Left"/>
-                <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The account needs read access to the site and remote management rights on the device. The tool only reads."
+                         Controls:TextBoxHelper.Watermark="e.g. MCM. Required with a site server." Width="240" HorizontalAlignment="Left"/>
+                <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The tool needs the Configuration Manager console on this computer. The account needs local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested. The tool only reads."
                            FontSize="11" TextWrapping="Wrap" Margin="0,16,0,0"
                            Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
             </StackPanel>

@@ -4,14 +4,14 @@
 
 | Source | Facts |
 |---|---|
-| Site (SMS Provider, `SELECT` queries only) | Device record (resource ID, client installed, client version, active, operating system, last logon user). Last hardware inventory date. Installed applications from hardware inventory (32-bit and 64-bit). Collection memberships with collection names. Deployments targeted at those collections. Updates that the site lists as required for the device. |
+| Site (ConfigurationManager cmdlets, and `SELECT` queries through `Invoke-CMWmiQuery` where no cmdlet exists; see [data-sources.md](data-sources.md)) | Device record (resource ID, client installed, client version, active, operating system, last logon user). Last hardware inventory date. Installed applications from hardware inventory (32-bit and 64-bit). Collection memberships with collection names. Deployments targeted at those collections. Updates that the site lists as required for the device. |
 | The device (one WinRM script block) | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last hardware inventory cycle, last discovery data cycle). Installed applications from the uninstall registry keys. Client application policy (`CCM_Application`). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
 
 Two "last hardware inventory" values exist on purpose. The site value is the scan date that the site stored. The device value is the start time of the last hardware inventory cycle on the client. They can differ.
 
 ## Read-only design
 
-- The only path to the site is the private function `Invoke-SiteQuery`. It refuses every query that does not start with `SELECT`.
+- The site is read with `Get-CM*` cmdlets and with the private function `Invoke-SiteQuery`. `Invoke-SiteQuery` refuses every query that does not start with `SELECT`. No command of the site read creates, changes or removes an object.
 - The device block calls `Get-CimInstance` and `Get-ItemProperty` and no write command.
 - A Pester test parses the module with the PowerShell parser and fails if the module calls a command from a list of state-changing commands. A second test does the same for the window script.
 - The computer name is validated by pattern. Collection IDs from the site are checked against `^[A-Za-z0-9]{8}$` before they enter a query.
@@ -29,6 +29,9 @@ Each later action will follow the rules of the suite: off until Enable actions i
 
 ## Known limits
 
+- The tool needs the Configuration Manager console on the computer that runs it.
+- The site value of the last hardware inventory comes from `Get-CMDevice`. Older versions read a class that was 4 hours early on the lab.
+- A deployment deadline is shown as the local time that the site stores, with no zone.
 - The tool shows deployments that target a collection of the device. It does not show the per-device result of each deployment.
 - The site inventory list depends on the hardware inventory classes `Add Remove Programs` and `Add Remove Programs (64)`. The classes must be enabled in the client settings.
 - The device list reads the machine-wide uninstall keys only. Per-user installs are not listed.

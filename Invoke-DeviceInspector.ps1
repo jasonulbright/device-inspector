@@ -14,7 +14,7 @@
 # The site server (SMS Provider) name. Omit it to skip the site facts.
 #
 # .PARAMETER SiteCode
-# The site code. Omit it to read it from the provider.
+# The site code. It is required with SiteServer.
 #
 # .PARAMETER Credential
 # An optional credential for the site server and the device.
@@ -29,7 +29,7 @@
 # The most entries to print in each list of the report. The default is 25.
 #
 # .EXAMPLE
-# .\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -Credential $LabCredential -JsonPath .\client01.json
+# .\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -SiteCode MCM -Credential $LabCredential -JsonPath .\client01.json
 #
 # # Prints the report for CLIENT01 and writes client01.json.
 #
@@ -42,7 +42,7 @@
 # .NOTES
 # Positional parameters: position 0 is ComputerName.
 #
-# Version: 2026.11.06.0002
+# Version: 2026.11.06.0003
 [CmdletBinding(PositionalBinding = $false)]
 [OutputType([string])]
 param (
