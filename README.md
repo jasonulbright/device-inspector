@@ -1,3 +1,119 @@
 # Device Inspector
 
-This repository is under construction. The first release follows in the first pull request.
+[![Latest release](https://img.shields.io/github/v/release/jasonulbright/device-inspector?label=release)](https://github.com/jasonulbright/device-inspector/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/jasonulbright/device-inspector/total?label=downloads)](https://github.com/jasonulbright/device-inspector/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D4)](#requirements)
+[![License](https://img.shields.io/github/license/jasonulbright/device-inspector)](LICENSE)
+
+Read the facts of one device from a Configuration Manager site and from the device itself, in one window: operating system, client health, site record, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report. The tool is read only.
+
+![Device Inspector](screenshots/device.png)
+
+## Features
+
+- One window, five panels: Device, Applications, Updates, Collections, Problems.
+- Compares the applications installed on the device with the site hardware inventory. Each row has a status: Match, Version differs, Device only or Inventory only.
+- Lists the updates that the site requires for the device and the updates pending in the client policy on the device.
+- Lists the collections of the device and the deployments that target them.
+- Keeps going when one part fails. A part that fails (a device that is off, a device the site does not know) is listed under Problems. The other parts still run.
+- Exports the inspection as JSON or as a self-contained HTML report.
+- Read only. The tool sends only `SELECT` queries to the site and reads the device with one remote script block. It never changes the site or the device. A test checks the module and the window script for state-changing commands.
+- Dark and light themes with a runtime toggle, like the other tools of the AppPackager Suite.
+
+## Requirements
+
+- Windows 10 / 11 or Server 2016+
+- PowerShell 5.1 (PowerShell 7 also works)
+- .NET Framework 4.7.2+
+- WinRM access to the device and to the site server (SMS Provider computer)
+- The Windows account that runs the tool needs read access to the site and remote management rights on the device.
+- The Configuration Manager console is not needed.
+
+The tool connects with the Windows account that runs it. It stores no password and has no credential field.
+
+## Quick Start
+
+1. Download the release zip and extract it to a working folder.
+2. Right-click `start-deviceinspector.ps1` -> **Run with PowerShell**, or from a PowerShell prompt:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File start-deviceinspector.ps1
+   ```
+3. Enter the device name and the site server (the SMS Provider FQDN). **Options** sets the site server and an optional site code.
+4. Click **Inspect**.
+
+Leave the site server empty to read only the device. Select **Site only** to read only the site. Inside the AppPackager Suite, the launcher hands its site code and provider to the tool.
+
+## Panels
+
+- **Device** -- a summary line, then the facts: operating system, client health (service state, client version, assigned site code, management point, last hardware inventory and discovery cycles) and the site record (resource ID, client installed, client version, active, last logon user, last hardware inventory date).
+- **Applications** -- the device list and the site inventory list, merged by name. A filter box and a status filter narrow the rows.
+- **Updates** -- updates that the site lists as required for the device (expired updates are left out; superseded updates are marked) and updates pending on the device with their evaluation state and deadline.
+- **Collections** -- the collection memberships, and the deployments that target those collections.
+- **Problems** -- the parts that failed.
+
+![Applications](screenshots/applications.png)
+
+![Updates](screenshots/updates.png)
+
+![Collections](screenshots/collections.png)
+
+![Problems](screenshots/problems.png)
+
+The right-click menus of the Applications, Updates and Collections grids and the **Enable actions** switch are in place for later releases. They are disabled. See [docs/read-only-design.md](docs/read-only-design.md).
+
+## Command line
+
+The window wraps the same module as the script `Invoke-DeviceInspector.ps1`. The script prints the text report and writes JSON with `-JsonPath`:
+
+```powershell
+.\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -JsonPath .\client01.json
+```
+
+| Parameter | Meaning |
+|---|---|
+| `-ComputerName` | The device. Required. |
+| `-SiteServer` | The site server. Omit it to skip the site facts. |
+| `-SiteCode` | The site code. Omit it to read it from the provider. |
+| `-Credential` | Optional credential for both connections. |
+| `-SkipDevice` | Do not contact the device. |
+| `-JsonPath` | Write the facts as JSON (UTF-8 without BOM, dates in ISO 8601 UTC). |
+| `-MaximumListedItems` | The most entries in each report list. Default 25. The JSON has all entries. |
+
+## Files written on disk
+
+| File | Purpose |
+|------|---------|
+| `DeviceInspector.prefs.json` | Site code, site server, the last device name |
+| `DeviceInspector.windowstate.json` | Window size, position and last-used panel |
+| `Logs\DeviceInspector-*.log` | Per-session tool log |
+| `Reports\*` | Exports |
+
+## Tests
+
+```powershell
+.\Invoke-Checks.ps1
+```
+
+The script runs PSScriptAnalyzer with the shared settings, then the Pester tests. The tests need no lab. CI runs the tests under Windows PowerShell 5.1 and PowerShell 7.
+
+## Project Structure
+
+```
+device-inspector/
++- start-deviceinspector.ps1         # WPF shell
++- MainWindow.xaml                   # Main window layout
++- Invoke-DeviceInspector.ps1        # Command line entry point
++- Invoke-Checks.ps1                 # Linter and tests
++- Lib/                              # Vendored MahApps.Metro 2.4.10
+|  \- SuiteCommon/                   # Vendored shared core: logging, settings, theme, dialogs
++- Module/
+|  +- DeviceInspectorCommon.psd1     # Module manifest
+|  \- DeviceInspectorCommon.psm1     # Inspection logic and window support
++- Tests/                            # Pester 5 tests
++- docs/read-only-design.md          # Scope, read-only design, limits
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE). Third-party notices: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
