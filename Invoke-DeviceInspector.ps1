@@ -42,7 +42,7 @@
 # .NOTES
 # Positional parameters: position 0 is ComputerName.
 #
-# Version: 2026.11.06.0001
+# Version: 2026.11.06.0002
 [CmdletBinding(PositionalBinding = $false)]
 [OutputType([string])]
 param (
@@ -73,6 +73,11 @@ Set-StrictMode -Version Latest
 
 $strModulePath = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath 'Module') -ChildPath 'DeviceInspectorCommon.psd1'
 Import-Module -Name $strModulePath -Force -ErrorAction Stop
+
+$objInputCheck = Test-DeviceInspectorInput -ComputerName $ComputerName -SiteServer $SiteServer -SiteCode $SiteCode
+if (-not $objInputCheck.IsValid) {
+    throw ($objInputCheck.Errors -join ' ')
+}
 
 $hashtableArgument = @{ ComputerName = $ComputerName }
 foreach ($strName in @('SiteServer', 'SiteCode', 'Credential')) {
