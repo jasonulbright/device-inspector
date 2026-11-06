@@ -14,7 +14,7 @@
 # The site server (SMS Provider) name. Omit it to skip the site facts.
 #
 # .PARAMETER SiteCode
-# The site code. Omit it to read it from the provider.
+# The site code. It is required with SiteServer.
 #
 # .PARAMETER Credential
 # An optional credential for the site server and the device.
@@ -42,7 +42,7 @@
 # .NOTES
 # Positional parameters: position 0 is ComputerName.
 #
-# Version: 2026.11.06.0002
+# Version: 2026.11.06.0003
 [CmdletBinding(PositionalBinding = $false)]
 [OutputType([string])]
 param (

@@ -17,7 +17,7 @@ Read the facts of one device from a Configuration Manager site and from the devi
 - Lists the collections of the device and the deployments that target them.
 - Keeps going when one part fails. A part that fails (a device that is off, a device the site does not know) is listed under Problems. The other parts still run.
 - Exports the inspection as JSON or as a self-contained HTML report.
-- Read only. The tool sends only `SELECT` queries to the site and reads the device with one remote script block. It never changes the site or the device. A test checks the module and the window script for state-changing commands.
+- Read only. The tool reads the site with ConfigurationManager cmdlets (and `SELECT` queries through `Invoke-CMWmiQuery` where no cmdlet exists) and reads the device with one remote script block. It never changes the site or the device. A test checks the module and the window script for state-changing commands.
 - Dark and light themes with a runtime toggle, like the other tools of the AppPackager Suite.
 
 ## Requirements
@@ -25,9 +25,10 @@ Read the facts of one device from a Configuration Manager site and from the devi
 - Windows 10 / 11 or Server 2016+
 - PowerShell 5.1 (PowerShell 7 also works)
 - .NET Framework 4.7.2+
-- WinRM access to the device and to the site server (SMS Provider computer)
-- The Windows account that runs the tool needs read access to the site and remote management rights on the device.
-- The Configuration Manager console is not needed.
+- The Configuration Manager console on the computer that runs the tool. The tool reads the site with the ConfigurationManager PowerShell module, which comes only with the console. Without the console the tool shows a message and stops.
+- Network access to the site server (SMS Provider computer).
+- WinRM access to the device. The account needs local administrator rights on the device, because the tool reads the device remotely.
+- For the site: a domain admin account that is also a local administrator of the SMS Provider computer. It needs no Configuration Manager security role (a new site has no roles). An account with fewer rights on the site is not tested. Do not rely on one.
 
 The tool connects with the Windows account that runs it. It stores no password and has no credential field.
 
@@ -39,7 +40,7 @@ The tool connects with the Windows account that runs it. It stores no password a
    ```powershell
    powershell -ExecutionPolicy Bypass -File start-deviceinspector.ps1
    ```
-3. Enter the device name and the site server (the SMS Provider FQDN). **Options** sets the site server and an optional site code.
+3. Enter the device name and the site server (the SMS Provider FQDN). **Options** sets the site server and the site code. The site code is required when a site server is set.
 4. Click **Inspect**.
 
 Leave the site server empty to read only the device. Select **Site only** to read only the site. Inside the AppPackager Suite, the launcher hands its site code and provider to the tool.
