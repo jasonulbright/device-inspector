@@ -13,6 +13,7 @@ BeforeAll {
 
 AfterAll {
     Remove-Module -Name DeviceInspectorCommon -Force -ErrorAction SilentlyContinue
+    Remove-CMTestStub
 }
 
 Describe 'Read-only guarantee' {

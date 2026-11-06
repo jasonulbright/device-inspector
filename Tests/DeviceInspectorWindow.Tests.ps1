@@ -55,6 +55,7 @@ BeforeAll {
 
 AfterAll {
     Remove-Module -Name DeviceInspectorCommon -Force -ErrorAction SilentlyContinue
+    Remove-CMTestStub
 }
 
 Describe 'Test-DeviceInspectorInput' {

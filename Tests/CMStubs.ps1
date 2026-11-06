@@ -30,3 +30,7 @@ foreach ($strStubName in $script:hashtableStub.Keys) {
     $strBody = 'function global:{0} {{ [CmdletBinding()] param ({1}) }}' -f $strStubName, ($arrParameter -join ', ')
     . ([scriptblock]::Create($strBody))
 }
+
+# The teardown function holds the stub names as text, so no global variable is needed.
+$strRemoveBody = 'foreach ($strStubName in @({0})) {{ Remove-Item -LiteralPath (''Function:\global:{{0}}'' -f $strStubName) -ErrorAction SilentlyContinue }}; Remove-Item -LiteralPath ''Function:\global:Remove-CMTestStub'' -ErrorAction SilentlyContinue' -f (($script:hashtableStub.Keys | ForEach-Object { "'{0}'" -f $_ }) -join ', ')
+. ([scriptblock]::Create(('function global:Remove-CMTestStub {{ {0} }}' -f $strRemoveBody)))
