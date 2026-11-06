@@ -351,6 +351,20 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
         { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM' } } | Should -Throw 'Cannot open site MCM on cm01.*RPC server is unavailable*'
     }
 
+    It 'removes the drive that it created when the site check fails, and keeps one that it did not create' {
+        Mock -ModuleName DeviceInspectorCommon Resolve-ConfigurationManagerModulePath { 'C:\Console\bin\ConfigurationManager.psd1' }
+        Mock -ModuleName DeviceInspectorCommon Get-Module { [pscustomobject]@{ Name = 'ConfigurationManager' } }
+        Mock -ModuleName DeviceInspectorCommon Get-PSDrive { }
+        Mock -ModuleName DeviceInspectorCommon New-PSDrive { }
+        Mock -ModuleName DeviceInspectorCommon Set-Location { }
+        Mock -ModuleName DeviceInspectorCommon Remove-PSDrive { }
+        Mock -ModuleName DeviceInspectorCommon Get-CMSite { throw 'site not found' }
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM' } } | Should -Throw '*site not found*'
+        Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 1 -Exactly -Scope It
+        Mock -ModuleName DeviceInspectorCommon Get-PSDrive { [pscustomobject]@{ Name = 'MCM'; Root = 'cm01' } }
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM' } } | Should -Throw '*site not found*'
+        Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 1 -Exactly -Scope It
+    }
     It 'goes back to the earlier folder and removes a drive that it created' {
         Mock -ModuleName DeviceInspectorCommon Set-Location { }
         Mock -ModuleName DeviceInspectorCommon Remove-PSDrive { }

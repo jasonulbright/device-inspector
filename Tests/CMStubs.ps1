@@ -14,13 +14,13 @@
 #
 # Version: 2026.11.06.0001
 
-$script:arrSwitchName = @('Fast', 'DisableWildcardHandling')
+$script:arrSwitchName = @('Fast', 'DisableWildcardHandling', 'IncludeUpgrade')
 $script:hashtableStub = [ordered]@{
     'Get-CMSite' = @('SiteCode')
     'Get-CMDevice' = @('Name', 'Fast', 'DisableWildcardHandling')
     'Get-CMDeviceCollection' = @()
     'Get-CMDeployment' = @()
-    'Get-CMSoftwareUpdate' = @('Fast')
+    'Get-CMSoftwareUpdate' = @('Fast', 'IncludeUpgrade')
     'Invoke-CMWmiQuery' = @('Query', 'Option')
 }
 foreach ($strStubName in $script:hashtableStub.Keys) {

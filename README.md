@@ -68,14 +68,14 @@ The right-click menus of the Applications, Updates and Collections grids and the
 The window wraps the same module as the script `Invoke-DeviceInspector.ps1`. The script prints the text report and writes JSON with `-JsonPath`:
 
 ```powershell
-.\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -JsonPath .\client01.json
+.\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -SiteCode MCM -JsonPath .\client01.json
 ```
 
 | Parameter | Meaning |
 |---|---|
 | `-ComputerName` | The device. Required. |
 | `-SiteServer` | The site server. Omit it to skip the site facts. |
-| `-SiteCode` | The site code. Omit it to read it from the provider. |
+| `-SiteCode` | The site code. Required with `-SiteServer`. |
 | `-Credential` | Optional credential for both connections. |
 | `-SkipDevice` | Do not contact the device. |
 | `-JsonPath` | Write the facts as JSON (UTF-8 without BOM, dates in ISO 8601 UTC). |

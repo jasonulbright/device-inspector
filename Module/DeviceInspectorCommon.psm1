@@ -461,12 +461,12 @@ function Connect-InspectorSite {
         }
         $objPrevious = Get-Location
         $strSiteDrive = '{0}:' -f $SiteCode
+        $boolCreated = $false
         try {
             if (-not (Get-Module -Name 'ConfigurationManager')) {
                 Import-Module -Name $objCheck.Path -DisableNameChecking -ErrorAction Stop
             }
             $objDrive = Get-PSDrive -Name $SiteCode -PSProvider 'CMSite' -ErrorAction SilentlyContinue
-            $boolCreated = $false
             if ($null -ne $objDrive -and (($objDrive.Root -ne $SiteServer) -or $PSBoundParameters.ContainsKey('Credential'))) {
                 Set-Location -LiteralPath $env:SystemDrive
                 Remove-PSDrive -Name $SiteCode -PSProvider 'CMSite' -Force -ErrorAction SilentlyContinue
@@ -485,6 +485,9 @@ function Connect-InspectorSite {
         } catch {
             Write-Debug -Message ('Connect-InspectorSite failed: {0}' -f $_.Exception.Message)
             Set-Location -LiteralPath $objPrevious.Path -ErrorAction SilentlyContinue
+            if ($boolCreated) {
+                Remove-PSDrive -Name $SiteCode -PSProvider 'CMSite' -Force -ErrorAction SilentlyContinue
+            }
             throw ('Cannot open site {0} on {1}. Check the site code and the site server name, and the account rights. {2}' -f $SiteCode, $SiteServer, $_.Exception.Message)
         }
         [pscustomobject]@{
@@ -757,7 +760,7 @@ function Get-SiteFact {
                 $listUpdateId.Add([int]$objRow.CI_ID)
             }
             if ($listUpdateId.Count -gt 0) {
-                foreach ($objUpdate in @(Get-CMSoftwareUpdate -Fast -ErrorAction Stop)) {
+                foreach ($objUpdate in @(Get-CMSoftwareUpdate -Fast -IncludeUpgrade -ErrorAction Stop)) {
                     if ($listUpdateId -contains [int]$objUpdate.CI_ID -and -not [bool]$objUpdate.IsExpired) {
                         $listRequiredUpdate.Add([pscustomobject]@{
                                 CIId         = [int]$objUpdate.CI_ID
@@ -1054,12 +1057,12 @@ function Get-DeviceInspection {
     # Skip the facts from the device itself.
     #
     # .EXAMPLE
-    # $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' -Credential $objCredential
+    # $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' -Credential $objCredential
     #
     # # $objInspection.Site.Collections lists the collections of CLIENT01.
     #
     # .EXAMPLE
-    # Get-DeviceInspection -ComputerName 'CLIENT01' -SkipDevice -SiteServer 'cm01.contoso.com' | ConvertTo-Json -Depth 6
+    # Get-DeviceInspection -ComputerName 'CLIENT01' -SkipDevice -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' | ConvertTo-Json -Depth 6
     #
     # # Prints the site facts as JSON. The device is not contacted.
     #
@@ -1187,7 +1190,7 @@ function ConvertTo-DeviceInspectionReport {
     # The most entries to print in each list. The default is 25.
     #
     # .EXAMPLE
-    # Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' | ConvertTo-DeviceInspectionReport
+    # Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' | ConvertTo-DeviceInspectionReport
     #
     # # Prints the report.
     #
@@ -1336,7 +1339,7 @@ function Test-DeviceInspectorInput {
     # The site code as typed. May be empty.
     #
     # .EXAMPLE
-    # $objInput = Test-DeviceInspectorInput -ComputerName 'client01' -SiteServer 'cm01.contoso.com'
+    # $objInput = Test-DeviceInspectorInput -ComputerName 'client01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM'
     #
     # # $objInput.IsValid = $true
     #
