@@ -42,7 +42,7 @@
 # .NOTES
 # Positional parameters: position 0 is ComputerName.
 #
-# Version: 2026.11.06.0001
+# Version: 2026.11.06.0002
 [CmdletBinding(PositionalBinding = $false)]
 [OutputType([string])]
 param (
@@ -70,6 +70,7 @@ param (
 )
 
 Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
 $strModulePath = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath 'Module') -ChildPath 'DeviceInspectorCommon.psd1'
 Import-Module -Name $strModulePath -Force -ErrorAction Stop

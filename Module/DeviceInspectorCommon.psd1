@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'DeviceInspectorCommon.psm1'
-    ModuleVersion     = '2026.11.06.0001'
+    ModuleVersion     = '2026.11.06.0002'
     GUID              = '5b0d6f0e-6f6c-4c52-9a53-3a0d2f4c9b11'
     Author            = 'Jason Ulbright'
     Description       = 'Read-only inspection of one device: Configuration Manager site facts plus facts from the device itself.'

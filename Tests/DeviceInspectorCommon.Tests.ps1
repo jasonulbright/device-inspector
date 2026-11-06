@@ -421,6 +421,14 @@ Describe 'Invoke-DeviceInspector.ps1' {
         @($objJson.Problems | Where-Object { $_ -like 'Site:*' }).Count | Should -Be 1
     }
 
+    It 'stops with one error and exit code 1 for a device name that is not valid' {
+        $strHost = (Get-Process -Id $PID).Path
+        $arrOutput = @(& $strHost -NoProfile -ExecutionPolicy Bypass -File $script:strScriptFile -ComputerName 'bad name!' 2>&1 | ForEach-Object { [string]$_ })
+        $LASTEXITCODE | Should -Be 1
+        ($arrOutput -join "`n") | Should -BeLike "*does not match*"
+        ($arrOutput -join "`n") | Should -Not -BeLike '*ConvertTo-DeviceInspectionReport*'
+    }
+
     It 'parses without error' {
         $arrError = $null
         $null = [System.Management.Automation.Language.Parser]::ParseFile($script:strScriptFile, [ref]$null, [ref]$arrError)
