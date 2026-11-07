@@ -1,0 +1,55 @@
+# External references
+
+This page lists the Microsoft Learn pages for each feature of Device Inspector. Each link was opened and checked on 2026-11-06. The same links are in the Links section at the end of each page.
+
+## Core features
+
+### [Getting started](getting-started.md)
+
+- [Introduction to Configuration Manager](https://learn.microsoft.com/intune/configmgr/core/understand/introduction): Explains the site and its clients.
+- [Fundamentals of role-based administration](https://learn.microsoft.com/intune/configmgr/core/understand/fundamentals-of-role-based-administration): Describes the security roles, including Read-only Analyst.
+
+### [Inspect bar](core/inspect.md)
+
+- [Windows Remote Management](https://learn.microsoft.com/windows/win32/winrm/portal): Describes WinRM, which the tool uses for the device.
+
+### [Device panel](core/device.md)
+
+- [How to monitor clients in Configuration Manager](https://learn.microsoft.com/intune/configmgr/core/clients/manage/monitor-clients): Explains how the site judges client health.
+
+### [Applications panel](core/applications.md)
+
+- [How to configure hardware inventory](https://learn.microsoft.com/intune/configmgr/core/clients/manage/inventory/configure-hardware-inventory): Describes how to enable inventory classes.
+
+### [Updates panel](core/updates.md)
+
+- [Monitor software updates](https://learn.microsoft.com/intune/configmgr/sum/deploy-use/monitor-software-updates): Describes how the site reports update compliance.
+
+### [Collections panel](core/collections.md)
+
+- [Introduction to collections](https://learn.microsoft.com/intune/configmgr/core/clients/manage/collections/introduction-to-collections): Explains device collections and their members.
+
+### [Problems panel](core/problems.md) and [Command line](core/command-line.md)
+
+- [about_Remote_Troubleshooting](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_remote_troubleshooting): Describes how to fix remoting errors.
+
+### [Options dialog](core/options.md) and [Getting started](getting-started.md)
+
+- [Install consoles](https://learn.microsoft.com/intune/configmgr/core/servers/deploy/install/install-consoles): Describes how to install the Configuration Manager console.
+
+
+- [Plan for the SMS Provider](https://learn.microsoft.com/intune/configmgr/core/plan-design/hierarchy/plan-for-the-sms-provider): Explains what the SMS Provider is.
+
+## Reference
+
+### [Permissions](reference/permissions.md)
+
+- [Fundamentals of role-based administration](https://learn.microsoft.com/intune/configmgr/core/understand/fundamentals-of-role-based-administration): Describes the security roles and scopes.
+
+### [Network](reference/network.md)
+
+- [Windows Remote Management](https://learn.microsoft.com/windows/win32/winrm/portal): Describes WinRM and its ports.
+
+### [Read-only design](reference/read-only-design.md)
+
+- [Get-CimInstance](https://learn.microsoft.com/powershell/module/cimcmdlets/get-ciminstance): Describes the read command that the tool uses on the device.
