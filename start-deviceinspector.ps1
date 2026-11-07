@@ -23,8 +23,8 @@
 
 .NOTES
     ScriptName : start-deviceinspector.ps1
-    Version    : 2026.11.06.0003
-    Updated    : 2026-11-06
+    Version    : 2026.11.07.0004
+    Updated    : 2026-11-07
 #>
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '', Justification='$global: survives closure scope-strip in WPF event handlers.')]
