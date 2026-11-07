@@ -14,7 +14,7 @@ The script inspects one device and prints a report. With `-JsonPath` it also wri
 ## Requirements
 
 - Windows PowerShell 5.1 or PowerShell 7.
-- The Configuration Manager console on this computer (the ConfigurationManager module).
+- For site queries, the Configuration Manager console on this computer (the ConfigurationManager module).
 - The same rights as the window. See [Permissions](../reference/permissions.md).
 
 ## Steps
@@ -58,7 +58,7 @@ A part that fails is listed in the **Problems** section. The other parts still p
 | `-SiteCode` | None. Required with `-SiteServer`. | Three letters or digits. |
 | `-Credential` | The current account | A credential for both connections. |
 | `-SkipDevice` | Off | Does not contact the device. |
-| `-JsonPath` | None | Writes the facts as JSON (UTF-8 without BOM, dates in ISO 8601 UTC). |
+| `-JsonPath` | None | Writes the facts as JSON (UTF-8 without BOM, dates in ISO 8601). A deployment deadline has no time zone: the site stores the local time that the administrator entered. |
 | `-MaximumListedItems` | 25 | The most entries in each list of the report. The JSON has all entries. A list with more entries ends with "... <n> more (see the JSON output)". |
 
 ## Exit codes

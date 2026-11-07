@@ -4,7 +4,7 @@ This page shows how to install Device Inspector, set the site server, and inspec
 
 ## What it does
 
-Device Inspector shows one device in five panels: Device, Applications, Updates, Collections and Problems. It reads the site with `SELECT` queries and reads the device with one remote script block. It never changes the site or the device.
+Device Inspector shows one device in five panels: Device, Applications, Updates, Collections and Problems. It reads the site with ConfigurationManager cmdlets and WQL `SELECT` queries through `Invoke-CMWmiQuery`, and reads the device with one remote script block. It never changes the site or the device.
 
 ## When to use it
 
@@ -15,12 +15,13 @@ Use this page on a new installation, or when you connect the tool to a different
 - Windows 10, Windows 11 or Windows Server 2016 or later.
 - Windows PowerShell 5.1. PowerShell 7 also works for the command-line script.
 - .NET Framework 4.7.2 or later.
-- WinRM access from this computer to the device and to the SMS Provider computer.
-- A Windows account with local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested.
+- Network access from this computer to the SMS Provider computer.
+- WinRM access from this computer to the device, for the live device reads.
+- A Windows account with local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with other rights on the site is not tested. For another account, check the Configuration Manager roles and scopes in your site. This was tested on the lab only.
 - The Configuration Manager console on this computer. The tool reads the site with the ConfigurationManager PowerShell module, which comes only with the console. Without the console, the tool stops at start with a message (see below). A device-only inspection needs the module too, because the start check runs first.
 - A window of at least 1024 by 640 pixels. The window opens at 1320 by 820.
 
-The tool connects with the Windows account that runs it. It stores no password and has no credential field.
+The window connects with the Windows account that runs it. It stores no password and has no credential field. The command-line script accepts `-Credential` for both connections. See [Command line](core/command-line.md).
 
 ## Steps
 
@@ -61,7 +62,7 @@ The sidebar shows five panels. See [Inspect bar](core/inspect.md) for every cont
 - To read only the device, leave the site server empty.
 - To read only the site, select **Site only**.
 
-The tool keeps the device name, the site server and **Site only** for the next start.
+The tool saves the device name and **Site only** when you select **Inspect** with valid inputs. It saves a site server that is not empty on **Inspect**, and on **OK** in Options.
 
 ### Start the tool on a computer without the console
 

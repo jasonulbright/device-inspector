@@ -76,7 +76,7 @@ A row shows the status as text. It has no color.
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| Every row is **Device only**. | The site has no inventory for the device. | Check the hardware inventory classes and the client settings. |
+| Every row is **Device only**. | The site was not queried, or it has no matching application inventory. | If the site was not queried, enter the site server and the site code, then inspect again. Otherwise check the hardware inventory classes and the client settings. |
 | Every row is **Inventory only**. | The device did not answer, or **Site only** was on. | Read the **Problems** panel. Clear **Site only**. |
 | The list is empty. | No inspection yet, or both sources failed. | Select **Inspect**. |
 

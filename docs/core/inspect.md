@@ -40,8 +40,9 @@ The summary line on the **Device** panel counts the applications, the update row
 
 ### Read only the device
 
-1. Clear the site server box.
-2. Select **Inspect**. The tool does not contact the site. The site record is missing from the **Device** panel, and the Site server row says "not queried".
+1. In **Options**, clear the site server and the **Site Code**, then select **OK**. The site server box on the Inspect bar is then empty. With a site code left in **Options**, **Inspect** stops with the message "A site code needs a site server."
+2. Clear **Site only** and enter a valid device name.
+3. Select **Inspect**. The tool does not contact the site. The site record is missing from the **Device** panel, and the Site server row says "not queried".
 
 ![The Device panel after an inspection with no site server](../images/device-device-only.png)
 
@@ -67,7 +68,7 @@ The tool checks the boxes before it reads anything. A wrong value opens a messag
 | **Inspect** | Reads the device and the site. |
 | **Export JSON**, **Export HTML** | Save the inspection. See [Export](export.md). They turn on when an inspection exists. |
 
-The site code comes from **Options**. It is required whenever a site server is set. The tool saves the device name, the site server and **Site only** when you select **Inspect**.
+The site code comes from **Options**. It is required whenever a site server is set. The tool saves the device name and **Site only** when you select **Inspect** with valid inputs. It saves the site server on **Inspect** only when the box is not empty, and when you select **OK** in Options.
 
 The **Enable actions** switch at the bottom of the sidebar is off and cannot be turned on in this release. The tool is read only. See [Read-only design](../reference/read-only-design.md).
 
@@ -80,7 +81,7 @@ The **Enable actions** switch at the bottom of the sidebar is off and cannot be 
 
 | Message | Cause | Fix |
 |---|---|---|
-| Enter the device name. Use letters, digits, dots, hyphens and underscores. | The device box is empty or holds another character. | Enter a valid device name. |
+| Enter the device name. Use letters, digits, dots, hyphens and underscores. | The trimmed name is empty, is longer than 255 characters, starts with a dot or holds another character. | Enter 1 to 255 letters, digits, dots, hyphens or underscores. Do not start with a dot. |
 | The site server is a computer name or an FQDN. | The site server box holds another character. | Enter a computer name or an FQDN. |
 | A site code needs a site server. | A site code is set in Options and the site server box is empty. | Enter a site server, or clear the site code in **Options**. |
 | A site server needs a site code. Enter it in Options. | The site server box holds a value and Options holds no site code. | Enter the site code in **Options**. |

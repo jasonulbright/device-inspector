@@ -50,7 +50,7 @@ A site code of another form opens a message and the dialog stays open. A site se
 | **Site server (SMS Provider FQDN)** | Empty, or the value that the suite launcher hands over | The SMS Provider computer. The site server box on the Inspect bar starts with this value. |
 | **Site Code** | Empty, or the value that the suite launcher hands over | A three-character site code. Required with a site server. The tool no longer asks the provider for it. |
 
-The dialog also says that the tool needs the Configuration Manager console on this computer, that the account needs local administrator rights on the device (WinRM), and that a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested.
+The dialog also says that the tool needs the Configuration Manager console on this computer, that the account needs local administrator rights on the device (WinRM), and that a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. This is the text of the dialog, and it was tested on the lab only. For another account, check the Configuration Manager roles and scopes in your site. An account with other rights is not tested.
 
 ## Limits
 

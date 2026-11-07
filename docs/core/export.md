@@ -46,7 +46,7 @@ Select **Cancel** in the dialog to stop. The tool writes nothing.
 
 | Message | Cause | Fix |
 |---|---|---|
-| Export JSON failed: ... (dialog **Export**) | The tool could not write the file. | Choose a folder that your account can write to. |
+| Export JSON failed: ... (dialog **Export**) | The tool could not write the file. | Choose a folder that your account can write to. When the `Reports` folder does not exist and the tool cannot create it, make the application folder writable, or ask an administrator to create the `Reports` folder beside the script. Then export again. |
 
 ## Links
 

@@ -26,7 +26,7 @@ An inspection.
 
 The same lines are in the log, each with the word `problem:`.
 
-With no problem, the panel says "No problems. Every part of the inspection ran."
+With no problem, the panel says "No problems. Every part of the inspection ran." This covers only the sources that you selected. **Site only** skips the device checks. An inspection with no site server skips the site checks.
 
 ![The Problems panel of a device with no problem](../images/problems-panel.png)
 
