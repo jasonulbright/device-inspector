@@ -322,9 +322,11 @@ Describe 'Window files' {
         $strText | Should -Match '(?s)if \(-not \$__console\.Available\) \{.*?MessageBox.*?exit 2'
     }
 
-    It 'keeps the version equal in the manifest, the start script and the changelog' {
+    It 'keeps the version equal in the manifest, the start script, the command line note and the top changelog heading' {
         $strManifestVersion = (Import-PowerShellDataFile -LiteralPath $script:strManifestPath).ModuleVersion
         (Get-Content -LiteralPath $script:strStartPath -Raw) | Should -Match ('(?m)^\s*Version\s*:\s*{0}\s*$' -f [regex]::Escape($strManifestVersion))
-        (Get-Content -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'CHANGELOG.md') -Raw) | Should -Match ('(?m)^## \[{0}\]' -f [regex]::Escape($strManifestVersion))
+        (Get-Content -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'Invoke-DeviceInspector.ps1') -Raw) | Should -Match ('(?m)^#\s*Version:\s*{0}\s*$' -f [regex]::Escape($strManifestVersion))
+        $strTopHeading = (Select-String -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'CHANGELOG.md') -Pattern '^## \[([^\]]+)\]' | Select-Object -First 1).Matches[0].Groups[1].Value
+        $strTopHeading | Should -Be $strManifestVersion
     }
 }
