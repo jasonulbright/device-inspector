@@ -2,6 +2,14 @@
 
 All notable changes to Device Inspector are documented in this file.
 
+## [2026.11.07.0004] - 2026-11-07
+
+## 1 user guide ships with the release
+
+### Added
+
+- Add the user guide (docs/index.md) with images of the running window.
+
 ## [2026.11.06.0003] - 2026-11-06
 
 ## 1 data access that uses the supported ConfigurationManager cmdlets
