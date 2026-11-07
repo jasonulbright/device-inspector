@@ -1,4 +1,18 @@
-# Scope, read-only design and limits
+# Read-only design
+
+This page lists what Device Inspector reads, why it cannot change anything, and its limits.
+
+## What it does
+
+The page states the scope and the design rules of the tool.
+
+## When to use it
+
+Use this page to check what the tool touches before you run it on a device.
+
+## Requirements
+
+None.
 
 ## What the tool reads
 
@@ -37,3 +51,7 @@ Each later action will follow the rules of the suite: off until Enable actions i
 - The device list reads the machine-wide uninstall keys only. Per-user installs are not listed.
 - A device name that has several resource records in the site uses the first record and adds a problem line.
 - The updates that the site lists as required come from the update compliance status of the site. They can lag the state on the device.
+
+## Links
+
+- [Get-CimInstance](https://learn.microsoft.com/powershell/module/cimcmdlets/get-ciminstance): Describes the read command that the tool uses on the device.

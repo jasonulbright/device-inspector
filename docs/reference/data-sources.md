@@ -1,5 +1,19 @@
 # Data sources and the lab comparison
 
+This page lists the source of each fact and the result of the lab comparison of the old and the new read.
+
+## What it does
+
+The page says which cmdlet or which device read gives each fact.
+
+## When to use it
+
+Use this page when a value differs from the console, or to find the source of a fact.
+
+## Requirements
+
+None.
+
 ## Rule
 
 - A fact that comes from the device itself stays live. The tool reads it on the device over WinRM (CIM and the registry on the device).
@@ -64,3 +78,7 @@ These stay on the device. A WinRM script block reads them, and they are not cach
 ## Time
 
 Both devices, site facts only, from CLIENT01 to CM01: 1.6 s with CIM (version 0001) and 6.5 s with the cmdlets (measured on 2026-11-06, including the first load of the module). One call for each collection or update took about ten times longer than one call for all, so the tool reads collections, deployments and updates in one call each and filters.
+
+## Links
+
+- [Get-CMDevice](https://learn.microsoft.com/powershell/module/configurationmanager/get-cmdevice): Describes the cmdlet that reads the site record of a device.

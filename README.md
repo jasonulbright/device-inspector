@@ -7,7 +7,11 @@
 
 Read the facts of one device from a Configuration Manager site and from the device itself, in one window: operating system, client health, site record, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report. The tool is read only.
 
-![Device Inspector](screenshots/device.png)
+![Device Inspector](docs/images/device-panel.png)
+
+## User guide
+
+The user guide is in [docs/index.md](docs/index.md). It has one page for each part of the window, a settings page, the command line, reference pages and troubleshooting. Every image in it is a capture of the running window.
 
 ## Features
 
@@ -53,15 +57,15 @@ Leave the site server empty to read only the device. Select **Site only** to rea
 - **Collections** -- the collection memberships, and the deployments that target those collections.
 - **Problems** -- the parts that failed.
 
-![Applications](screenshots/applications.png)
+![Applications](docs/images/apps-panel.png)
 
-![Updates](screenshots/updates.png)
+![Updates](docs/images/updates-panel.png)
 
-![Collections](screenshots/collections.png)
+![Collections](docs/images/collections-dc01.png)
 
-![Problems](screenshots/problems.png)
+![Problems](docs/images/problems-unreachable.png)
 
-The right-click menus of the Applications, Updates and Collections grids and the **Enable actions** switch are in place for later releases. They are disabled. See [docs/read-only-design.md](docs/read-only-design.md).
+The right-click menus of the Applications, Updates and Collections grids and the **Enable actions** switch are in place for later releases. They are disabled. See [docs/reference/read-only-design.md](docs/reference/read-only-design.md).
 
 ## Command line
 
@@ -112,7 +116,7 @@ device-inspector/
 |  +- DeviceInspectorCommon.psd1     # Module manifest
 |  \- DeviceInspectorCommon.psm1     # Inspection logic and window support
 +- Tests/                            # Pester 5 tests
-+- docs/read-only-design.md          # Scope, read-only design, limits
++- docs/reference/read-only-design.md          # Scope, read-only design, limits
 ```
 
 ## License
