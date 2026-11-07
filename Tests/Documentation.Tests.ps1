@@ -18,6 +18,7 @@ BeforeAll {
         }
     }
     $script:arrRef = @(foreach ($objPage in $script:arrPage) { Get-DocLink -Page $objPage })
+    $script:arrReadmeRef = @(Get-DocLink -Page (Get-Item -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'README.md')) | Where-Object { $_.Target -match '^docs/' -or $_.Target -match '^\.?/?docs/' })
 }
 
 Describe 'User guide' {
@@ -28,7 +29,7 @@ Describe 'User guide' {
     }
 
     It 'resolves every relative link and image to a file' {
-        $arrMissing = foreach ($objRef in @($script:arrRef | Where-Object { $_.Target -notmatch '^(https?:|mailto:|#)' })) {
+        $arrMissing = foreach ($objRef in @(@($script:arrRef) + @($script:arrReadmeRef) | Where-Object { $_.Target -notmatch '^(https?:|mailto:|#)' })) {
             $strPath = ($objRef.Target -split '#')[0]
             if (-not $strPath) { continue }
             $strFull = Join-Path -Path (Split-Path -Path $objRef.Page.FullName -Parent) -ChildPath $strPath
@@ -41,7 +42,7 @@ Describe 'User guide' {
         $strIndex = Get-Content -LiteralPath (Join-Path -Path $script:strDocsRoot -ChildPath 'index.md') -Raw
         $arrOrphan = foreach ($objPage in $script:arrPage) {
             $strRelative = $objPage.FullName.Substring($script:strDocsRoot.Length + 1).Replace('\', '/')
-            if ($strRelative -ne 'index.md' -and $strIndex -notmatch [regex]::Escape('(' + $strRelative + ')')) { $strRelative }
+            if ($strRelative -ne 'index.md' -and $strIndex -notmatch [regex]::Escape('](' + $strRelative + ')')) { $strRelative }
         }
         @($arrOrphan) | Should -BeNullOrEmpty
     }
@@ -59,7 +60,7 @@ Describe 'User guide' {
     It 'gives every image a description' {
         @($script:arrRef | Where-Object { $_.Kind -eq 'Image' }).Count | Should -BeGreaterThan 0
         foreach ($objPage in $script:arrPage) {
-            (Get-Content -LiteralPath $objPage.FullName -Raw) | Should -Not -Match '\!\[\]\(' -Because $objPage.Name
+            (Get-Content -LiteralPath $objPage.FullName -Raw) | Should -Not -Match '\!\[\s*\]\(' -Because $objPage.Name
         }
     }
 

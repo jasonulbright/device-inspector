@@ -4,7 +4,7 @@ This page lists the most common problems of Device Inspector with their cause an
 
 ## What it does
 
-The page helps you find the fix for a message in a dialog, in the log or on the **Problems** panel. [Error messages](reference/error-messages.md) lists all messages.
+The page helps you find the fix for a message in a dialog, in the log or on the **Problems** panel. See [Error messages](reference/error-messages.md) for the dialog and command-line messages, and [Problems panel](core/problems.md) for the inspection problems.
 
 ## When to use it
 
@@ -34,25 +34,25 @@ None. Some fixes need rights on the site or on the device.
 | A message opens when you select **Inspect**. | A box holds a wrong value. | Read the message. See [Inspect bar](core/inspect.md). |
 | **Export JSON** and **Export HTML** are off. | No inspection exists yet. | Select **Inspect**. |
 | A message says "A site server needs a site code. Enter it in Options." | The site server is set and the site code is empty. | Enter the site code in **Options**. |
-| The status bar shows "Enter a site server, or clear Site only." | **Site only** is on and the site server box is empty. | Enter the site server. |
+| The status bar shows "Enter a site server, or clear Site only." | **Site only** is on and the site server box is empty. | Enter the site server, or clear **Site only** to inspect the device. |
 
 ## Problems panel
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| Device: Connecting to remote server <name> failed ... the server name cannot be resolved. | The device name is wrong, or the name does not resolve. | Check the name and the DNS. |
+| Device: Connecting to remote server `<name>` failed ... the server name cannot be resolved. | The device name is wrong, or the name does not resolve. | Check the name and the DNS. |
 | Device: ... Access is denied. | The account has no remote management right on the device. | Run the tool as an account with the right. |
 | Device: ... WinRM cannot process the request. | The device is off, or WinRM is not on. | Start the device. Check the WinRM service and the firewall. |
-| Site: no device named <name> exists in site <code>. | The site has no record with that name. | Check the name. The device must be in the site. |
+| Site: no device named `<name>` exists in site `<code>`. | The site has no record with that name. | Check the name. The device must be in the site. |
 | Client health: the CcmExec service does not exist. | The device has no ConfigMgr client. | Install the client, or inspect another device. |
-| Site: <n> resource records share the name <name>. The first one is used. | The site has several records with one name. | Remove the duplicate record in the console. |
+| Site: `<n>` resource records share the name `<name>`. The first one is used. | The site has several records with one name. | Compare the records in the console. Confirm that a record is no longer needed before you delete it. Deleting a client record removes its history and its earlier associations. |
 
 ## Panels
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
 | Every application is **Inventory only**. | The device part failed or **Site only** was on. | Read the **Problems** panel. |
-| Every application is **Device only**. | The site has no inventory for the device. | Enable the classes `Add Remove Programs` and `Add Remove Programs (64)` in the client settings. |
+| Every application is **Device only**. | The site was not queried, the site read failed, or the site has no inventory for the device. | Check the site server and the **Problems** panel first. Then enable the classes `Add Remove Programs` and `Add Remove Programs (64)` in the client settings. |
 | A new install shows as **Device only**. | The hardware inventory did not run yet. | Wait for the next hardware inventory. |
 
 ## Window

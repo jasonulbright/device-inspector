@@ -30,7 +30,7 @@ The tool needs no right to change anything. It never changes the site or the dev
 
 ### Check an account
 
-1. Start the tool as the account.
+1. Start the tool as the account. Clear **Site only**, and read the **Problems** panel first: a missing group can also come from **Site only** or from a device that did not answer.
 2. Inspect a device with a site server. An empty **Device** group means the device right is missing. An empty **Site record** means the site right is missing. The **Problems** panel names the part.
 
 ## Limits

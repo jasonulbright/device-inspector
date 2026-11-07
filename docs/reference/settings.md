@@ -39,7 +39,7 @@ Write access for your account to the folder of the script.
 | `SUITE_CM_PROVIDER` | Fills an empty site server. The suite launcher sets it. |
 | `SUITE_CM_SITECODE` | Fills an empty site code. The suite launcher sets it. |
 
-A value that is saved in `DeviceInspector.prefs.json` wins over a variable.
+A value that is saved in `DeviceInspector.prefs.json` and is not empty wins over the variable. An empty saved value is filled from the variable.
 
 ## Steps
 

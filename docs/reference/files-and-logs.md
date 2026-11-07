@@ -4,7 +4,7 @@ This page lists every folder and file that Device Inspector writes.
 
 ## What it does
 
-The tool writes next to its script. It writes nothing to the registry. It never writes to the site or to the device.
+The tool writes next to its script. It writes nothing to the registry. It never writes to the site or to the device during an inspection. An export writes to the folder that you select in the Save As dialog. That folder can be a share on another computer.
 
 ## When to use it
 

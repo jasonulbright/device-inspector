@@ -40,7 +40,7 @@ Select **Cancel** in the dialog to stop. The tool writes nothing.
 ## Limits
 
 - The files hold the facts of the last inspection. A change of the boxes does not change them.
-- The HTML page lists all entries. The command-line report lists at most 25 entries in each list. See [Command line](command-line.md).
+- The HTML page lists the entries of the lists that it shows. It omits the client application policy entries of the device, with their install and evaluation states. Use the JSON file for the complete inspection. The command-line report defaults to at most 25 entries in each of the collections, deployments, updates and applications lists. Use `-MaximumListedItems` to change this. See [Command line](command-line.md).
 
 ## Troubleshooting
 

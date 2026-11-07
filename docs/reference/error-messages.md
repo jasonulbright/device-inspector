@@ -30,7 +30,7 @@ None.
 | A site server needs a site code. Enter it in Options. | Dialog **Inspect** or **Options** | The site server is set and the site code is empty. | Enter the site code in **Options**. |
 | The Configuration Manager console is not installed on this computer. Device Inspector reads the site with the ConfigurationManager PowerShell module, which comes only with the console. Install the console, then start Device Inspector again. | Message box at start | The module is not found. | Install the console. |
 | Inspect: Site only needs a site server. | Log | **Site only** is on and the site server box is empty. | Enter a site server, or clear **Site only**. |
-| Inspect failed: <text> | Dialog and log | The inspection stopped on an error that no part caught. | Read the text. |
+| Inspect failed: `<text>` | Dialog and log | The inspection stopped on an error that no part caught. | Read the text. |
 
 ### Problems
 
@@ -40,7 +40,7 @@ See [Problems panel](../core/problems.md) for the lines of the failed parts.
 
 | Message | Where | Cause | Fix |
 |---|---|---|---|
-| Export <kind> failed: <text> | Dialog **Export** and log | The file could not be written. | Choose a folder that your account can write to. |
+| Export `<kind>` failed: `<text>` | Dialog **Export** and log | The file could not be written. | Choose a folder that your account can write to. |
 
 ### Command line
 

@@ -57,11 +57,13 @@ A part that fails is listed in the **Problems** section. The other parts still p
 | `-SiteServer` | None | The SMS Provider computer. Omit it to skip the site facts. |
 | `-SiteCode` | None. Required with `-SiteServer`. | Three letters or digits. |
 | `-Credential` | The current account | A credential for both connections. |
-| `-SkipDevice` | Off | Does not contact the device. |
+| `-SkipDevice` | Off | Does not contact the device. Requires `-SiteServer` and `-SiteCode`. |
 | `-JsonPath` | None | Writes the facts as JSON (UTF-8 without BOM, dates in ISO 8601). A deployment deadline has no time zone: the site stores the local time that the administrator entered. |
 | `-MaximumListedItems` | 25 | The most entries in each list of the report. The JSON has all entries. A list with more entries ends with "... <n> more (see the JSON output)". |
 
 ## Exit codes
+
+The table applies to a PowerShell process that you start with `-File`. When you call the script with `&` from a PowerShell session, an invalid name throws an exception and does not set `$LASTEXITCODE` to 1. A caller must handle the exception.
 
 | Code | Meaning |
 |---|---|
