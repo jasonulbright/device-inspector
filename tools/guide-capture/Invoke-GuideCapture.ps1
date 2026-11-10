@@ -67,12 +67,22 @@ $captureJson = @{ SiteCode = $SiteCode; SmsProvider = $SmsProvider; Device = $De
 $failed = New-Object System.Collections.Generic.List[string]
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('guide-capture-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $tmp | Out-Null
+# Runs on the lab computer. Stops the task, the runner and the app that run from C:\guide.
+$stopCapture = {
+    Stop-ScheduledTask -TaskName GuideShots -ErrorAction SilentlyContinue
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*C:\guide\*' -and $_.ProcessId -ne $PID } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 2
+    $left = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*C:\guide\*' -and $_.ProcessId -ne $PID })
+    if ($left.Count) { throw ('These processes from C:\guide did not stop: ' + (($left | ForEach-Object { $_.ProcessId }) -join ', ')) }
+}
 $session = New-PSSession -ComputerName $Target -Credential $LabCredential
+$completed = $false
 try {
     foreach ($steps in 'steps-guide.ps1', 'steps-console-missing.ps1') {
         $dest = "C:\guide\$app"
         # A fresh copy for each run: no saved settings, no window state, no log of an earlier run.
-        Invoke-Command $session { param($d) Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*C:\guide\*' -and $_.ProcessId -ne $PID } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 2; if (Test-Path $d) { Remove-Item $d -Recurse -Force }; New-Item -ItemType Directory $d, 'C:\guide\ui' -Force | Out-Null } -ArgumentList $dest
+        Invoke-Command $session $stopCapture
+        Invoke-Command $session { param($d) if (Test-Path $d) { Remove-Item $d -Recurse -Force }; New-Item -ItemType Directory $d, 'C:\guide\ui' -Force | Out-Null } -ArgumentList $dest
         foreach ($item in Get-ChildItem -LiteralPath $repo -Force | Where-Object { $_.Name -notin '.git', '.claude', '.github', 'Logs', 'Reports', 'screenshots', 'TestResults', 'docs', 'Tests', 'tools' -and $_.Name -notlike '*.prefs.json' -and $_.Name -notlike '*.windowstate.json' -and $_.Name -notlike '*.local.*' -and $_.Name -notlike '*.png' }) {
             Copy-Item -LiteralPath $item.FullName -Destination "$dest\$($item.Name)" -ToSession $session -Recurse -Force
         }
@@ -83,7 +93,7 @@ try {
         Invoke-Command $session -ScriptBlock {
             param($a, $user)
             Remove-Item C:\guide\ui\out -Recurse -Force -ErrorAction SilentlyContinue
-            $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\guide\ui\main.ps1 -App $a"
+            $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\guide\ui\main.ps1 -App `"$a`""
             $pr = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
             Register-ScheduledTask -TaskName GuideShots -Action $act -Principal $pr -Force | Out-Null
             Start-ScheduledTask GuideShots
@@ -107,9 +117,24 @@ try {
     foreach ($png in $captured) {
         if ($AddNew -or (Test-Path (Join-Path $images $png.Name))) { Copy-Item $png.FullName (Join-Path $images $png.Name) -Force }
     }
+    $completed = $true
 }
 finally {
-    Invoke-Command $session { Unregister-ScheduledTask GuideShots -Confirm:$false -ErrorAction SilentlyContinue; Remove-Item C:\guide -Recurse -Force -ErrorAction SilentlyContinue }
+    # After a timeout or a failure the app can still run on the lab computer. Stop it before the cleanup.
+    $cleanupError = $null
+    try {
+        Invoke-Command $session $stopCapture
+        Invoke-Command $session {
+            Unregister-ScheduledTask GuideShots -Confirm:$false -ErrorAction SilentlyContinue
+            if (Test-Path C:\guide) { Remove-Item C:\guide -Recurse -Force -ErrorAction Stop }
+        }
+    }
+    catch { $cleanupError = $_ }
     Remove-PSSession $session
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    if ($cleanupError) {
+        $message = "The cleanup of C:\guide on the lab computer failed: $cleanupError"
+        # A failed run already throws its own error. Do not replace it: show the cleanup failure as a warning.
+        if ($completed) { throw $message } else { Write-Warning $message }
+    }
 }
