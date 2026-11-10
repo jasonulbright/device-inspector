@@ -178,17 +178,24 @@ function Register-OwnerCentering {
     $global:__ownerCenteringRegistered = $true
     [System.Windows.EventManager]::RegisterClassHandler([System.Windows.Window], [System.Windows.FrameworkElement]::LoadedEvent, [System.Windows.RoutedEventHandler]{
             param($s, $e)
-            $owner = $s.Owner
-            if (-not $owner -or $s.WindowStartupLocation -ne [System.Windows.WindowStartupLocation]::CenterOwner) { return }
-            # The owner position in device-independent units, also when the owner is maximized.
-            $left = $owner.Left; $top = $owner.Top
-            $source = [System.Windows.PresentationSource]::FromVisual($owner)
-            if ($source -and $source.CompositionTarget) {
-                $corner = $source.CompositionTarget.TransformFromDevice.Transform($owner.PointToScreen([System.Windows.Point]::new(0, 0)))
-                $left = $corner.X; $top = $corner.Y
-            }
-            $s.Left = $left + ($owner.ActualWidth - $s.ActualWidth) / 2
-            $s.Top = $top + ($owner.ActualHeight - $s.ActualHeight) / 2
+            if (-not $s.Owner -or $s.WindowStartupLocation -ne [System.Windows.WindowStartupLocation]::CenterOwner) { return }
+            # Center after the first layout and after the placement of WPF, which runs after Loaded.
+            $w = $s
+            [void]$s.Dispatcher.BeginInvoke([System.Windows.Threading.DispatcherPriority]::ContextIdle, [action]({
+                    $owner = $w.Owner
+                    if (-not $owner) { return }
+                    # The owner position in device-independent units, also when the owner is maximized.
+                    $left = $owner.Left; $top = $owner.Top
+                    $source = [System.Windows.PresentationSource]::FromVisual($owner)
+                    if ($source -and $source.CompositionTarget) {
+                        $corner = $source.CompositionTarget.TransformFromDevice.Transform($owner.PointToScreen([System.Windows.Point]::new(0, 0)))
+                        $left = $corner.X; $top = $corner.Y
+                    }
+                    $w.WindowStartupLocation = [System.Windows.WindowStartupLocation]::Manual
+                    $w.Left = $left + ($owner.ActualWidth - $w.ActualWidth) / 2
+                    $w.Top = $top + ($owner.ActualHeight - $w.ActualHeight) / 2
+                    $global:__ownerCenteringCount = 1 + [int]$global:__ownerCenteringCount
+                }.GetNewClosure()))
         })
 }
 Register-OwnerCentering

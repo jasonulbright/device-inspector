@@ -184,7 +184,7 @@ Describe 'Message boxes' -Skip:(-not $script:WindowGuard.Allowed) {
         $r.BoxWidth | Should -BeGreaterThan 0
         $ownerX = $r.OwnerLeft + $r.OwnerWidth / 2; $ownerY = $r.OwnerTop + $r.OwnerHeight / 2
         $boxX = $r.BoxLeft + $r.BoxWidth / 2; $boxY = $r.BoxTop + $r.BoxHeight / 2
-        [math]::Abs($boxX - $ownerX) | Should -BeLessOrEqual 2 -Because ('box center x {0}, owner center x {1}' -f $boxX, $ownerX)
+        [math]::Abs($boxX - $ownerX) | Should -BeLessOrEqual 2 -Because ('box center x {0}, owner center x {1}, centered by the app {2} times' -f $boxX, $ownerX, $r.Centered)
         [math]::Abs($boxY - $ownerY) | Should -BeLessOrEqual 2 -Because ('box center y {0}, owner center y {1}' -f $boxY, $ownerY)
     }
 }

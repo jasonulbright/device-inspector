@@ -146,12 +146,12 @@ $script:MessageBoxMeasureScript = {
             $global:HarnessTicks++
             $box = @($global:HarnessOwner.OwnedWindows) | Where-Object { $_.IsLoaded } | Select-Object -First 1
             # Read the box some ticks after it loaded, so SizeToContent and the start location are applied.
-            if ($box -and -not $global:HarnessBox -and $global:HarnessTicks -ge 5) {
+            if ($box -and -not $global:HarnessBox -and $global:HarnessTicks -ge 10) {
                 $o = $global:HarnessOwner
                 $global:HarnessBox = [PSCustomObject]@{
                     OwnerTitle = $o.Title; BoxTitle = $box.Title
                     OwnerLeft = $o.Left; OwnerTop = $o.Top; OwnerWidth = $o.ActualWidth; OwnerHeight = $o.ActualHeight
-                    BoxLeft = $box.Left; BoxTop = $box.Top; BoxWidth = $box.ActualWidth; BoxHeight = $box.ActualHeight
+                    BoxLeft = $box.Left; BoxTop = $box.Top; BoxWidth = $box.ActualWidth; BoxHeight = $box.ActualHeight; Centered = [int]$global:__ownerCenteringCount
                 }
                 $box.Close()
             }
