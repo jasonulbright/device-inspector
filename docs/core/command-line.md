@@ -73,12 +73,16 @@ The table applies to a PowerShell process that you start with `-File`. When you 
 ## Limits
 
 - The report shows at most `-MaximumListedItems` entries in each list.
+- With a site server, the report can start with a warning of the ConfigurationManager module about a wildcard in the `Name` parameter. This is a known item. The warning does not stop the report.
 
 ## Troubleshooting
 
 | Message | Cause | Fix |
 |---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | The device name is empty or holds another character. | Use letters, digits, dots, hyphens and underscores. |
+| Nothing to inspect: SiteServer is omitted and SkipDevice is set. | `-SkipDevice` is set and `-SiteServer` is not. | Add `-SiteServer` and `-SiteCode`, or remove `-SkipDevice`. |
+
+See [Error messages](../reference/error-messages.md) for the other input messages.
 
 ## Links
 

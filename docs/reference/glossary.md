@@ -28,6 +28,7 @@ None.
 | Problem | A part of the inspection that failed. The other parts still run. |
 | Provider | The SMS Provider: the computer that gives access to the site data. The site server box names it. |
 | Resource ID | The ID that the site gives to the device record. |
+| Site drive | The `CMSite` PowerShell drive that the tool opens for the site code. The ConfigurationManager cmdlets work only from it. It exists only in the PowerShell session of the tool. |
 | Site only | The option that skips the connection to the device. |
 | Site record | The facts that the site stores about the device. |
 | Version differs | An application with the same name and another version on the device and in the inventory. |
