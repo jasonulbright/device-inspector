@@ -17,7 +17,7 @@ AfterAll {
 
 Describe 'Action module surface' {
     It 'exports the action functions through the module manifest' {
-        foreach ($strName in 'Invoke-DeviceInspectorPolicyUpdate', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog') {
+        foreach ($strName in 'Invoke-DeviceInspectorPolicyUpdate', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord') {
             Get-Command -Name $strName -Module DeviceInspectorCommon -ErrorAction SilentlyContinue | Should -Not -BeNullOrEmpty -Because $strName
         }
     }
@@ -59,7 +59,14 @@ Describe 'Invoke-DeviceInspectorPolicyUpdate' {
         (Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01').Succeeded | Should -BeFalse
     }
 
-    It 'refuses a device name that carries a path or a query' {
+    It 'says on a failed run that a step can have run' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { throw 'The WinRM client cannot process the request.' }
+        (Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01').Summary | Should -Match 'can fail after a step ran'
+        (Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01' -DryRun).Summary | Should -Not -Match 'can fail after a step ran'
+    }
+
+    It 'refuses a device name that carries a path, a query or a line break' {
+        { Invoke-DeviceInspectorPolicyUpdate -ComputerName "WS01`n" } | Should -Throw
         { Invoke-DeviceInspectorPolicyUpdate -ComputerName 'a\b' } | Should -Throw
         { Invoke-DeviceInspectorPolicyUpdate -ComputerName "a' OR 1=1" } | Should -Throw
     }
@@ -102,6 +109,19 @@ Describe 'Policy update script on the device' {
         }
     }
 
+    It 'keeps the done steps when the second method call throws' {
+        InModuleScope DeviceInspectorCommon {
+            $script:intCall = 0
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } }
+            Mock Invoke-CimMethod { $script:intCall++; if ($script:intCall -eq 2) { throw 'Generic failure' }; [pscustomobject]@{ ReturnValue = 0 } }
+            $objRaw = & $script:scriptBlockPolicyUpdate $false
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'The steps before it ran'
+            $objRaw.Steps[1] | Should -Match '^Triggered .*000000000021'
+            $objRaw.Steps[2] | Should -Match 'failed: Generic failure'
+        }
+    }
+
     It 'reports a device without the client and calls no method' {
         InModuleScope DeviceInspectorCommon {
             Mock Get-CimInstance { throw 'Invalid namespace' }
@@ -128,6 +148,23 @@ Describe 'Action log' {
         $arrLine.Count | Should -Be 3
         $arrLine[0] | Should -Be '2026-11-10T20:00:00Z | EXAMPLE\admin | WS01 | Client policy update | DRY RUN | OK | Dry run: the client answers. Nothing changed.'
         $arrLine[1] | Should -Be '    Client version 5.00 answers.'
+    }
+
+    It 'writes each field on one line, so device text cannot add a log line' {
+        $objBad = $script:objSample.PSObject.Copy()
+        $objBad.Summary = "first`r`n2026-01-01T00:00:00Z | X | Y | Z | RUN | OK | forged"
+        $objBad.Steps = @("step`nnext", "tab`there")
+        $arrLine = @(ConvertTo-DeviceInspectorActionText -Result $objBad)
+        $arrLine.Count | Should -Be 3
+        $arrLine[0] | Should -Match '\| first 2026-01-01T00:00:00Z \| X'
+        $arrLine[1] | Should -Be '    step next'
+        $arrLine[2] | Should -Be '    tab here'
+    }
+
+    It 'writes a start record with the outcome STARTED' {
+        $objStart = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Outcome 'STARTED' -Summary 'The run started.' -Steps @()
+        $objStart.Mode | Should -Be 'RUN'
+        @(ConvertTo-DeviceInspectorActionText -Result $objStart)[0] | Should -Match '\| WS01 \| Client policy update \| RUN \| STARTED \| The run started\.$'
     }
 
     It 'marks a failed action' {
@@ -170,10 +207,19 @@ Describe 'Action gate in the window' {
     It 'writes every run and every dry run to the action log' {
         $script:strStart | Should -Match '(?s)function Write-ActionResult \{.*?Write-DeviceInspectorActionLog -Path \$script:ActionLogPath'
         $script:strStart | Should -Match '(?s)-OnDone \{.*?Write-ActionResult -Result \$r'
+        $script:strStart | Should -Match '(?s)if \(\$State\.ErrorMsg\) \{\s*\$failed = New-DeviceInspectorActionRecord.*?Write-ActionResult -Result \$failed'
+    }
+
+    It 'writes a start record before a run and stops when it cannot write it' {
+        $intStart = $script:strStart.IndexOf("-Outcome 'STARTED'")
+        $intWork = $script:strStart.IndexOf('Start-BackgroundWork -Title $title')
+        $intStart | Should -BeGreaterThan 0
+        $intStart | Should -BeLessThan $intWork
+        $script:strStart | Should -Match "(?s)-Outcome 'STARTED'.*?catch \{.*?the run does not start.*?return\s*\}"
     }
 
     It 'shows the device count in the confirmation and makes Cancel the default button' {
-        $script:strStart | Should -Match 'This action changes 1 device'
+        $script:strStart | Should -Match 'This action targets 1 device'
         $script:strStart | Should -Match 'x:Name="btnActionCancel"[^>]*IsCancel="True" IsDefault="True"'
         $script:strStart | Should -Not -Match 'x:Name="btnActionRun"[^>]*IsDefault'
     }

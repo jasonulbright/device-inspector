@@ -355,6 +355,7 @@ $script:BgGraveyard    = @()
 $script:BgOnDone       = $null
 $script:ActionChoice   = 'Cancel'
 $script:ActionAfterRun = $null
+$script:ActionPending  = $null
 
 function Initialize-BgRunspace {
     if ($script:BgRunspace -and $script:BgRunspace.RunspaceStateInfo.State -eq 'Opened') { return }
@@ -758,7 +759,7 @@ function Show-ActionConfirmDialog {
     Install-TitleBarDragFallback -Window $dlg
     Set-DialogTheme -Dialog $dlg
     $count = @($Devices).Count
-    $dlg.FindName('txtDeviceCount').Text = $(if ($count -eq 1) { 'This action changes 1 device: {0}' -f $Devices[0] } else { 'This action changes {0} devices: {1}' -f $count, (@($Devices) -join ', ') })
+    $dlg.FindName('txtDeviceCount').Text = $(if ($count -eq 1) { 'This action targets 1 device: {0}' -f $Devices[0] } else { 'This action targets {0} devices: {1}' -f $count, (@($Devices) -join ', ') })
     $dlg.FindName('txtActionMessage').Text = $Message
     $script:ActionChoice = 'Cancel'
     $dlg.FindName('btnActionRun').Add_Click({ $script:ActionChoice = 'Run'; $dlg.Close() })
@@ -796,7 +797,18 @@ function Invoke-DeviceAction {
     $choice = Show-ActionConfirmDialog -Title $Name -Message $Message -Devices @($device)
     if ($choice -eq 'Cancel') { Add-LogLine ('{0}: cancelled.' -f $Name); return }
     $dry = ($choice -eq 'DryRun')
+    if (-not $dry) {
+        # A run that stops part way (window closed, connection lost) still leaves this line.
+        $start = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $false -Succeeded $false -Outcome 'STARTED' -Summary 'The run started.' -Steps @()
+        try { $null = Write-DeviceInspectorActionLog -Path $script:ActionLogPath -Result $start }
+        catch {
+            Add-LogLine ('{0}: the action log cannot be written, so the run does not start. {1}' -f $Name, $_.Exception.Message)
+            [void](Show-ThemedMessage -Owner $window -Title 'Action log' -Message ('The action log cannot be written, so the run does not start: {0}' -f $_.Exception.Message) -Icon Error)
+            return
+        }
+    }
     $script:ActionAfterRun = $AfterRun
+    $script:ActionPending = @{ Name = $Name; Device = $device; DryRun = $dry }
     $arguments = @{ Function = $Function; Parameters = (@{ ComputerName = $device; DryRun = $dry } + $Parameters) }
     $title = $(if ($dry) { 'Dry run: {0} on {1}' -f $Name, $device } else { '{0} on {1}' -f $Name, $device })
     Start-BackgroundWork -Title $title -Step 'Connecting to the device...' -Arguments $arguments -Work {
@@ -810,6 +822,8 @@ function Invoke-DeviceAction {
     } -OnDone {
         param($State)
         if ($State.ErrorMsg) {
+            $failed = New-DeviceInspectorActionRecord -Action $script:ActionPending.Name -ComputerName $script:ActionPending.Device -DryRun ([bool]$script:ActionPending.DryRun) -Succeeded $false -Summary ([string]$State.ErrorMsg) -Steps @()
+            Write-ActionResult -Result $failed
             Add-LogLine ('Action failed: {0}' -f $State.ErrorMsg)
             Set-StatusText 'Action failed. See the log.'
             [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ([string]$State.ErrorMsg) -Icon Error)

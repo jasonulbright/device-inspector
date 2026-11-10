@@ -28,6 +28,7 @@
         'Invoke-DeviceInspectorPolicyUpdate'
         'ConvertTo-DeviceInspectorActionText'
         'Write-DeviceInspectorActionLog'
+        'New-DeviceInspectorActionRecord'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

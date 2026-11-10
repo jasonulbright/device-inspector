@@ -16,7 +16,6 @@ Device Inspector reads the facts of one device from a Configuration Manager site
 - [Problems panel](core/problems.md): the parts that failed, and what a failed part leaves.
 - [Export](core/export.md): Export JSON and Export HTML.
 - [Actions](core/actions.md): Enable actions, the confirmation, the dry run, the action log, and each action.
-- [Actions](core/actions.md): Enable actions, the confirmation, the dry run, the action log, and each action.
 - [Options dialog](core/options.md): the site server, the site code and About.
 - [Command line](core/command-line.md): `Invoke-DeviceInspector.ps1`, its parameters and its output.
 

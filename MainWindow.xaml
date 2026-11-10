@@ -219,7 +219,7 @@
                                                IsOn="False"
                                                OnContent="" OffContent=""
                                                MinWidth="0"
-                                               ToolTip="Off: the tool only reads. On: the action buttons and menu entries can change the device or the site. Each action asks first. The switch is off at each start."/>
+                                               ToolTip="Off: the tool only reads. On: the action buttons can change the device or the site. Each action asks first. The switch is off at each start."/>
                     </DockPanel>
                     <DockPanel LastChildFill="False">
                         <TextBlock x:Name="txtThemeLabel" Text="Dark Theme"

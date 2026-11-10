@@ -7,11 +7,11 @@ The actions change the device or the site. They are off until you turn on **Enab
 Each action follows the same steps:
 
 1. You turn on **Enable actions** at the bottom of the sidebar. The switch is off at each start of the tool. The status bar shows "actions on" while it is on.
-2. You select the action button or the right-click menu entry.
-3. A dialog names the action. A banner at the top shows the number of devices that the action changes, and their names.
+2. You select the action button.
+3. A dialog names the action. A banner at the top shows the number of devices that the action targets, and their names.
 4. You select **Run**, **Dry run** or **Cancel**. **Cancel** is the default button, so Enter and Esc change nothing.
 5. The action runs in the background. **Dry run** reads the current state and lists the steps, and changes nothing.
-6. The result goes to the window log, to the tool log and to the action log. A message shows the result.
+6. Before a run, the tool writes a `STARTED` line to the action log. If it cannot write the line, the run does not start. The result goes to the window log, to the tool log and to the action log. A message shows the result.
 
 ## When to use it
 
@@ -41,17 +41,17 @@ The client requests machine policy from its management point (schedule `{0000000
 
 | Control | Effect |
 |---|---|
-| **Enable actions** | Off: the tool only reads, and the action buttons and menu entries are off. On: they turn on when an inspection reached the device. |
+| **Enable actions** | Off: the tool only reads, and the action buttons are off. On: they turn on when an inspection reached the device. |
 | **Run** | Makes the change. |
 | **Dry run** | Reads the state and lists the steps. Changes nothing. |
 | **Cancel** | Closes the dialog. Changes nothing. |
 
 ## The action log
 
-The action log is `Logs\DeviceInspector-actions.log` in the script folder. The tool appends to it and never deletes it. It keeps every run and every dry run of every session. Each entry has one line with the UTC time, the account, the device, the action, the mode (`RUN` or `DRY RUN`), the outcome (`OK` or `FAILED`) and a summary, then one indented line for each step.
+The action log is `Logs\DeviceInspector-actions.log` in the script folder. The tool appends to it and never deletes it. It keeps every run and every dry run of every session. Each entry has one line with the UTC time, the account, the device, the action, the mode (`RUN` or `DRY RUN`), the outcome (`STARTED`, `OK` or `FAILED`) and a summary, then one indented line for each step. A line break in a field from the device becomes a space.
 
 ```text
-2026-11-10T20:00:00Z | CONTOSO\labadmin | CLIENT01 | Client policy update | DRY RUN | OK | Dry run: the client answers. Nothing changed.
+2026-11-10T20:00:00Z | CONTOSO\admin1 | CLIENT01 | Client policy update | DRY RUN | OK | Dry run: the client answers. Nothing changed.
     Client version 5.00.9146.1009 answers.
     Dry run: would trigger Machine policy retrieval (Machine Policy Assignments Request) {00000000-0000-0000-0000-000000000021}.
     Dry run: would trigger Machine policy evaluation (Machine Policy Evaluation) {00000000-0000-0000-0000-000000000022}.
@@ -66,7 +66,9 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 
 | Message | Cause | Fix |
 |---|---|---|
-| Cannot run the action on <device>: ... | WinRM to the device failed. | Check that the device is on and that your account is a local administrator on it. |
+| Cannot run the action on <device>: ... | WinRM to the device failed. On a run, a step can have run before the failure. | Check that the device is on and that your account is a local administrator on it. Inspect the device to see its state. |
+| <step> failed. The steps before it ran. | A method call on the client failed. | Read the step lines in the log. Read `PolicyAgent.log` on the device. |
+| The action log cannot be written, so the run does not start. | The `Logs` folder is not writable. | Make the folder of the script writable. |
 | The Configuration Manager client does not answer: ... | The client is not installed or its WMI namespace is broken. | Install or repair the client. |
 | ... failed with return value <n>. | The client refused the request. | Read `PolicyAgent.log` on the device. |
 

@@ -32,12 +32,18 @@ $script:scriptBlockPolicyUpdate = {
             $listStep.Add(('Dry run: would trigger {0} {1}.' -f $hashtableSchedule.Name, $hashtableSchedule.Id))
             continue
         }
-        $objReturn = Invoke-CimMethod -Namespace 'root\ccm' -ClassName 'SMS_Client' -MethodName 'TriggerSchedule' -Arguments @{ sScheduleID = $hashtableSchedule.Id }
-        $objReturnValue = $null
-        if ($null -ne $objReturn -and $null -ne $objReturn.PSObject.Properties['ReturnValue']) {
-            $objReturnValue = $objReturn.ReturnValue
+        try {
+            $objReturn = Invoke-CimMethod -Namespace 'root\ccm' -ClassName 'SMS_Client' -MethodName 'TriggerSchedule' -Arguments @{ sScheduleID = $hashtableSchedule.Id }
+            $objReturnValue = $null
+            if ($null -ne $objReturn -and $null -ne $objReturn.PSObject.Properties['ReturnValue']) {
+                $objReturnValue = $objReturn.ReturnValue
+            }
+            $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
+        } catch {
+            $listStep.Add(('{0} failed: {1}' -f $hashtableSchedule.Name, $_.Exception.Message))
+            return [pscustomobject]@{ Succeeded = $false; Summary = ('{0} failed. The steps before it ran.' -f $hashtableSchedule.Name); Steps = @($listStep) }
         }
-        if ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0) {
+        if ($boolRefused) {
             $listStep.Add(('{0} failed: TriggerSchedule returned {1}.' -f $hashtableSchedule.Name, $objReturnValue))
             return [pscustomobject]@{ Succeeded = $false; Summary = ('{0} failed with return value {1}.' -f $hashtableSchedule.Name, $objReturnValue); Steps = @($listStep) }
         }
@@ -123,9 +129,13 @@ function Invoke-ActionDeviceScript {
     }
 }
 
-function New-ActionResult {
+function New-DeviceInspectorActionRecord {
     # .SYNOPSIS
-    # Builds the result object that every action returns.
+    # Builds the result object that every action returns, or a start record.
+    #
+    # .DESCRIPTION
+    # The window writes a start record to the action log before a run, so a run
+    # that stops part way still leaves a line. Outcome is OK, FAILED or STARTED.
     #
     # .PARAMETER Action
     # The name of the action.
@@ -139,6 +149,9 @@ function New-ActionResult {
     # .PARAMETER Succeeded
     # $true when the action did what it had to do.
     #
+    # .PARAMETER Outcome
+    # Optional. STARTED for a start record. When omitted, Succeeded gives OK or FAILED.
+    #
     # .PARAMETER Summary
     # One sentence about the outcome.
     #
@@ -146,7 +159,7 @@ function New-ActionResult {
     # One line for each step that ran or would run.
     #
     # .EXAMPLE
-    # $objResult = New-ActionResult -Action 'Client policy update' -ComputerName 'WS01' -DryRun $true -Succeeded $true -Summary 'Done.' -Steps @()
+    # $objResult = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $true -Succeeded $true -Summary 'Done.' -Steps @()
     #
     # # $objResult.Mode = 'DRY RUN'
     #
@@ -155,15 +168,12 @@ function New-ActionResult {
     #
     # .OUTPUTS
     # [pscustomobject] Properties: Action, ComputerName, DryRun, Mode, StartedAt,
-    # Account, Succeeded, Summary, Steps.
+    # Account, Succeeded, Outcome, Summary, Steps.
     #
     # .NOTES
-    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
-    # return shape, and positional contract may change without notice.
-    #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261110.0
+    # Version: 1.0.20261110.1
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -179,6 +189,10 @@ function New-ActionResult {
         [Parameter(Mandatory = $true)]
         [bool]$Succeeded,
 
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('OK', 'FAILED', 'STARTED')]
+        [string]$Outcome,
+
         [Parameter(Mandatory = $true)]
         [string]$Summary,
 
@@ -192,6 +206,13 @@ function New-ActionResult {
         if ($DryRun) {
             $strMode = 'DRY RUN'
         }
+        $strOutcome = $Outcome
+        if ([string]::IsNullOrEmpty($strOutcome)) {
+            $strOutcome = 'FAILED'
+            if ($Succeeded) {
+                $strOutcome = 'OK'
+            }
+        }
         $strAccount = [System.Environment]::UserName
         if (-not [string]::IsNullOrEmpty([System.Environment]::UserDomainName)) {
             $strAccount = '{0}\{1}' -f [System.Environment]::UserDomainName, [System.Environment]::UserName
@@ -204,6 +225,7 @@ function New-ActionResult {
             StartedAt    = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [System.Globalization.CultureInfo]::InvariantCulture)
             Account      = $strAccount
             Succeeded    = $Succeeded
+            Outcome      = $strOutcome
             Summary      = $Summary
             Steps        = @($Steps)
         }
@@ -246,7 +268,7 @@ function Invoke-ActionOnDevice {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] See New-ActionResult.
+    # [pscustomobject] See New-DeviceInspectorActionRecord.
     #
     # .NOTES
     # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
@@ -292,12 +314,16 @@ function Invoke-ActionOnDevice {
             $objRaw = @(Invoke-ActionDeviceScript @hashtableInvoke) | Select-Object -Last 1
         } catch {
             Write-Debug -Message $_.Exception.Message
-            return New-ActionResult -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $false -Summary ('Cannot run the action on {0}: {1}' -f $ComputerName, $_.Exception.Message) -Steps @()
+            $strSummary = 'Cannot run the action on {0}: {1}' -f $ComputerName, $_.Exception.Message
+            if (-not $boolDryRun) {
+                $strSummary = '{0} The connection can fail after a step ran. Inspect the device to see its state.' -f $strSummary
+            }
+            return New-DeviceInspectorActionRecord -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $false -Summary $strSummary -Steps @()
         }
         if ($null -eq $objRaw -or $null -eq $objRaw.PSObject.Properties['Succeeded']) {
-            return New-ActionResult -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $false -Summary 'The device returned no result.' -Steps @()
+            return New-DeviceInspectorActionRecord -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $false -Summary 'The device returned no result.' -Steps @()
         }
-        New-ActionResult -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded ([bool]$objRaw.Succeeded) -Summary ([string]$objRaw.Summary) -Steps ([string[]]@($objRaw.Steps))
+        New-DeviceInspectorActionRecord -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded ([bool]$objRaw.Succeeded) -Summary ([string]$objRaw.Summary) -Steps ([string[]]@($objRaw.Steps))
     }
 }
 
@@ -334,7 +360,7 @@ function Invoke-DeviceInspectorPolicyUpdate {
     #
     # .OUTPUTS
     # [pscustomobject] Properties: Action, ComputerName, DryRun, Mode, StartedAt,
-    # Account, Succeeded, Summary, Steps.
+    # Account, Succeeded, Outcome, Summary, Steps.
     #
     # .NOTES
     # Non-throwing contract: a failure gives Succeeded $false and a Summary.
@@ -346,7 +372,7 @@ function Invoke-DeviceInspectorPolicyUpdate {
     [OutputType([pscustomobject])]
     param (
         [Parameter(Mandatory = $true)]
-        [ValidatePattern('^[A-Za-z0-9_.-]{1,255}$')]
+        [ValidatePattern('^[A-Za-z0-9_.-]{1,255}\z')]
         [string]$ComputerName,
 
         [Parameter(Mandatory = $false)]
@@ -376,7 +402,9 @@ function ConvertTo-DeviceInspectorActionText {
     #
     # .DESCRIPTION
     # The first line holds the time, the account, the device, the action, the mode,
-    # the outcome and the summary. One indented line follows for each step.
+    # the outcome and the summary. One indented line follows for each step. Line
+    # breaks and control characters in a field become one space, so text from the
+    # device cannot add a line to the action log.
     #
     # .PARAMETER Result
     # The object that an action function returns.
@@ -384,7 +412,7 @@ function ConvertTo-DeviceInspectorActionText {
     # .EXAMPLE
     # ConvertTo-DeviceInspectorActionText -Result $objResult
     #
-    # # 2026-11-10T20:00:00Z | CONTOSO\admin | WS01 | Client policy update | DRY RUN | OK | Dry run: ...
+    # # <UTC time> | <domain\account> | WS01 | Client policy update | DRY RUN | OK | Dry run: ...
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
@@ -404,13 +432,17 @@ function ConvertTo-DeviceInspectorActionText {
     )
 
     process {
+        $scriptBlockLine = { param($objValue) ([regex]::Replace([string]$objValue, '[\x00-\x1F\x7F]+', ' ')).Trim() }
         $strOutcome = 'FAILED'
-        if ($Result.Succeeded) {
+        if ($null -ne $Result.PSObject.Properties['Outcome'] -and -not [string]::IsNullOrEmpty([string]$Result.Outcome)) {
+            $strOutcome = [string]$Result.Outcome
+        } elseif ($Result.Succeeded) {
             $strOutcome = 'OK'
         }
-        '{0} | {1} | {2} | {3} | {4} | {5} | {6}' -f $Result.StartedAt, $Result.Account, $Result.ComputerName, $Result.Action, $Result.Mode, $strOutcome, $Result.Summary
+        $arrField = @($Result.StartedAt, $Result.Account, $Result.ComputerName, $Result.Action, $Result.Mode, $strOutcome, $Result.Summary) | ForEach-Object { & $scriptBlockLine $_ }
+        $arrField -join ' | '
         foreach ($strStep in @($Result.Steps)) {
-            '    {0}' -f $strStep
+            '    {0}' -f (& $scriptBlockLine $strStep)
         }
     }
 }
