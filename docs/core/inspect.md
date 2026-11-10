@@ -40,7 +40,7 @@ The summary line on the **Device** panel counts the applications, the update row
 
 ### Read only the device
 
-1. In **Options**, clear the site server and the **Site Code**, then select **OK**. The site server box on the Inspect bar is then empty. With a site code left in **Options**, **Inspect** stops with the message "A site code needs a site server."
+1. In **Options**, clear the site server and the **Site Code**, then select **OK**. The site server box on the Inspect bar is then empty. With a site code left in **Options**, **OK** opens the message "A site code needs a site server." and the dialog stays open. When you clear only the site server box on the Inspect bar and a site code is set in **Options**, **Inspect** stops with the same message.
 2. Clear **Site only** and enter a valid device name.
 3. Select **Inspect**. The tool does not contact the site. The site record is missing from the **Device** panel, and the Site server row says "not queried".
 

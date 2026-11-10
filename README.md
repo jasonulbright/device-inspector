@@ -34,7 +34,7 @@ The user guide is in [docs/index.md](docs/index.md). It has one page for each pa
 - WinRM access to the device. The account needs local administrator rights on the device, because the tool reads the device remotely.
 - For the site: a domain admin account that is also a local administrator of the SMS Provider computer. It needs no Configuration Manager security role (a new site has no roles). An account with fewer rights on the site is not tested. Do not rely on one.
 
-The tool connects with the Windows account that runs it. It stores no password and has no credential field.
+The window connects with the Windows account that runs it. It stores no password and has no credential field. The command-line script accepts `-Credential`.
 
 ## Quick Start
 
@@ -51,7 +51,7 @@ Leave the site server empty to read only the device. Select **Site only** to rea
 
 ## Panels
 
-- **Device** -- a summary line, then the facts: operating system, client health (service state, client version, assigned site code, management point, last hardware inventory and discovery cycles) and the site record (resource ID, client installed, client version, active, last logon user, last hardware inventory date).
+- **Device** -- a summary line, then the facts: operating system, client health (service state, client version, assigned site code, management point, last hardware inventory and discovery cycles) and the site record (resource ID, client installed, client version, active, operating system, last logon user, last hardware inventory date).
 - **Applications** -- the device list and the site inventory list, merged by name. A filter box and a status filter narrow the rows.
 - **Updates** -- updates that the site lists as required for the device (expired updates are left out; superseded updates are marked) and updates pending on the device with their evaluation state and deadline.
 - **Collections** -- the collection memberships, and the deployments that target those collections.
@@ -82,16 +82,17 @@ The window wraps the same module as the script `Invoke-DeviceInspector.ps1`. The
 | `-SiteCode` | The site code. Required with `-SiteServer`. |
 | `-Credential` | Optional credential for both connections. |
 | `-SkipDevice` | Do not contact the device. |
-| `-JsonPath` | Write the facts as JSON (UTF-8 without BOM, dates in ISO 8601 UTC). |
+| `-JsonPath` | Write the facts as JSON (UTF-8 without BOM, dates in ISO 8601 UTC; a deployment deadline has no zone, because the site stores local time). |
 | `-MaximumListedItems` | The most entries in each report list. Default 25. The JSON has all entries. |
 
 ## Files written on disk
 
 | File | Purpose |
 |------|---------|
-| `DeviceInspector.prefs.json` | Site code, site server, the last device name |
+| `DeviceInspector.prefs.json` | Theme, site code, site server, the last device name, Site only |
 | `DeviceInspector.windowstate.json` | Window size, position and last-used panel |
 | `Logs\DeviceInspector-*.log` | Per-session tool log |
+| `Logs\DeviceInspector-startup-*.txt`, `Logs\DeviceInspector-crash-*.txt` | Start transcript; details of an unhandled error |
 | `Reports\*` | Exports |
 
 ## Tests

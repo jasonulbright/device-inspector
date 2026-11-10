@@ -43,9 +43,11 @@ With no problem, the panel says "No problems. Every part of the inspection ran."
 | `Site: no device named <name> exists in site <code>.` | The site has no resource with that name. |
 | `Site: <n> resource records share the name <name>. The first one is used.` | Several records have the same name. |
 | `Device: Connecting to remote server <name> failed ...` | The device did not answer. The text is the WinRM error. |
-| `Operating system:`, `Client details:`, `Installed applications:`, `Client application policy:`, `Pending updates:` | One part of the device read failed. |
-| `Client health: the CcmExec service does not exist.` | The device has no ConfigMgr client. |
-| `Site hardware inventory date:`, `Site installed applications (<class>):`, `Site collection membership:`, `Site collection names:`, `Site deployments:`, `Site required updates:` | One part of the site read failed. |
+| `Device: Operating system:`, `Device: Client details:`, `Device: Client health:`, `Device: Installed applications:`, `Device: Client application policy:`, `Device: Pending updates:` | One part of the device read failed. |
+| `Device: Client health: the CcmExec service does not exist.` | The device has no ConfigMgr client. |
+| `Site: Cannot open site <code> on <server>. ...` | The site drive did not open. No site fact was read. |
+| `Site: <text>` | The device lookup on the site (`Get-CMDevice`) failed. No site fact was read. |
+| `Site installed applications (<class>):`, `Site collection membership:`, `Site collection names:`, `Site deployments:`, `Site required updates:` | One part of the site read failed. |
 
 ## Limits
 

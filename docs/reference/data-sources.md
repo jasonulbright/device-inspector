@@ -19,6 +19,7 @@ None.
 - A fact that comes from the device itself stays live. The tool reads it on the device over WinRM (CIM and the registry on the device).
 - A fact that the site holds (cached data) comes from a ConfigurationManager cmdlet first. A read that no cmdlet returns uses `Invoke-CMWmiQuery` (a ConfigurationManager cmdlet that runs a WQL `SELECT` on the open site drive).
 - The tool needs the Configuration Manager console on the computer that runs it. The ConfigurationManager module comes only with the console. The site code is required when a site server is set.
+- The cmdlets work only from a site drive. The tool opens a `CMSite` drive for the site code, checks the site with `Get-CMSite`, reads, and then removes the drive that it created.
 
 ## Site facts
 
@@ -26,7 +27,7 @@ Compared on 2026-11-06 on the lab site for the workstation and the site server. 
 
 | Field | New source | Old CIM class | Result | Notes |
 |---|---|---|---|---|
-| Device found, resource ID | `Get-CMDevice -Name` | `SMS_R_System` | Match | |
+| Device found, resource ID | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | `SMS_R_System` | Match | The name has no domain suffix. One call gives all the record fields below. |
 | Client installed | `Get-CMDevice` `IsClient` | `SMS_R_System.Client` | Match | |
 | Client version | `Get-CMDevice` `ClientVersion` | `SMS_R_System.ClientVersion` | Match | The device reports the same version live. |
 | Active | `Get-CMDevice` `IsActive` | `SMS_R_System.Active` | Match | |
@@ -37,7 +38,7 @@ Compared on 2026-11-06 on the lab site for the workstation and the site server. 
 | Collection memberships (IDs) | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | same class | Match (11 on the workstation, 5 on the site server) | A cmdlet route exists: `Get-CMCollectionMember -ResourceId` for each device collection. It returned the same sets. It made one call for each of the 26 device collections and took about 4 s, against about 0.3 s for the one query. The tool keeps the query. |
 | Collection names | `Get-CMDeviceCollection` (one call, then a filter) | `SMS_Collection` | Match | |
 | Deployments of those collections | `Get-CMDeployment` (one call, then a filter) | `SMS_DeploymentSummary` | Rows match (13 on the workstation, 1 on the site server). **Deadline text differs.** | See below. |
-| Required updates | `Invoke-CMWmiQuery` on `SMS_UpdateComplianceStatus` (status 2), details from `Get-CMSoftwareUpdate` | `SMS_UpdateComplianceStatus`, `SMS_SoftwareUpdate` | Match (7 on the workstation, 4 on the site server) | No cmdlet returns the update status of one device. |
+| Required updates | `Invoke-CMWmiQuery` on `SMS_UpdateComplianceStatus` (status 2), details from `Get-CMSoftwareUpdate -Fast -IncludeUpgrade` (one call, then a filter) | `SMS_UpdateComplianceStatus`, `SMS_SoftwareUpdate` | Match (7 on the workstation, 4 on the site server) | No cmdlet returns the update status of one device. Expired updates are left out. |
 
 ### Last hardware inventory differs
 
@@ -54,7 +55,7 @@ The site stores the deadline of a deployment as the local time that the administ
 
 ## Device facts (live)
 
-These stay on the device. A WinRM script block reads them, and they are not cached.
+These stay on the device. `Invoke-Command` runs one script block on the device over WinRM. The block reads the facts below, and they are not cached.
 
 | Fact | Source on the device |
 |---|---|
@@ -62,7 +63,7 @@ These stay on the device. A WinRM script block reads them, and they are not cach
 | Client service state and start mode | `Win32_Service` (`CcmExec`) |
 | Client version, assigned site code, management point | `root\ccm` `SMS_Client`, `CCM_Authority` |
 | Last hardware and discovery inventory cycle | `root\ccm\invagt` `InventoryActionStatus` |
-| Installed applications | The machine-wide uninstall registry keys |
+| Installed applications | The machine-wide uninstall registry keys (`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` and the `WOW6432Node` key). An entry with no display name, or with `SystemComponent` set to 1, is left out. |
 | Client application policy | `root\ccm\ClientSDK` `CCM_Application` |
 | Pending updates in the client policy | `root\ccm\ClientSDK` `CCM_SoftwareUpdate` |
 

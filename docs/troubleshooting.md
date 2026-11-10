@@ -34,6 +34,7 @@ None. Some fixes need rights on the site or on the device.
 | A message opens when you select **Inspect**. | A box holds a wrong value. | Read the message. See [Inspect bar](core/inspect.md). |
 | **Export JSON** and **Export HTML** are off. | No inspection exists yet. | Select **Inspect**. |
 | A message says "A site server needs a site code. Enter it in Options." | The site server is set and the site code is empty. | Enter the site code in **Options**. |
+| **OK** in **Options** opens a message box with the title **Device Inspector**, and the dialog stays open. | The site server or the site code has a wrong value. | Read the message. Correct the value. See [Options dialog](core/options.md). |
 | The status bar shows "Enter a site server, or clear Site only." | **Site only** is on and the site server box is empty. | Enter the site server, or clear **Site only** to inspect the device. |
 
 ## Problems panel
@@ -44,8 +45,15 @@ None. Some fixes need rights on the site or on the device.
 | Device: ... Access is denied. | The account has no remote management right on the device. | Run the tool as an account with the right. |
 | Device: ... WinRM cannot process the request. | The device is off, or WinRM is not on. | Start the device. Check the WinRM service and the firewall. |
 | Site: no device named `<name>` exists in site `<code>`. | The site has no record with that name. | Check the name. The device must be in the site. |
-| Client health: the CcmExec service does not exist. | The device has no ConfigMgr client. | Install the client, or inspect another device. |
+| Device: Client health: the CcmExec service does not exist. | The device has no ConfigMgr client. | Install the client, or inspect another device. |
+| Site: Cannot open site `<code>` on `<server>`. Check the site code and the site server name, and the account rights. ... | The site drive did not open: a wrong site code or server name, no network path, or no right on the site. | Check the values in **Options**. See [Permissions](reference/permissions.md). |
 | Site: `<n>` resource records share the name `<name>`. The first one is used. | The site has several records with one name. | Compare the records in the console. Confirm that a record is no longer needed before you delete it. Deleting a client record removes its history and its earlier associations. |
+
+## Command line
+
+| Message or symptom | Cause | Fix |
+|---|---|---|
+| The report starts with a warning of the ConfigurationManager module about a wildcard in the `Name` parameter. | A known item of the site read. | None. The warning does not stop the report. |
 
 ## Panels
 

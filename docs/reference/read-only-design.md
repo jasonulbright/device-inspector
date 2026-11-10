@@ -16,20 +16,29 @@ None.
 
 ## What the tool reads
 
-| Source | Facts |
-|---|---|
-| Site (ConfigurationManager cmdlets, and `SELECT` queries through `Invoke-CMWmiQuery` where no cmdlet exists; see [data-sources.md](data-sources.md)) | Device record (resource ID, client installed, client version, active, operating system, last logon user). Last hardware inventory date. Installed applications from hardware inventory (32-bit and 64-bit). Collection memberships with collection names. Deployments targeted at those collections. Updates that the site lists as required for the device. |
-| The device (one WinRM script block) | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last hardware inventory cycle, last discovery data cycle). Installed applications from the uninstall registry keys. Client application policy (`CCM_Application`). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
+| Source | Command | Facts |
+|---|---|---|
+| Site | `Get-CMSite` | No fact. The tool runs it once, when it opens the site drive, to check that the site answers. |
+| Site | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | Device record (resource ID, client installed, client version, active, operating system, last logon user). Last hardware inventory date. |
+| Site | `Invoke-CMWmiQuery` on `SMS_G_System_ADD_REMOVE_PROGRAMS` and `SMS_G_System_ADD_REMOVE_PROGRAMS_64` | Installed applications from hardware inventory (32-bit and 64-bit). |
+| Site | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | Collection memberships (collection IDs). |
+| Site | `Get-CMDeviceCollection` | Collection names. One call, then a filter. |
+| Site | `Get-CMDeployment` | Deployments targeted at those collections. One call, then a filter. |
+| Site | `Invoke-CMWmiQuery` on `SMS_UpdateComplianceStatus` (status 2), then `Get-CMSoftwareUpdate -Fast -IncludeUpgrade` | Updates that the site lists as required for the device. Expired updates are left out. |
+| The device | `Invoke-Command` with one script block | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last hardware inventory cycle, last discovery data cycle). Installed applications from the uninstall registry keys. Client application policy (`CCM_Application`). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
+
+`Invoke-CMWmiQuery` is a ConfigurationManager cmdlet. The tool uses it only for the three reads that no cmdlet returns: the installed applications of hardware inventory, the collection memberships of the device and the required updates of the device. See [Data sources](data-sources.md).
 
 Two "last hardware inventory" values exist on purpose. The site value is the scan date that the site stored. The device value is the start time of the last hardware inventory cycle on the client. They can differ.
 
 ## Read-only design
 
-- The site is read with `Get-CM*` cmdlets and with the private function `Invoke-SiteQuery`. `Invoke-SiteQuery` refuses every query that does not start with `SELECT`. No command of the site read creates, changes or removes an object.
-- The device block calls `Get-CimInstance` and `Get-ItemProperty` and no write command.
-- A Pester test parses the module with the PowerShell parser and fails if the module calls a command from a list of state-changing commands. A second test does the same for the window script.
-- The computer name is validated by pattern. Collection IDs from the site are checked against `^[A-Za-z0-9]{8}$` before they enter a query.
-- The only files the tool writes are its log files, its settings files and the exports that the person names.
+- The site is read with the `Get-CM*` cmdlets in the table and with `Invoke-CMWmiQuery`. Every `Invoke-CMWmiQuery` call goes through the private function `Invoke-SiteQuery`, which refuses every query that does not start with `SELECT`. No command of the site read creates, changes or removes an object on the site.
+- To use the cmdlets, the tool creates a `CMSite` drive in its own PowerShell session and sets the location to it. After the read, it sets the location back and removes the drive that it created. The drive exists only in the session on this computer.
+- The device is read with `Invoke-Command` and one fixed script block. The block calls `Get-CimInstance` and `Get-ItemProperty` and no write command.
+- A Pester test parses the module with the PowerShell parser and fails if the module calls a command from a list of state-changing commands. A second test does the same for the window script, and also fails if the window script calls `Invoke-Command`. A third test checks that the site query function refuses a `DELETE` and an `UPDATE` query.
+- The computer name is validated by pattern. The site read uses the name without a domain suffix. Collection IDs from the site are checked against `^[A-Za-z0-9]{8}$` before they are used.
+- The only files the tool writes are its log files, its settings files and the exports that the person names. In an installation of the suite, the shared update check also writes `%LOCALAPPDATA%\AppPackagerSuite\update-check.json`.
 - The tool uses the permissions of the Windows account that runs it. It stores no password.
 
 ## Layout for later actions

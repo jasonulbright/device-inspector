@@ -24,13 +24,24 @@ None.
 | Message | Where | Cause | Fix |
 |---|---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | Dialog **Inspect** and log | The device box is empty or holds another character. | Enter a valid device name. |
-| The site server is a computer name or an FQDN. | Dialog **Inspect** | The site server holds another character. | Enter a computer name or an FQDN. |
-| The site code is three letters or digits. | Dialog **Inspect** or **Options** | The site code has another form. | Enter three letters or digits. |
-| A site code needs a site server. | Dialog **Inspect** | A site code is set and the site server is empty. | Enter a site server, or clear the site code in **Options**. |
-| A site server needs a site code. Enter it in Options. | Dialog **Inspect** or **Options** | The site server is set and the site code is empty. | Enter the site code in **Options**. |
-| The Configuration Manager console is not installed on this computer. Device Inspector reads the site with the ConfigurationManager PowerShell module, which comes only with the console. Install the console, then start Device Inspector again. | Message box at start | The module is not found. | Install the console. |
-| Inspect: Site only needs a site server. | Log | **Site only** is on and the site server box is empty. | Enter a site server, or clear **Site only**. |
-| Inspect failed: `<text>` | Dialog and log | The inspection stopped on an error that no part caught. | Read the text. |
+| The site server is a computer name or an FQDN. | Dialog **Inspect** and log | The site server holds another character. | Enter a computer name or an FQDN. |
+| The site code is three letters or digits. | Dialog **Inspect** and log | The saved site code has another form. | Enter three letters or digits in **Options**. |
+| A site code needs a site server. | Dialog **Inspect** and log | A site code is set and the site server box is empty. | Enter a site server, or clear the site code in **Options**. |
+| A site server needs a site code. Enter it in Options. | Dialog **Inspect** and log | The site server is set and the site code is empty. | Enter the site code in **Options**. |
+| The Configuration Manager console is not installed on this computer. Device Inspector reads the site with the ConfigurationManager PowerShell module, which comes only with the console. Install the console, then start Device Inspector again. | Message box **Device Inspector** at start | The module is not found. | Install the console. |
+| Inspect: Site only needs a site server. | Log. The status bar says "Enter a site server, or clear Site only." | **Site only** is on and the site server box is empty. | Enter a site server, or clear **Site only**. |
+| Inspect failed: `<text>` | Log. The dialog **Inspect** shows `<text>`. The status bar says "Inspect failed. See the log." | The inspection stopped on an error that no part caught. | Read the text. |
+
+### Options dialog
+
+**OK** in the Options dialog checks the site server and the site code. A wrong value opens a message box with the title **Device Inspector**, and the dialog stays open.
+
+| Message | Cause | Fix |
+|---|---|---|
+| The site server is a computer name or an FQDN. | The site server holds another character. | Enter a computer name or an FQDN. |
+| The site code is three letters or digits. | The site code has another form. | Enter three letters or digits. |
+| A site code needs a site server. | A site code is set and the site server is empty. | Enter a site server, or clear the site code. |
+| A site server needs a site code. Enter it in Options. | The site server is set and the site code is empty. | Enter the site code. |
 
 ### Problems
 
@@ -44,9 +55,18 @@ See [Problems panel](../core/problems.md) for the lines of the failed parts.
 
 ### Command line
 
+The script checks its input first and stops with the messages of the Inspect bar, joined into one line.
+
 | Message | Cause | Fix |
 |---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | The device name has another form. | Use letters, digits, dots, hyphens and underscores. |
+| The site server is a computer name or an FQDN. | `-SiteServer` holds another character. | Enter a computer name or an FQDN. |
+| The site code is three letters or digits. | `-SiteCode` has another form. | Enter three letters or digits. |
+| A site code needs a site server. | `-SiteCode` is set and `-SiteServer` is not. | Add `-SiteServer`, or remove `-SiteCode`. |
+| A site server needs a site code. Enter it in Options. | `-SiteServer` is set and `-SiteCode` is not. | Add `-SiteCode`. The script has no Options dialog. |
+| Nothing to inspect: SiteServer is omitted and SkipDevice is set. | `-SkipDevice` is set and `-SiteServer` is not. | Add `-SiteServer` and `-SiteCode`, or remove `-SkipDevice`. |
+
+The report can also start with a warning of the ConfigurationManager module about a wildcard in the `Name` parameter. This is a known item. The warning does not stop the report.
 
 ## Steps
 
