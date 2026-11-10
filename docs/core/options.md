@@ -54,7 +54,6 @@ The dialog also says that the tool needs the Configuration Manager console on th
 
 ## Limits
 
-- The message boxes of the dialog carry the title **Options**, the same title as the dialog.
 - The dialog has no credential field. To use another account, start the tool as that account.
 - A site code needs a site server. See [Inspect bar](inspect.md).
 

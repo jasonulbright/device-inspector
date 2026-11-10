@@ -40,7 +40,7 @@ Push a branch and open a pull request. Squash-merge it when CI is green and the 
 git checkout main && git pull
 git tag -a v<ver> -m v<ver>
 git push origin v<ver>
-git archive --format=zip -o DeviceInspector-<ver>.zip v<ver> -- . ':(exclude)Tests' ':(exclude)*.Tests.ps1' ':(exclude)RELEASING.md' ':(exclude).github' ':(exclude).gitignore' ':(exclude).coderabbit.yaml' ':(exclude)screenshots' ':(exclude)screenshot.png' ':(exclude)Invoke-Checks.ps1' ':(exclude)PSScriptAnalyzerSettings.psd1'
+git archive --format=zip -o DeviceInspector-<ver>.zip v<ver> -- . ':(exclude)Tests' ':(exclude)tools' ':(exclude)*.Tests.ps1' ':(exclude)RELEASING.md' ':(exclude).github' ':(exclude).gitignore' ':(exclude).coderabbit.yaml' ':(exclude)screenshots' ':(exclude)screenshot.png' ':(exclude)Invoke-Checks.ps1' ':(exclude)PSScriptAnalyzerSettings.psd1'
 sha256sum DeviceInspector-<ver>.zip | sed 's/ \*/  /' > checksums.txt
 ```
 

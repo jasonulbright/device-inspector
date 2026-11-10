@@ -118,6 +118,10 @@ $script:MessageBoxMeasureScript = {
     $cfg = $Arguments.Config
     $main = Open-TestWindow -XamlPath (Join-Path $Root $cfg.Xaml) -Dark $Arguments.Dark -Width 1024 -Height 720
     Initialize-ShellTheme -Window $main -Dark $Arguments.Dark -Views $cfg.Views -OptionsButtonName $cfg.OptionsButton -LogLabelName $cfg.LogLabel -ActiveView $cfg.Views[0].Name
+    # Windows treats -32000,-32000 as the place of a minimized window, and CenterOwner then places the
+    # box on the left edge of the owner. Put the owner on screen, where a person sees it.
+    $main.Left = 0; $main.Top = 0; $main.Width = $main.MinWidth; $main.Height = $main.MinHeight
+    Wait-Layout $main
     $owner = $main
     $dialog = $null
     if ($Arguments.Xaml) {

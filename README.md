@@ -100,7 +100,7 @@ The window wraps the same module as the script `Invoke-DeviceInspector.ps1`. The
 .\Invoke-Checks.ps1
 ```
 
-The script runs PSScriptAnalyzer with the shared settings, then the Pester tests. The tests need no lab. CI runs the tests under Windows PowerShell 5.1 and PowerShell 7.
+The script runs PSScriptAnalyzer with the shared settings, then the Pester tests. The tests need no lab. CI runs the tests under Windows PowerShell 5.1 and PowerShell 7. The window tests (Tests/Window.Tests.ps1) open windows off screen and run only when SUITE_ALLOW_WINDOW_TESTS is 1. CI sets it.
 
 ## Project Structure
 
@@ -116,6 +116,7 @@ device-inspector/
 |  +- DeviceInspectorCommon.psd1     # Module manifest
 |  \- DeviceInspectorCommon.psm1     # Inspection logic and window support
 +- Tests/                            # Pester 5 tests
++- tools/guide-capture/              # Capture scripts for the guide images (see docs/index.md)
 +- docs/reference/read-only-design.md          # Scope, read-only design, limits
 ```
 
