@@ -86,8 +86,9 @@ Describe 'Capture scripts' {
 Describe 'Repository text' {
     It 'has no lab machine, lab domain, lab site code or lab account name in a text file of the repository' {
         # The vendored Lib folder is the copy of another repository and is left out.
-        $files = @(Get-ChildItem -LiteralPath $script:Root -Recurse -File -Include '*.ps1', '*.psm1', '*.psd1', '*.md', '*.xaml', '*.yml', '*.yaml', '*.json', '*.txt' |
-                Where-Object { $_.FullName -notmatch '[\/](\.git|Lib)[\/]' })
+        $extensions = '.ps1', '.psm1', '.psd1', '.md', '.xaml', '.yml', '.yaml', '.json', '.txt'
+        $files = @(Get-ChildItem -LiteralPath $script:Root -Recurse -File |
+                Where-Object { $extensions -contains $_.Extension -and $_.FullName -notmatch '[\\/](\.git|Lib)[\\/]' })
         $files.Count | Should -BeGreaterThan 10
         $found = foreach ($f in $files) {
             foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f.FullName), $script:LabNamePattern)) { '{0}: {1}' -f $f.FullName.Substring($script:Root.Length + 1), $m.Value }
