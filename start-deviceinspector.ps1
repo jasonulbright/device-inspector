@@ -1,16 +1,19 @@
 ﻿<#
 .SYNOPSIS
-    Main window of Device Inspector, a read-only tool that shows the facts of one device from a Configuration Manager site and from the device itself.
+    Main window of Device Inspector, a tool that shows the facts of one device from a Configuration Manager site and from the device itself, with optional actions.
 
 .DESCRIPTION
     Sidebar navigation across five panels (Device, Applications, Updates,
     Collections, Problems). The action bar holds the device name, the site
     server, the Inspect button and the JSON and HTML exports.
 
-    The tool is read only. It reads the site with SELECT queries and reads the
-    device with one remote script block. It uses the permissions of the
-    signed-in user and stores no password. The only files it writes are the
-    log files and the exports that the person names.
+    The inspection only reads. It reads the site with the ConfigurationManager
+    cmdlets and SELECT queries and reads the device with one remote script
+    block. Actions change the device or the site. They run only when Enable
+    actions is on, after a confirmation, and each run and dry run goes to the
+    action log. The tool uses the permissions of the signed-in user and stores
+    no password. The only files it writes are the log files, the action log
+    and the exports that the person names.
 
     Requirements:
       - PowerShell 5.1
@@ -132,6 +135,7 @@ $viewCollections = $window.FindName('viewCollections')
 $viewProblems    = $window.FindName('viewProblems')
 
 $txtSummary      = $window.FindName('txtSummary')
+$btnPolicyUpdate = $window.FindName('btnPolicyUpdate')
 $gridFacts       = $window.FindName('gridFacts')
 $txtAppFilter    = $window.FindName('txtAppFilter')
 $cboAppStatus    = $window.FindName('cboAppStatus')
@@ -149,7 +153,7 @@ $lblLogOutput = $window.FindName('lblLogOutput')
 $txtLog       = $window.FindName('txtLog')
 $txtStatus    = $window.FindName('txtStatus')
 
-$null = $txtAppTitle, $toggleActions
+$null = $txtAppTitle
 
 function Add-LogLine {
     param([Parameter(Mandatory)][string]$Message)
@@ -232,6 +236,14 @@ $window.Dispatcher.Add_UnhandledException({ param($s, $e) & $global:__writeCrash
 $script:Inspection = $null
 $script:AppRows    = @()
 $script:IsBusy     = $false
+# Actions are off at each start. The switch is not saved.
+$script:ActionsEnabled = $false
+$script:ActionLogPath  = Join-Path $__txDir 'DeviceInspector-actions.log'
+
+function Test-DeviceActionReady {
+    # A device action needs the switch, an idle window and an inspection that reached the device.
+    return [bool]($script:ActionsEnabled -and -not $script:IsBusy -and $script:Inspection -and $null -ne $script:Inspection.Device)
+}
 
 function Update-ControlState {
     $idle = -not $script:IsBusy
@@ -242,6 +254,8 @@ function Update-ControlState {
     $chkSiteOnly.IsEnabled   = $idle
     $btnExportJson.IsEnabled = $has
     $btnExportHtml.IsEnabled = $has
+    $toggleActions.IsEnabled = $idle
+    $btnPolicyUpdate.IsEnabled = Test-DeviceActionReady
 }
 
 # === View switching ===
@@ -284,7 +298,7 @@ function Update-StatusBarSummary {
     } else {
         $parts += 'Enter a device name and click Inspect'
     }
-    $parts += 'read only'
+    $parts += $(if ($script:ActionsEnabled) { 'actions on' } else { 'read only' })
     Set-StatusText ($parts -join '   |   ')
 }
 
@@ -338,6 +352,9 @@ $script:BgInvokeHandle = $null
 $script:BgState        = $null
 $script:BgTimer        = $null
 $script:BgGraveyard    = @()
+$script:BgOnDone       = $null
+$script:ActionChoice   = 'Cancel'
+$script:ActionAfterRun = $null
 
 function Initialize-BgRunspace {
     if ($script:BgRunspace -and $script:BgRunspace.RunspaceStateInfo.State -eq 'Opened') { return }
@@ -349,6 +366,50 @@ function Stop-BackgroundWork {
     $script:BgTimer = $null
     $script:BgPowerShell = $null
     $script:BgInvokeHandle = $null
+}
+
+# Runs one piece of work in the background runspace and calls OnDone on the window
+# thread when it ends. Work receives ($A, $State) and must set $State.Done in a finally block.
+function Start-BackgroundWork {
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Step,
+        [Parameter(Mandatory)][scriptblock]$Work,
+        [Parameter(Mandatory)][hashtable]$Arguments,
+        [Parameter(Mandatory)][scriptblock]$OnDone
+    )
+    Initialize-BgRunspace
+    Stop-BackgroundWork
+    $script:BgState = [hashtable]::Synchronized(@{ Step = $Step; Done = $false; Result = $null; ErrorMsg = $null })
+    $script:BgOnDone = $OnDone
+    $script:IsBusy = $true
+    Update-ControlState
+    $txtProgressTitle.Text = $Title
+    $txtProgressStep.Text  = $Step
+    $progressOverlay.Visibility = [System.Windows.Visibility]::Visible
+    Set-StatusText ($Title + '...')
+
+    $script:BgPowerShell = [powershell]::Create()
+    $script:BgPowerShell.Runspace = $script:BgRunspace
+    [void]$script:BgPowerShell.AddScript($Work).AddArgument($Arguments).AddArgument($script:BgState)
+    $script:BgInvokeHandle = $script:BgPowerShell.BeginInvoke()
+    $script:BgTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $script:BgTimer.Interval = [TimeSpan]::FromMilliseconds(150)
+    $script:BgTimer.Add_Tick({
+        if ($script:BgState) { $current = [string]$script:BgState.Step; if ($txtProgressStep.Text -ne $current) { $txtProgressStep.Text = $current } }
+        if ($script:BgState -and $script:BgState.Done) {
+            $script:BgTimer.Stop()
+            try { [void]$script:BgPowerShell.EndInvoke($script:BgInvokeHandle) } catch { $null = $_ }
+            try { $script:BgPowerShell.Dispose() } catch { $null = $_ }
+            $script:BgPowerShell   = $null
+            $script:BgInvokeHandle = $null
+            $progressOverlay.Visibility = [System.Windows.Visibility]::Collapsed
+            $script:IsBusy = $false
+            Update-ControlState
+            & $script:BgOnDone $script:BgState
+        }
+    })
+    $script:BgTimer.Start()
 }
 
 function Invoke-Inspect {
@@ -371,20 +432,8 @@ function Invoke-Inspect {
     Save-DiPreferences -Prefs $global:Prefs
     Add-LogLine ('Inspect: device={0} siteServer={1} siteOnly={2}' -f $check.ComputerName, $(if ($check.SiteServer) { $check.SiteServer } else { '(none)' }), $siteOnly)
 
-    Initialize-BgRunspace
-    Stop-BackgroundWork
-    $script:BgState = [hashtable]::Synchronized(@{ Step = 'Connecting...'; Done = $false; Result = $null; ErrorMsg = $null })
-    $script:IsBusy = $true
-    Update-ControlState
-    $txtProgressTitle.Text = ('Inspecting {0}' -f $check.ComputerName)
-    $txtProgressStep.Text  = 'Connecting...'
-    $progressOverlay.Visibility = [System.Windows.Visibility]::Visible
-    Set-StatusText 'Inspecting...'
-
     $arguments = @{ Device = $check.ComputerName; Server = $check.SiteServer; Code = [string]$global:Prefs.SiteCode; SiteOnly = $siteOnly }
-    $script:BgPowerShell = [powershell]::Create()
-    $script:BgPowerShell.Runspace = $script:BgRunspace
-    [void]$script:BgPowerShell.AddScript({
+    Start-BackgroundWork -Title ('Inspecting {0}' -f $check.ComputerName) -Step 'Connecting...' -Arguments $arguments -Work {
         param($A, $State)
         try {
             $p = @{ ComputerName = $A.Device }
@@ -395,35 +444,19 @@ function Invoke-Inspect {
         }
         catch { $State.ErrorMsg = $_.Exception.Message }
         finally { $State.Done = $true }
-    }).AddArgument($arguments).AddArgument($script:BgState)
-
-    $script:BgInvokeHandle = $script:BgPowerShell.BeginInvoke()
-    $script:BgTimer = New-Object System.Windows.Threading.DispatcherTimer
-    $script:BgTimer.Interval = [TimeSpan]::FromMilliseconds(150)
-    $script:BgTimer.Add_Tick({
-        if ($script:BgState) { $current = [string]$script:BgState.Step; if ($txtProgressStep.Text -ne $current) { $txtProgressStep.Text = $current } }
-        if ($script:BgState -and $script:BgState.Done) {
-            $script:BgTimer.Stop()
-            try { [void]$script:BgPowerShell.EndInvoke($script:BgInvokeHandle) } catch { $null = $_ }
-            try { $script:BgPowerShell.Dispose() } catch { $null = $_ }
-            $script:BgPowerShell   = $null
-            $script:BgInvokeHandle = $null
-            $progressOverlay.Visibility = [System.Windows.Visibility]::Collapsed
-            $script:IsBusy = $false
-            Update-ControlState
-            if ($script:BgState.ErrorMsg) {
-                Add-LogLine ('Inspect failed: {0}' -f $script:BgState.ErrorMsg)
-                Set-StatusText 'Inspect failed. See the log.'
-                [void](Show-ThemedMessage -Owner $window -Title 'Inspect' -Message ([string]$script:BgState.ErrorMsg) -Icon Error)
-                return
-            }
-            $r = $script:BgState.Result
-            Show-Inspection -Inspection $r
-            Add-LogLine ('Inspection of {0} finished: {1} problems.' -f $r.ComputerName, @($r.Problems).Count)
-            foreach ($p in @($r.Problems)) { Add-LogLine ('  problem: {0}' -f $p) }
+    } -OnDone {
+        param($State)
+        if ($State.ErrorMsg) {
+            Add-LogLine ('Inspect failed: {0}' -f $State.ErrorMsg)
+            Set-StatusText 'Inspect failed. See the log.'
+            [void](Show-ThemedMessage -Owner $window -Title 'Inspect' -Message ([string]$State.ErrorMsg) -Icon Error)
+            return
         }
-    })
-    $script:BgTimer.Start()
+        $r = $State.Result
+        Show-Inspection -Inspection $r
+        Add-LogLine ('Inspection of {0} finished: {1} problems.' -f $r.ComputerName, @($r.Problems).Count)
+        foreach ($p in @($r.Problems)) { Add-LogLine ('  problem: {0}' -f $p) }
+    }
 }
 $btnInspect.Add_Click({ Invoke-Inspect })
 $txtDevice.Add_KeyDown({ param($s, $e) if ($e.Key -eq [System.Windows.Input.Key]::Return) { Invoke-Inspect } })
@@ -559,7 +592,7 @@ function Show-OptionsDialog {
                 <TextBlock Text="Site Code" FontSize="11" Margin="0,12,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
                 <TextBox x:Name="txtSiteCode" FontSize="12" Padding="6,4,6,4"
                          Controls:TextBoxHelper.Watermark="e.g. XYZ. Required with a site server." Width="240" HorizontalAlignment="Left"/>
-                <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The tool needs the Configuration Manager console on this computer. The account needs local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested. The tool only reads."
+                <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The tool needs the Configuration Manager console on this computer. The account needs local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested. Only actions make changes."
                            FontSize="11" TextWrapping="Wrap" Margin="0,16,0,0"
                            Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
             </StackPanel>
@@ -621,6 +654,181 @@ function Show-OptionsDialog {
 }
 $btnOptions.Add_Click({ Show-OptionsDialog })
 
+# === Actions ===
+# Every action follows the same path: the switch must be on, a dialog names the action
+# and the device count, the person picks Run or Dry run, the work runs in the background,
+# and the result goes to the window log, the tool log and the action log.
+function Set-ActionsEnabled {
+    param([Parameter(Mandatory)][bool]$Enabled)
+    $script:ActionsEnabled = $Enabled
+    Add-LogLine $(if ($Enabled) { 'Actions on. Each action asks for a confirmation and offers a dry run. Action log: ' + $script:ActionLogPath } else { 'Actions off. The tool only reads.' })
+    Update-ControlState
+    Update-StatusBarSummary
+}
+$toggleActions.Add_Toggled({ Set-ActionsEnabled -Enabled ([bool]$toggleActions.IsOn) })
+
+function Show-ActionConfirmDialog {
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Message,
+        [Parameter(Mandatory)][string[]]$Devices
+    )
+    $dlgXaml = @'
+<Controls:MetroWindow
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+    Title="Confirm action" Width="560" SizeToContent="Height" MinWidth="460"
+    WindowStartupLocation="CenterOwner" TitleCharacterCasing="Normal"
+    GlowBrush="{DynamicResource MahApps.Brushes.Accent}"
+    NonActiveGlowBrush="{DynamicResource MahApps.Brushes.Accent}"
+    BorderThickness="1" ResizeMode="NoResize" ShowIconOnTitleBar="False">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Controls.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Steel.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#666666"/>
+            <ControlTemplate x:Key="AppButtonTemplate" TargetType="ButtonBase">
+                <Grid>
+                    <Border x:Name="AppBd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True"/>
+                    <Rectangle x:Name="AppHover" Margin="{TemplateBinding BorderThickness}" Opacity="0"
+                               Fill="{DynamicResource MahApps.Brushes.Gray.SemiTransparent}"/>
+                    <ContentPresenter x:Name="AppContent" Margin="{TemplateBinding Padding}"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      RecognizesAccessKey="True" SnapsToDevicePixels="True"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="AppHover" Property="Opacity" Value="1"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="AppHover" Property="Opacity" Value="0"/>
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+            <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+                <Setter Property="Template" Value="{StaticResource AppButtonTemplate}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="MinWidth" Value="90"/><Setter Property="Height" Value="32"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
+            </Style>
+            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="16,12,16,12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Border x:Name="bannerDevices" Grid.Row="0" Padding="10,6,10,6" Margin="0,4,0,12"
+                Background="{DynamicResource MahApps.Brushes.Highlight}">
+            <TextBlock x:Name="txtDeviceCount" TextWrapping="Wrap" FontSize="13" FontWeight="SemiBold"
+                       Foreground="{DynamicResource MahApps.Brushes.IdealForeground}"/>
+        </Border>
+        <TextBlock x:Name="txtActionMessage" Grid.Row="1" TextWrapping="Wrap" FontSize="13" Margin="0,0,0,12"/>
+        <TextBlock Grid.Row="2" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,16"
+                   Foreground="{DynamicResource MahApps.Brushes.Gray1}"
+                   Text="Dry run reads the current state and lists the steps. It changes nothing. Run and Dry run both go to the action log."/>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="btnActionRun"    Content="Run"     Style="{StaticResource DialogAccentButton}"/>
+            <Button x:Name="btnActionDryRun" Content="Dry run" Style="{StaticResource DialogButton}"/>
+            <Button x:Name="btnActionCancel" Content="Cancel"  Style="{StaticResource DialogButton}" IsCancel="True" IsDefault="True"/>
+        </StackPanel>
+    </Grid>
+</Controls:MetroWindow>
+'@
+    [xml]$dx = $dlgXaml
+    $dlg = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $dx))
+    $dlg.Owner = $window
+    $dlg.Title = $Title
+    Install-TitleBarDragFallback -Window $dlg
+    Set-DialogTheme -Dialog $dlg
+    $count = @($Devices).Count
+    $dlg.FindName('txtDeviceCount').Text = $(if ($count -eq 1) { 'This action changes 1 device: {0}' -f $Devices[0] } else { 'This action changes {0} devices: {1}' -f $count, (@($Devices) -join ', ') })
+    $dlg.FindName('txtActionMessage').Text = $Message
+    $script:ActionChoice = 'Cancel'
+    $dlg.FindName('btnActionRun').Add_Click({ $script:ActionChoice = 'Run'; $dlg.Close() })
+    $dlg.FindName('btnActionDryRun').Add_Click({ $script:ActionChoice = 'DryRun'; $dlg.Close() })
+    $dlg.FindName('btnActionCancel').Add_Click({ $script:ActionChoice = 'Cancel'; $dlg.Close() })
+    [void]$dlg.ShowDialog()
+    $choice = $script:ActionChoice
+    $script:ActionChoice = 'Cancel'
+    return $choice
+}
+
+function Write-ActionResult {
+    param([Parameter(Mandatory)]$Result)
+    $lines = @(ConvertTo-DeviceInspectorActionText -Result $Result)
+    foreach ($line in $lines) { Add-LogLine $line }
+    try { $null = Write-DeviceInspectorActionLog -Path $script:ActionLogPath -Result $Result }
+    catch { Add-LogLine ('The action log could not be written: {0}' -f $_.Exception.Message) }
+}
+
+# Asks, then runs one device action in the background. Function is the name of an action
+# function of the module; it receives ComputerName, DryRun and the extra Parameters.
+function Invoke-DeviceAction {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Message,
+        [Parameter(Mandatory)][string]$Function,
+        [hashtable]$Parameters = @{},
+        [scriptblock]$AfterRun
+    )
+    if (-not (Test-DeviceActionReady)) {
+        Add-LogLine ('{0}: turn on Enable actions and inspect a device that answers first.' -f $Name)
+        return
+    }
+    $device = [string]$script:Inspection.ComputerName
+    $choice = Show-ActionConfirmDialog -Title $Name -Message $Message -Devices @($device)
+    if ($choice -eq 'Cancel') { Add-LogLine ('{0}: cancelled.' -f $Name); return }
+    $dry = ($choice -eq 'DryRun')
+    $script:ActionAfterRun = $AfterRun
+    $arguments = @{ Function = $Function; Parameters = (@{ ComputerName = $device; DryRun = $dry } + $Parameters) }
+    $title = $(if ($dry) { 'Dry run: {0} on {1}' -f $Name, $device } else { '{0} on {1}' -f $Name, $device })
+    Start-BackgroundWork -Title $title -Step 'Connecting to the device...' -Arguments $arguments -Work {
+        param($A, $State)
+        try {
+            $p = $A.Parameters
+            $State.Result = & $A.Function @p
+        }
+        catch { $State.ErrorMsg = $_.Exception.Message }
+        finally { $State.Done = $true }
+    } -OnDone {
+        param($State)
+        if ($State.ErrorMsg) {
+            Add-LogLine ('Action failed: {0}' -f $State.ErrorMsg)
+            Set-StatusText 'Action failed. See the log.'
+            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ([string]$State.ErrorMsg) -Icon Error)
+            return
+        }
+        $r = $State.Result
+        Write-ActionResult -Result $r
+        Update-StatusBarSummary
+        $icon = $(if ($r.Succeeded) { 'Info' } else { 'Error' })
+        [void](Show-ThemedMessage -Owner $window -Title 'Action result' -Message ('{0} on {1}, {2}: {3}' -f $r.Action, $r.ComputerName, $r.Mode, $r.Summary) -Icon $icon)
+        if ($r.Succeeded -and -not $r.DryRun -and $script:ActionAfterRun) { & $script:ActionAfterRun $r }
+    }
+}
+
+$btnPolicyUpdate.Add_Click({
+    Invoke-DeviceAction -Name 'Client policy update' -Function 'Invoke-DeviceInspectorPolicyUpdate' `
+        -Message 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it (Machine Policy Retrieval and Evaluation Cycle).'
+})
+
 # === Window state (geometry logic: SuiteCommon) ===
 $global:WindowStatePath = Join-Path $PSScriptRoot 'DeviceInspector.windowstate.json'
 
@@ -643,7 +851,7 @@ $window.Add_Loaded({
     $chkSiteOnly.IsChecked = [bool]$global:Prefs['SiteOnly']
     Update-ControlState
     Update-StatusBarSummary
-    Add-LogLine 'Device Inspector ready. Enter a device name and a site server, then click Inspect. The tool only reads.'
+    Add-LogLine 'Device Inspector ready. Enter a device name and a site server, then click Inspect. The tool only reads until you turn on Enable actions.'
 })
 
 # Suite update notice: one shared daily lookup across the suite tools; the launcher installs.

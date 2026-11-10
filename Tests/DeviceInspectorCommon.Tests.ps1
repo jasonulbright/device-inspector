@@ -766,12 +766,13 @@ Describe 'Invoke-DeviceInspector.ps1' {
 Describe 'Module surface' {
     It 'exports the documented public functions' {
         $arrExported = @((Get-Module -Name DeviceInspectorCommon).ExportedFunctions.Keys | Sort-Object)
-        $arrExported | Should -Be @(
-            'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow',
-            'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionHtml', 'ConvertTo-DeviceInspectionJson',
-            'ConvertTo-DeviceInspectionReport', 'ConvertTo-DeviceInspectionUpdateRow', 'Get-DeviceInspection',
-            'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile'
-        )
+        $arrExported | Should -Be @(@(
+                'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow',
+                'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionHtml', 'ConvertTo-DeviceInspectionJson',
+                'ConvertTo-DeviceInspectionReport', 'ConvertTo-DeviceInspectionUpdateRow', 'Get-DeviceInspection',
+                'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile',
+                'Invoke-DeviceInspectorPolicyUpdate', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog'
+            ) | Sort-Object)
     }
 
     It 'has comment-based help with an example on every public function' {

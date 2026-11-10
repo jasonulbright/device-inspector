@@ -110,6 +110,28 @@ $script:DialogMeasureScript = {
     , @($rows)
 }
 
+# Runs in the STA runspace. Opens the action confirmation from its XAML text, owned by the
+# themed main window, fills the texts as the shell does, and measures it. Arguments: Config, Xaml, Dark.
+$script:ActionDialogMeasureScript = {
+    $cfg = $Arguments.Config
+    $main = Open-TestWindow -XamlPath (Join-Path $Root $cfg.Xaml) -Dark $Arguments.Dark -Width 1024 -Height 720
+    Initialize-ShellTheme -Window $main -Dark $Arguments.Dark -Views $cfg.Views -OptionsButtonName $cfg.OptionsButton -LogLabelName $cfg.LogLabel -ActiveView $cfg.Views[0].Name
+    $w = Open-TestWindow -XamlText $Arguments.Xaml -Dark $Arguments.Dark -Width 560 -Height 300
+    $w.FindName('txtDeviceCount').Text = 'This action changes 1 device: device-a'
+    $w.FindName('txtActionMessage').Text = 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it.'
+    Set-DialogTheme -Dialog $w -IsDark $Arguments.Dark
+    Wait-Layout $w
+    $out = [PSCustomObject]@{
+        View = 'Action confirmation'
+        Text = @(Get-TextContrast $w); Interactive = @(Get-InteractiveContrast $w)
+        Clipped = @(Get-ClippedText $w); Offscreen = @(Get-OffscreenControls $w)
+        TitleBar = Get-TitleBarContrast $w
+    }
+    $w.Close()
+    $main.Close()
+    $out
+}
+
 # Runs in the STA runspace. Opens the main window (and, for the Options case, the Options dialog
 # owned by it), opens a SuiteCommon message box owned by that window, and reads the place and the
 # title of both windows while the box is open. A timer on the dispatcher reads the box and closes it,

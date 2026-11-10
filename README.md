@@ -5,7 +5,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D4)](#requirements)
 [![License](https://img.shields.io/github/license/jasonulbright/device-inspector)](LICENSE)
 
-Read the facts of one device from a Configuration Manager site and from the device itself, in one window: operating system, client health, site record, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report. The tool is read only.
+Read the facts of one device from a Configuration Manager site and from the device itself, in one window: operating system, client health, site record, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report. The inspection is read only. Actions, such as a client policy update, run only when **Enable actions** is on, after a confirmation with a dry run, and each one goes to an action log.
 
 ![Device Inspector](docs/images/device-panel.png)
 
@@ -21,7 +21,8 @@ The user guide is in [docs/index.md](docs/index.md). It has one page for each pa
 - Lists the collections of the device and the deployments that target them.
 - Keeps going when one part fails. A part that fails (a device that is off, a device the site does not know) is listed under Problems. The other parts still run.
 - Exports the inspection as JSON or as a self-contained HTML report.
-- Read only. The tool reads the site with ConfigurationManager cmdlets (and `SELECT` queries through `Invoke-CMWmiQuery` where no cmdlet exists) and reads the device with one remote script block. It never changes the site or the device. A test checks the module and the window script for state-changing commands.
+- Read only. The tool reads the site with ConfigurationManager cmdlets (and `SELECT` queries through `Invoke-CMWmiQuery` where no cmdlet exists) and reads the device with one remote script block. The inspection never changes the site or the device. A test checks the inspection code and the window script for state-changing commands.
+- Actions behind a switch. **Enable actions** is off at each start. Each action asks for a confirmation that shows the device count, offers a dry run, and writes to `Logs\DeviceInspector-actions.log`. See [docs/core/actions.md](docs/core/actions.md).
 - Dark and light themes with a runtime toggle, like the other tools of the AppPackager Suite.
 
 ## Requirements
@@ -65,7 +66,7 @@ Leave the site server empty to read only the device. Select **Site only** to rea
 
 ![Problems](docs/images/problems-unreachable.png)
 
-The right-click menus of the Applications, Updates and Collections grids and the **Enable actions** switch are in place for later releases. They are disabled. See [docs/reference/read-only-design.md](docs/reference/read-only-design.md).
+The right-click menus of the Applications, Updates and Collections grids are in place for later actions. They are disabled. See [docs/core/actions.md](docs/core/actions.md).
 
 ## Command line
 

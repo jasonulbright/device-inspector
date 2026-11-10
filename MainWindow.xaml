@@ -216,10 +216,10 @@
                         <TextBlock Text="Enable actions" DockPanel.Dock="Left" VerticalAlignment="Center" FontSize="12"/>
                         <Controls:ToggleSwitch x:Name="toggleActions"
                                                DockPanel.Dock="Right"
-                                               IsOn="False" IsEnabled="False"
+                                               IsOn="False"
                                                OnContent="" OffContent=""
                                                MinWidth="0"
-                                               ToolTip="Device Inspector is read only in this release. Actions arrive in a later release."/>
+                                               ToolTip="Off: the tool only reads. On: the action buttons and menu entries can change the device or the site. Each action asks first. The switch is off at each start."/>
                     </DockPanel>
                     <DockPanel LastChildFill="False">
                         <TextBlock x:Name="txtThemeLabel" Text="Dark Theme"
@@ -314,11 +314,17 @@
                 <Grid x:Name="viewDevice" Visibility="Visible">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock x:Name="txtSummary" Grid.Row="0" FontSize="12" TextWrapping="Wrap" Margin="8,0,8,10"
                                Text="No inspection yet."/>
-                    <DataGrid x:Name="gridFacts" Grid.Row="1"
+                    <WrapPanel x:Name="panelDeviceActions" Grid.Row="1" Margin="8,0,8,10">
+                        <Button x:Name="btnPolicyUpdate" Content="Client policy update..."
+                                Style="{StaticResource SquareInlineButtonStyle}" MinWidth="170"
+                                ToolTip="Request and evaluate machine policy on the device. Needs Enable actions."/>
+                    </WrapPanel>
+                    <DataGrid x:Name="gridFacts" Grid.Row="2"
                               Style="{StaticResource ViewDataGrid}"
                               ColumnHeaderStyle="{StaticResource GridHeaderStyle}"
                               CellStyle="{StaticResource GridCellStyle}">

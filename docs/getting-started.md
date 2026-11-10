@@ -4,7 +4,7 @@ This page shows how to install Device Inspector, set the site server, and inspec
 
 ## What it does
 
-Device Inspector shows one device in five panels: Device, Applications, Updates, Collections and Problems. It reads the site with ConfigurationManager cmdlets and WQL `SELECT` queries through `Invoke-CMWmiQuery`, and reads the device with one remote script block (`Invoke-Command`). See [Read-only design](reference/read-only-design.md). It never changes the site or the device.
+Device Inspector shows one device in five panels: Device, Applications, Updates, Collections and Problems. It reads the site with ConfigurationManager cmdlets and WQL `SELECT` queries through `Invoke-CMWmiQuery`, and reads the device with one remote script block (`Invoke-Command`). See [Read-only design](reference/read-only-design.md). The inspection never changes the site or the device. The actions change them only when you turn on **Enable actions** and confirm. See [Actions](core/actions.md).
 
 ## When to use it
 

@@ -25,6 +25,11 @@ This page lists the Microsoft Learn pages for each feature of Device Inspector. 
 
 - [Monitor software updates](https://learn.microsoft.com/intune/configmgr/sum/deploy-use/monitor-software-updates): Describes how the site reports update compliance.
 
+### [Actions](core/actions.md)
+
+- [TriggerSchedule Method in Class SMS_Client](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/client-classes/triggerschedule-method-in-class-sms_client): Lists the schedule IDs that the actions use.
+- [How to manage clients in Configuration Manager](https://learn.microsoft.com/intune/configmgr/core/clients/manage/manage-clients#start-policy-retrieval): Describes policy retrieval.
+
 ### [Collections panel](core/collections.md)
 
 - [Introduction to collections](https://learn.microsoft.com/intune/configmgr/core/clients/manage/collections/introduction-to-collections): Explains device collections and their members.
