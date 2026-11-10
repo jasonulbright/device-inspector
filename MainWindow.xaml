@@ -40,11 +40,65 @@
                             </Setter.Value>
                         </Setter>
                     </Trigger>
+                    <!-- No opacity change when disabled: the sidebar colours come from SuiteCommon, and white text
+                         on the light blue button (4.53:1) has no room to dim. The view buttons are never disabled. -->
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <!-- Palette overrides for SuiteCommon (Initialize-SuiteTheme -Brushes). The start script passes every
+                 resource whose key starts with 'SuiteTheme.'. The SuiteCommon defaults fail the contrast rules:
+                 sidebar border #555555 on #252525 is 2.05:1, inactive light title bar #4BA3E0 is 2.6:1. -->
+            <SolidColorBrush x:Key="SuiteTheme.DarkButtonBorder" Color="#808080"/>
+            <SolidColorBrush x:Key="SuiteTheme.TitleBarInactive" Color="#557595"/>
+
+            <!-- MahApps theme overrides, the same in both themes. The inactive dark title bar (#808080) gives
+                 white title text 3.9:1. The text box border (#CCCCCC) is 1.6:1 on white. -->
+            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#666666"/>
+            <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7A7A7A"/>
+
+            <!-- Square button without the MahApps disabled state (content at 30 percent opacity). Disabled:
+                 theme colours, content at 60 percent, grey border. That keeps 4.5:1 text and 3:1 border in both themes. -->
+            <ControlTemplate x:Key="AppButtonTemplate" TargetType="ButtonBase">
+                <Grid>
+                    <Border x:Name="AppBd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            SnapsToDevicePixels="True"/>
+                    <Rectangle x:Name="AppHover" Margin="{TemplateBinding BorderThickness}" Opacity="0"
+                               Fill="{DynamicResource MahApps.Brushes.Gray.SemiTransparent}"/>
+                    <ContentPresenter x:Name="AppContent"
+                                      Margin="{TemplateBinding Padding}"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      RecognizesAccessKey="True"
+                                      SnapsToDevicePixels="True"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="AppHover" Property="Opacity" Value="1"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="AppHover" Property="Opacity" Value="0"/>
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                    </Trigger>
                     <Trigger Property="IsEnabled" Value="False">
-                        <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                        <Setter TargetName="AppContent" Property="Opacity" Value="0.6"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
+
+            <!-- The MahApps check box shows disabled text in a grey that fails 4.5:1. Keep the theme text colour;
+                 the check box glyph still shows the disabled state. -->
+            <Style TargetType="CheckBox" BasedOn="{StaticResource MahApps.Styles.CheckBox}">
+                <Setter Property="Controls:CheckBoxHelper.ForegroundUncheckedDisabled" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="Controls:CheckBoxHelper.ForegroundCheckedDisabled" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="Controls:CheckBoxHelper.ForegroundIndeterminateDisabled" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+            </Style>
 
             <Style x:Key="ViewButtonStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
                 <Setter Property="Template" Value="{StaticResource SidebarButtonTemplate}"/>
@@ -68,6 +122,9 @@
             <Style x:Key="OptionsButtonStyle" TargetType="Button" BasedOn="{StaticResource ViewButtonStyle}"/>
 
             <Style x:Key="SquareInlineButtonStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+                <Setter Property="Template" Value="{StaticResource AppButtonTemplate}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="Height" Value="28"/>
                 <Setter Property="MinWidth" Value="100"/>
                 <Setter Property="Margin" Value="0,0,8,0"/>
@@ -237,9 +294,9 @@
                             Style="{StaticResource SquareInlineButtonStyle}" MinWidth="120"
                             ToolTip="Read the device and the site. Nothing changes."/>
                     <TextBox x:Name="txtDevice" Grid.Column="1" FontSize="12" Padding="6,4,6,4" Margin="8,0,8,0"
-                             Controls:TextBoxHelper.Watermark="Device name, e.g. CLIENT01"/>
+                             Controls:TextBoxHelper.Watermark="Device name, e.g. WS01"/>
                     <TextBox x:Name="txtSiteServer" Grid.Column="2" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
-                             Controls:TextBoxHelper.Watermark="Site server, e.g. cm01.contoso.com"/>
+                             Controls:TextBoxHelper.Watermark="Site server, e.g. sms01.example.com"/>
                     <CheckBox x:Name="chkSiteOnly" Grid.Column="3" Content="Site only" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center"
                               ToolTip="Skip the connection to the device and read only the site"/>
                     <Button x:Name="btnExportJson" Grid.Column="4" Content="Export JSON" Style="{StaticResource SquareInlineButtonStyle}"

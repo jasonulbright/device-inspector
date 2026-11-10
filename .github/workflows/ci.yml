@@ -51,6 +51,9 @@ jobs:
     name: Pester (Windows PowerShell 5.1)
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      # Opt-in for the window tests (Tests/WindowHarness.ps1). They open windows off screen.
+      SUITE_ALLOW_WINDOW_TESTS: '1'
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -83,6 +86,9 @@ jobs:
     name: Pester (PowerShell 7)
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      # Opt-in for the window tests (Tests/WindowHarness.ps1). They open windows off screen.
+      SUITE_ALLOW_WINDOW_TESTS: '1'
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:

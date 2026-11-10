@@ -61,7 +61,7 @@ Leave the site server empty to read only the device. Select **Site only** to rea
 
 ![Updates](docs/images/updates-panel.png)
 
-![Collections](docs/images/collections-dc01.png)
+![Collections](docs/images/collections-server.png)
 
 ![Problems](docs/images/problems-unreachable.png)
 
@@ -72,7 +72,7 @@ The right-click menus of the Applications, Updates and Collections grids and the
 The window wraps the same module as the script `Invoke-DeviceInspector.ps1`. The script prints the text report and writes JSON with `-JsonPath`:
 
 ```powershell
-.\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -SiteCode MCM -JsonPath .\client01.json
+.\Invoke-DeviceInspector.ps1 -ComputerName WS01 -SiteServer sms01.example.com -SiteCode XYZ -JsonPath .\ws01.json
 ```
 
 | Parameter | Meaning |
@@ -100,7 +100,7 @@ The window wraps the same module as the script `Invoke-DeviceInspector.ps1`. The
 .\Invoke-Checks.ps1
 ```
 
-The script runs PSScriptAnalyzer with the shared settings, then the Pester tests. The tests need no lab. CI runs the tests under Windows PowerShell 5.1 and PowerShell 7.
+The script runs PSScriptAnalyzer with the shared settings, then the Pester tests. The tests need no lab. CI runs the tests under Windows PowerShell 5.1 and PowerShell 7. The window tests (Tests/Window.Tests.ps1) open windows off screen and run only when SUITE_ALLOW_WINDOW_TESTS is 1. CI sets it.
 
 ## Project Structure
 
@@ -116,6 +116,7 @@ device-inspector/
 |  +- DeviceInspectorCommon.psd1     # Module manifest
 |  \- DeviceInspectorCommon.psm1     # Inspection logic and window support
 +- Tests/                            # Pester 5 tests
++- tools/guide-capture/              # Capture scripts for the guide images (see docs/index.md)
 +- docs/reference/read-only-design.md          # Scope, read-only design, limits
 ```
 

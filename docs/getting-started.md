@@ -43,8 +43,8 @@ The status bar says "Enter a device name and click Inspect | read only". The ver
 
 ### Inspect the first device
 
-1. Select **Options**. Enter the site server (the SMS Provider computer), for example `cm01.contoso.com`, and the site code, for example `MCM`. Select **OK**. See [Options dialog](core/options.md).
-2. In the first box, enter the device name, for example `CLIENT01`.
+1. Select **Options**. Enter the site server (the SMS Provider computer), for example `sms01.example.com`, and the site code, for example `XYZ`. Select **OK**. See [Options dialog](core/options.md).
+2. In the first box, enter the device name, for example `WS01`.
 3. Check that the second box holds the site server.
 4. Select **Inspect**. A progress overlay shows "Connecting...", then "Reading the site and the device...".
 5. Read the summary line and the table on the **Device** panel.

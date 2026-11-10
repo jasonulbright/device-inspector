@@ -146,7 +146,7 @@ Describe 'Get-SiteFact' {
     BeforeEach {
         InModuleScope DeviceInspectorCommon {
             Mock Get-CMDevice {
-                [pscustomobject]@{ ResourceID = 16777221; Name = 'CLIENT01'; IsClient = $true; ClientVersion = '5.00.9146.1009'; IsActive = $true; DeviceOS = 'Microsoft Windows NT Workstation 10.0'; LastLogonUser = 'user'; LastHardwareScan = [datetime]::SpecifyKind([datetime]'2026-11-02T19:50:00', 'Utc') }
+                [pscustomobject]@{ ResourceID = 16777221; Name = 'WS01'; IsClient = $true; ClientVersion = '5.00.9146.1009'; IsActive = $true; DeviceOS = 'Microsoft Windows NT Workstation 10.0'; LastLogonUser = 'user'; LastHardwareScan = [datetime]::SpecifyKind([datetime]'2026-11-02T19:50:00', 'Utc') }
             }
             Mock Invoke-SiteQuery {
                 switch -Wildcard ($Query) {
@@ -159,7 +159,7 @@ Describe 'Get-SiteFact' {
                     }
                     '*SMS_FullCollectionMembership*' {
                         [pscustomobject]@{ CollectionID = 'SMS00001' }
-                        [pscustomobject]@{ CollectionID = 'MCM0001F' }
+                        [pscustomobject]@{ CollectionID = 'XYZ0001F' }
                         [pscustomobject]@{ CollectionID = "bad'id" }
                     }
                     '*SMS_UpdateComplianceStatus*' {
@@ -170,11 +170,11 @@ Describe 'Get-SiteFact' {
             }
             Mock Get-CMDeviceCollection {
                 [pscustomobject]@{ CollectionID = 'SMS00001'; Name = 'All Systems' }
-                [pscustomobject]@{ CollectionID = 'MCM0001F'; Name = 'Pilot' }
+                [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot' }
                 [pscustomobject]@{ CollectionID = 'ZZZ00000'; Name = 'Not a collection of the device' }
             }
             Mock Get-CMDeployment {
-                [pscustomobject]@{ DeploymentID = 'D1'; CollectionID = 'MCM0001F'; CollectionName = 'Pilot'; SoftwareName = 'Contoso App'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = [datetime]::SpecifyKind([datetime]'2026-12-04T17:00:00', 'Unspecified') }
+                [pscustomobject]@{ DeploymentID = 'D1'; CollectionID = 'XYZ0001F'; CollectionName = 'Pilot'; SoftwareName = 'Example App'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = [datetime]::SpecifyKind([datetime]'2026-12-04T17:00:00', 'Unspecified') }
                 [pscustomobject]@{ DeploymentID = 'D2'; CollectionID = 'OTHER001'; CollectionName = 'Other'; SoftwareName = 'Deployment to another collection'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = $null }
             }
             Mock Get-CMSoftwareUpdate {
@@ -188,7 +188,7 @@ Describe 'Get-SiteFact' {
     It 'builds the site facts' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $objSite = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             $objSite.Found | Should -BeTrue
             $objSite.ResourceId | Should -Be 16777221
             $objSite.ClientInstalled | Should -BeTrue
@@ -215,15 +215,15 @@ Describe 'Get-SiteFact' {
     It 'reads the device record with Get-CMDevice by exact name' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $null = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
-            Should -Invoke Get-CMDevice -Times 1 -Exactly -ParameterFilter { $Name -eq 'CLIENT01' -and $DisableWildcardHandling }
+            $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            Should -Invoke Get-CMDevice -Times 1 -Exactly -ParameterFilter { $Name -eq 'WS01' -and $DisableWildcardHandling }
         }
     }
 
     It 'reads collections, deployments and updates with one cmdlet call each' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $null = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
+            $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             Should -Invoke Get-CMDeviceCollection -Times 1 -Exactly
             Should -Invoke Get-CMDeployment -Times 1 -Exactly
             Should -Invoke Get-CMSoftwareUpdate -Times 1 -Exactly
@@ -232,7 +232,7 @@ Describe 'Get-SiteFact' {
 
     It 'uses a query only for the three reads that have no cmdlet' {        InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $null = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
+            $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             Should -Invoke Invoke-SiteQuery -Times 4 -Exactly
             Should -Invoke Invoke-SiteQuery -Times 0 -Exactly -ParameterFilter { $Query -like '*SMS_R_System*' -or $Query -like '*SMS_DeploymentSummary*' -or $Query -like '*FROM SMS_SoftwareUpdate*' -or $Query -like '*FROM SMS_Collection *' }
         }
@@ -242,7 +242,7 @@ Describe 'Get-SiteFact' {
         InModuleScope DeviceInspectorCommon {
             Mock Get-CMDeviceCollection { throw 'name lookup failed' }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $objSite = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             @($objSite.Collections).Count | Should -Be 2
             $objSite.Collections[0].Name | Should -BeNullOrEmpty
             @($listProblem | Where-Object { $_ -like 'Site collection names:*name lookup failed*' }).Count | Should -Be 1
@@ -252,8 +252,8 @@ Describe 'Get-SiteFact' {
     It 'drops collection ids that are not 8 letters or digits' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $null = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
-            $objSite = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
+            $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             @($objSite.Collections | Where-Object { $_.CollectionId -like '*bad*' }).Count | Should -Be 0
         }
     }
@@ -325,7 +325,7 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
     It 'stops with the plain console message when the module is missing' {
         Mock -ModuleName DeviceInspectorCommon Resolve-ConfigurationManagerModulePath { $null }
         Mock -ModuleName DeviceInspectorCommon New-PSDrive { }
-        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM' } } | Should -Throw 'The Configuration Manager console is not installed on this computer.*'
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw 'The Configuration Manager console is not installed on this computer.*'
         Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 0 -Scope It
     }
 
@@ -335,11 +335,11 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
         Mock -ModuleName DeviceInspectorCommon Get-PSDrive { }
         Mock -ModuleName DeviceInspectorCommon New-PSDrive { }
         Mock -ModuleName DeviceInspectorCommon Set-Location { }
-        Mock -ModuleName DeviceInspectorCommon Get-CMSite { [pscustomobject]@{ SiteCode = 'MCM' } }
-        $objConnection = InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM' }
+        Mock -ModuleName DeviceInspectorCommon Get-CMSite { [pscustomobject]@{ SiteCode = 'XYZ' } }
+        $objConnection = InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' }
         $objConnection.CreatedDrive | Should -BeTrue
-        Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 1 -Exactly -Scope It -ParameterFilter { $Name -eq 'MCM' -and $PSProvider -eq 'CMSite' -and $Root -eq 'cm01' }
-        Should -Invoke -ModuleName DeviceInspectorCommon Set-Location -Times 1 -Exactly -Scope It -ParameterFilter { $LiteralPath -eq 'MCM:' }
+        Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 1 -Exactly -Scope It -ParameterFilter { $Name -eq 'XYZ' -and $PSProvider -eq 'CMSite' -and $Root -eq 'sms01' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Set-Location -Times 1 -Exactly -Scope It -ParameterFilter { $LiteralPath -eq 'XYZ:' }
     }
 
     It 'reports a plain message when the site cannot be opened' {
@@ -348,7 +348,7 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
         Mock -ModuleName DeviceInspectorCommon Get-PSDrive { }
         Mock -ModuleName DeviceInspectorCommon New-PSDrive { throw 'RPC server is unavailable' }
         Mock -ModuleName DeviceInspectorCommon Set-Location { }
-        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM' } } | Should -Throw 'Cannot open site MCM on cm01.*RPC server is unavailable*'
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw 'Cannot open site XYZ on sms01.*RPC server is unavailable*'
     }
 
     It 'removes the drive that it created when the site check fails, and keeps one that it did not create' {
@@ -359,17 +359,17 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
         Mock -ModuleName DeviceInspectorCommon Set-Location { }
         Mock -ModuleName DeviceInspectorCommon Remove-PSDrive { }
         Mock -ModuleName DeviceInspectorCommon Get-CMSite { throw 'site not found' }
-        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM' } } | Should -Throw '*site not found*'
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw '*site not found*'
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 1 -Exactly -Scope It
-        Mock -ModuleName DeviceInspectorCommon Get-PSDrive { [pscustomobject]@{ Name = 'MCM'; Root = 'cm01' } }
-        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM' } } | Should -Throw '*site not found*'
+        Mock -ModuleName DeviceInspectorCommon Get-PSDrive { [pscustomobject]@{ Name = 'XYZ'; Root = 'sms01' } }
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw '*site not found*'
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 1 -Exactly -Scope It
     }
     It 'goes back to the earlier folder and removes a drive that it created' {
         Mock -ModuleName DeviceInspectorCommon Set-Location { }
         Mock -ModuleName DeviceInspectorCommon Remove-PSDrive { }
         InModuleScope DeviceInspectorCommon {
-            Disconnect-InspectorSite -Connection ([pscustomobject]@{ SiteCode = 'MCM'; SiteServer = 'cm01'; PreviousLocation = 'C:\Work'; CreatedDrive = $true })
+            Disconnect-InspectorSite -Connection ([pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\Work'; CreatedDrive = $true })
         }
         Should -Invoke -ModuleName DeviceInspectorCommon Set-Location -Times 1 -Exactly -Scope It -ParameterFilter { $LiteralPath -eq 'C:\Work' }
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 1 -Exactly -Scope It
@@ -379,7 +379,7 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
         Mock -ModuleName DeviceInspectorCommon Set-Location { }
         Mock -ModuleName DeviceInspectorCommon Remove-PSDrive { }
         InModuleScope DeviceInspectorCommon {
-            Disconnect-InspectorSite -Connection ([pscustomobject]@{ SiteCode = 'MCM'; SiteServer = 'cm01'; PreviousLocation = 'C:\Work'; CreatedDrive = $false })
+            Disconnect-InspectorSite -Connection ([pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\Work'; CreatedDrive = $false })
             Disconnect-InspectorSite -Connection $null
         }
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 0 -Scope It
@@ -389,7 +389,7 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
 Describe 'Get-DeviceInspection' {
     BeforeEach {
         InModuleScope DeviceInspectorCommon {
-            Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'MCM'; SiteServer = 'cm01'; PreviousLocation = 'C:\'; CreatedDrive = $true } }
+            Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $true } }
             Mock Disconnect-InspectorSite { }
             Mock Get-SiteFact { [pscustomobject]@{ Found = $true; ResourceId = 1; ClientInstalled = $true; ClientVersion = '1'; Active = $true; OperatingSystem = 'os'; LastLogonUserName = ''; LastHardwareInventory = $null; InstalledApplications = @(); Collections = @(); Deployments = @() } }
             Mock Get-DeviceFact { [pscustomobject]@{ Reachable = $true; OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @('Operating system: boom') } }
@@ -398,20 +398,20 @@ Describe 'Get-DeviceInspection' {
 
     It 'combines site and device facts and prefixes device problems' {
         InModuleScope DeviceInspectorCommon {
-            $objInspection = Get-DeviceInspection -ComputerName 'client01.contoso.com' -SiteServer 'cm01' -SiteCode 'MCM'
-            $objInspection.SiteCode | Should -Be 'MCM'
+            $objInspection = Get-DeviceInspection -ComputerName 'ws01.example.com' -SiteServer 'sms01' -SiteCode 'XYZ'
+            $objInspection.SiteCode | Should -Be 'XYZ'
             $objInspection.Site.Found | Should -BeTrue
             $objInspection.Device.Reachable | Should -BeTrue
             $objInspection.Problems | Should -Contain 'Device: Operating system: boom'
-            Should -Invoke Get-SiteFact -Times 1 -Exactly -ParameterFilter { $ComputerName -eq 'client01' }
-            Should -Invoke Connect-InspectorSite -Times 1 -Exactly -ParameterFilter { $SiteServer -eq 'cm01' -and $SiteCode -eq 'MCM' }
+            Should -Invoke Get-SiteFact -Times 1 -Exactly -ParameterFilter { $ComputerName -eq 'ws01' }
+            Should -Invoke Connect-InspectorSite -Times 1 -Exactly -ParameterFilter { $SiteServer -eq 'sms01' -and $SiteCode -eq 'XYZ' }
             Should -Invoke Disconnect-InspectorSite -Times 1 -Exactly
         }
     }
 
     It 'skips the device with SkipDevice' {
         InModuleScope DeviceInspectorCommon {
-            $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01' -SiteCode 'MCM' -SkipDevice
+            $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -SkipDevice
             $objInspection.Device | Should -BeNullOrEmpty
             Should -Invoke Get-DeviceFact -Times 0 -Exactly
         }
@@ -419,7 +419,7 @@ Describe 'Get-DeviceInspection' {
 
     It 'skips the site without SiteServer' {
         InModuleScope DeviceInspectorCommon {
-            $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01'
+            $objInspection = Get-DeviceInspection -ComputerName 'WS01'
             $objInspection.Site | Should -BeNullOrEmpty
             $objInspection.SiteServer | Should -BeNullOrEmpty
             Should -Invoke Connect-InspectorSite -Times 0 -Exactly
@@ -428,13 +428,13 @@ Describe 'Get-DeviceInspection' {
 
     It 'throws when there is nothing to inspect' {
         InModuleScope DeviceInspectorCommon {
-            { Get-DeviceInspection -ComputerName 'CLIENT01' -SkipDevice } | Should -Throw '*Nothing to inspect*'
+            { Get-DeviceInspection -ComputerName 'WS01' -SkipDevice } | Should -Throw '*Nothing to inspect*'
         }
     }
 
     It 'throws when a site server has no site code' {
         InModuleScope DeviceInspectorCommon {
-            { Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01' } | Should -Throw '*SiteCode is required with SiteServer*'
+            { Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' } | Should -Throw '*SiteCode is required with SiteServer*'
             Should -Invoke Connect-InspectorSite -Times 0 -Exactly
         }
     }
@@ -442,7 +442,7 @@ Describe 'Get-DeviceInspection' {
     It 'records a site connection failure and still inspects the device' {
         InModuleScope DeviceInspectorCommon {
             Mock Connect-InspectorSite { throw 'no route' }
-            $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01' -SiteCode 'MCM'
+            $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ'
             $objInspection.Site | Should -BeNullOrEmpty
             $objInspection.Problems | Should -Contain 'Site: no route'
             $objInspection.Device.Reachable | Should -BeTrue
@@ -453,7 +453,7 @@ Describe 'Get-DeviceInspection' {
     It 'records a device failure and keeps the site facts' {
         InModuleScope DeviceInspectorCommon {
             Mock Get-DeviceFact { throw 'WinRM failed' }
-            $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01' -SiteCode 'MCM'
+            $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ'
             $objInspection.Device | Should -BeNullOrEmpty
             $objInspection.Site.Found | Should -BeTrue
             $objInspection.Problems | Should -Contain 'Device: WinRM failed'
@@ -463,13 +463,13 @@ Describe 'Get-DeviceInspection' {
     It 'reports a missing device record as a problem' {
         InModuleScope DeviceInspectorCommon {
             Mock Get-SiteFact { [pscustomobject]@{ Found = $false } }
-            $objInspection = Get-DeviceInspection -ComputerName 'NOPE' -SiteServer 'cm01' -SiteCode 'MCM' -SkipDevice
-            $objInspection.Problems | Should -Contain 'Site: no device named NOPE exists in site MCM.'
+            $objInspection = Get-DeviceInspection -ComputerName 'NOPE' -SiteServer 'sms01' -SiteCode 'XYZ' -SkipDevice
+            $objInspection.Problems | Should -Contain 'Site: no device named NOPE exists in site XYZ.'
         }
     }
 
     It 'rejects an invalid computer name' {
-        { Get-DeviceInspection -ComputerName "bad name'" -SiteServer 'cm01' -SiteCode 'MCM' } | Should -Throw
+        { Get-DeviceInspection -ComputerName "bad name'" -SiteServer 'sms01' -SiteCode 'XYZ' } | Should -Throw
     }
 }
 
@@ -480,10 +480,10 @@ Describe 'Get-DeviceFact' {
                 [pscustomobject]@{ OperatingSystem = 'os'; Client = 'client'; InstalledApplications = @('a'); ClientApplications = @(); Problems = @() }
             }
             $objCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList 'u', (ConvertTo-SecureString -String 'p' -AsPlainText -Force)
-            $objDevice = Get-DeviceFact -ComputerName 'CLIENT01' -Credential $objCredential
+            $objDevice = Get-DeviceFact -ComputerName 'WS01' -Credential $objCredential
             $objDevice.Reachable | Should -BeTrue
             $objDevice.OperatingSystem | Should -Be 'os'
-            Should -Invoke Invoke-Command -Times 1 -Exactly -ParameterFilter { $ComputerName -eq 'CLIENT01' -and $null -ne $Credential }
+            Should -Invoke Invoke-Command -Times 1 -Exactly -ParameterFilter { $ComputerName -eq 'WS01' -and $null -ne $Credential }
         }
     }
 
@@ -492,7 +492,7 @@ Describe 'Get-DeviceFact' {
             Mock Invoke-Command {
                 [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @() }
             }
-            $null = Get-DeviceFact -ComputerName 'CLIENT01'
+            $null = Get-DeviceFact -ComputerName 'WS01'
             Should -Invoke Invoke-Command -Times 1 -Exactly -ParameterFilter { $null -eq $Credential }
         }
     }
@@ -504,7 +504,7 @@ Describe 'Get-DeviceFact' {
                 $script:scriptBlockSeen = $ScriptBlock
                 [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @() }
             }
-            $null = Get-DeviceFact -ComputerName 'CLIENT01'
+            $null = Get-DeviceFact -ComputerName 'WS01'
             $script:scriptBlockSeen | Should -BeOfType [scriptblock]
             $script:scriptBlockSeen.ToString() | Should -Not -Match '(Set|Remove|New|Start|Stop|Restart)-(Item|CimInstance|Service|ItemProperty)'
         }
@@ -514,10 +514,10 @@ Describe 'Get-DeviceFact' {
 Describe 'ConvertTo-DeviceInspectionReport' {
     BeforeAll {
         $script:objFull = [pscustomobject]@{
-            ComputerName = 'CLIENT01'
+            ComputerName = 'WS01'
             InspectedAt  = '2026-11-05T10:00:00Z'
-            SiteServer   = 'cm01'
-            SiteCode     = 'MCM'
+            SiteServer   = 'sms01'
+            SiteCode     = 'XYZ'
             Site         = [pscustomobject]@{
                 Found                 = $true
                 ResourceId            = 5
@@ -528,12 +528,12 @@ Describe 'ConvertTo-DeviceInspectionReport' {
                 LastHardwareInventory = '2026-11-02T19:50:00Z'
                 InstalledApplications = @([pscustomobject]@{ Name = 'SiteApp'; Version = '1'; Publisher = 'p' })
                 Collections           = @([pscustomobject]@{ CollectionId = 'SMS00001'; Name = 'All Systems' })
-                Deployments           = @([pscustomobject]@{ Name = 'Contoso App'; Type = 'Application'; Intent = 'Required'; CollectionName = 'Pilot' })
+                Deployments           = @([pscustomobject]@{ Name = 'Example App'; Type = 'Application'; Intent = 'Required'; CollectionName = 'Pilot' })
             }
             Device       = [pscustomobject]@{
                 Reachable             = $true
                 OperatingSystem       = [pscustomobject]@{ Caption = 'Windows 11'; Version = '10.0.26200'; BuildNumber = '26200'; Architecture = '64-bit'; LastBootUp = '2026-11-05T02:50:41Z' }
-                Client                = [pscustomobject]@{ ServiceState = 'Running'; ServiceStartMode = 'Auto'; Version = '5.0'; AssignedSiteCode = 'MCM'; CurrentManagementPoint = 'cm01'; LastHardwareInventoryCycle = '2026-11-02T19:50:53Z'; LastDiscoveryDataCycle = '2026-11-04T23:02:36Z' }
+                Client                = [pscustomobject]@{ ServiceState = 'Running'; ServiceStartMode = 'Auto'; Version = '5.0'; AssignedSiteCode = 'XYZ'; CurrentManagementPoint = 'sms01'; LastHardwareInventoryCycle = '2026-11-02T19:50:53Z'; LastDiscoveryDataCycle = '2026-11-04T23:02:36Z' }
                 InstalledApplications = @([pscustomobject]@{ Name = 'DeviceApp'; Version = '2'; Publisher = 'p' })
                 ClientApplications    = @([pscustomobject]@{ Name = 'PolicyApp'; InstallState = 'NotInstalled'; EvaluationState = 3; LastEvaluation = '2026-11-04T21:53:26Z' })
             }
@@ -543,12 +543,12 @@ Describe 'ConvertTo-DeviceInspectionReport' {
 
     It 'prints every section' {
         $strReport = ConvertTo-DeviceInspectionReport -Inspection $script:objFull
-        $strReport | Should -BeLike '*Device Inspector report: CLIENT01*'
+        $strReport | Should -BeLike '*Device Inspector report: WS01*'
         $strReport | Should -BeLike '*Caption:      Windows 11*'
         $strReport | Should -BeLike '*Service CcmExec:           Running*'
         $strReport | Should -BeLike '*Resource ID:               5*'
         $strReport | Should -BeLike '*SMS00001  All Systems*'
-        $strReport | Should -BeLike '*Contoso App | Application | Required | via Pilot*'
+        $strReport | Should -BeLike '*Example App | Application | Required | via Pilot*'
         $strReport | Should -BeLike '*DeviceApp 2*'
         $strReport | Should -BeLike '*SiteApp 1*'
         $strReport | Should -BeLike '*PolicyApp | NotInstalled | evaluation state 3*'
@@ -557,7 +557,7 @@ Describe 'ConvertTo-DeviceInspectionReport' {
 
     It 'accepts pipeline input' {
         $strReport = $script:objFull | ConvertTo-DeviceInspectionReport
-        $strReport | Should -BeLike '*CLIENT01*'
+        $strReport | Should -BeLike '*WS01*'
     }
 
     It 'prints No data for skipped parts' {
@@ -569,7 +569,7 @@ Describe 'ConvertTo-DeviceInspectionReport' {
     }
 
     It 'says when the site has no record' {
-        $objMissing = [pscustomobject]@{ ComputerName = 'X'; InspectedAt = 't'; SiteServer = 's'; SiteCode = 'MCM'; Site = [pscustomobject]@{ Found = $false }; Device = $null; Problems = @() }
+        $objMissing = [pscustomobject]@{ ComputerName = 'X'; InspectedAt = 't'; SiteServer = 's'; SiteCode = 'XYZ'; Site = [pscustomobject]@{ Found = $false }; Device = $null; Problems = @() }
         ConvertTo-DeviceInspectionReport -Inspection $objMissing | Should -BeLike '*The site has no record of this device.*'
     }
 
@@ -591,13 +591,13 @@ Describe 'ConvertTo-DeviceInspectionReport' {
 Describe 'Invoke-DeviceInspector.ps1' {
     It 'prints the report and writes JSON without a byte order mark' {
         $strJsonPath = Join-Path -Path $TestDrive -ChildPath 'out.json'
-        $arrOutput = @(& $script:strScriptFile -ComputerName 'CLIENT01' -SiteServer 'nonexistent.invalid' -SiteCode 'ABC' -SkipDevice -JsonPath $strJsonPath)
+        $arrOutput = @(& $script:strScriptFile -ComputerName 'WS01' -SiteServer 'nonexistent.invalid' -SiteCode 'ABC' -SkipDevice -JsonPath $strJsonPath)
         $arrOutput.Count | Should -Be 1
-        $arrOutput[0] | Should -BeLike '*Device Inspector report: CLIENT01*'
+        $arrOutput[0] | Should -BeLike '*Device Inspector report: WS01*'
         $arrByte = [System.IO.File]::ReadAllBytes($strJsonPath)
         $arrByte[0] | Should -Be 123
         $objJson = [System.IO.File]::ReadAllText($strJsonPath) | ConvertFrom-Json
-        $objJson.ComputerName | Should -Be 'CLIENT01'
+        $objJson.ComputerName | Should -Be 'WS01'
         @($objJson.Problems | Where-Object { $_ -like 'Site:*' }).Count | Should -Be 1
     }
 

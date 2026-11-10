@@ -181,12 +181,20 @@ $script:ViewButtons = @(
 )
 $script:ActiveView = 'Device'
 
+# Palette overrides for SuiteCommon: every window resource whose key starts with 'SuiteTheme.'
+# (MainWindow.xaml). They keep the sidebar border and the inactive title bar at the contrast minimum.
+$suiteBrushes = @{}
+foreach ($key in @($window.Resources.Keys)) {
+    if ($key -is [string] -and $key.StartsWith('SuiteTheme.')) { $suiteBrushes[$key.Substring(11)] = $window.Resources[$key] }
+}
+
 Initialize-SuiteTheme -Window $window `
     -IsDarkGetter { [bool]$global:Prefs['DarkMode'] } `
     -ActiveViewGetter { $script:ActiveView } `
     -ViewButtons $script:ViewButtons `
     -OptionsButton $btnOptions `
-    -LogLabel $lblLogOutput
+    -LogLabel $lblLogOutput `
+    -Brushes $suiteBrushes
 
 $__startIsDark = [bool]$global:Prefs['DarkMode']
 $toggleTheme.IsOn = $__startIsDark
@@ -467,7 +475,41 @@ function Show-OptionsDialog {
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Steel.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- Contrast fixes, the same as in MainWindow.xaml: inactive dark title bar, text box border,
+                 and a button template that keeps 4.5:1 text and a 3:1 border when disabled. -->
+            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#666666"/>
+            <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7A7A7A"/>
+            <ControlTemplate x:Key="AppButtonTemplate" TargetType="ButtonBase">
+                <Grid>
+                    <Border x:Name="AppBd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True"/>
+                    <Rectangle x:Name="AppHover" Margin="{TemplateBinding BorderThickness}" Opacity="0"
+                               Fill="{DynamicResource MahApps.Brushes.Gray.SemiTransparent}"/>
+                    <ContentPresenter x:Name="AppContent" Margin="{TemplateBinding Padding}"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      RecognizesAccessKey="True" SnapsToDevicePixels="True"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="AppHover" Property="Opacity" Value="1"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="AppHover" Property="Opacity" Value="0"/>
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                    </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                        <Setter TargetName="AppContent" Property="Opacity" Value="0.6"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
             <Style x:Key="CategoryRowStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+                <Setter Property="Template" Value="{StaticResource AppButtonTemplate}"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="Height" Value="36"/>
                 <Setter Property="HorizontalContentAlignment" Value="Left"/>
                 <Setter Property="Padding" Value="14,0,14,0"/>
@@ -476,14 +518,18 @@ function Show-OptionsDialog {
                 <Setter Property="Margin" Value="0"/>
             </Style>
             <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+                <Setter Property="Template" Value="{StaticResource AppButtonTemplate}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="MinWidth" Value="90"/><Setter Property="Height" Value="32"/>
                 <Setter Property="Margin" Value="0,0,8,0"/>
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
             </Style>
-            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square.Accent}">
-                <Setter Property="MinWidth" Value="90"/><Setter Property="Height" Value="32"/>
-                <Setter Property="Margin" Value="0,0,8,0"/>
-                <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
+            <!-- The MahApps accent (80 percent opaque) gives white text 3.3:1 in the light theme.
+                 The opaque highlight colour gives 7:1 in both themes. -->
+            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
             </Style>
         </ResourceDictionary>
     </Window.Resources>
@@ -509,10 +555,10 @@ function Show-OptionsDialog {
                 <TextBlock Text="Configuration Manager Connection" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
                 <TextBlock Text="Site server (SMS Provider FQDN)" FontSize="11" Margin="0,4,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
                 <TextBox x:Name="txtSmsProvider" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="e.g. cm01.contoso.com"/>
+                         Controls:TextBoxHelper.Watermark="e.g. sms01.example.com"/>
                 <TextBlock Text="Site Code" FontSize="11" Margin="0,12,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
                 <TextBox x:Name="txtSiteCode" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="e.g. MCM. Required with a site server." Width="240" HorizontalAlignment="Left"/>
+                         Controls:TextBoxHelper.Watermark="e.g. XYZ. Required with a site server." Width="240" HorizontalAlignment="Left"/>
                 <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The tool needs the Configuration Manager console on this computer. The account needs local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested. The tool only reads."
                            FontSize="11" TextWrapping="Wrap" Margin="0,16,0,0"
                            Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
@@ -559,7 +605,8 @@ function Show-OptionsDialog {
         $neutralName = 'name'
         $check = Test-DeviceInspectorInput -ComputerName $neutralName -SiteServer ([string]$txtSmsProvider.Text) -SiteCode ([string]$txtSiteCode.Text)
         if (-not $check.IsValid) {
-            [void](Show-ThemedMessage -Owner $dlg -Title 'Options' -Message ($check.Errors -join [Environment]::NewLine) -Icon Warn)
+            # The title differs from the owner title (Options), so the two windows are not confused.
+            [void](Show-ThemedMessage -Owner $dlg -Title 'Device Inspector' -Message ($check.Errors -join [Environment]::NewLine) -Icon Warn)
             return
         }
         $global:Prefs.SiteCode    = $check.SiteCode

@@ -19,11 +19,11 @@ An inspection. Before **Inspect**, the panel shows "No inspection yet." and an e
 ### Read the summary
 
 1. Select **Inspect**.
-2. Read the line above the table, for example: `Device CLIENT01; client service Running, version 5.00.9146.1009; site record found (resource ID 16777221); 20 applications; 8 update rows; 11 collections; 0 problems.`
+2. Read the line above the table, for example: `Device WS01; client service Running, version 5.00.9146.1009; site record found (resource ID 16777221); 20 applications; 8 update rows; 11 collections; 0 problems.`
 
 The line says "the site has no record of the device" when the site does not know the device.
 
-![The Device panel of CLIENT01](../images/device-panel.png)
+![The Device panel of the workstation](../images/device-panel.png)
 
 ### Read the facts
 
@@ -38,7 +38,7 @@ The table has three columns: **Group**, **Fact** and **Value**.
 
 Two "last hardware inventory" values exist on purpose. The device value is the start time of the last cycle on the client. The site value is the scan date that the site stored. They can differ.
 
-![The Device panel of a server](../images/device-dc01.png)
+![The Device panel of a server](../images/device-server.png)
 
 ### Device panel in the light theme
 

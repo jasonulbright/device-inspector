@@ -62,8 +62,8 @@ The tool checks the boxes before it reads anything. A wrong value opens a messag
 
 | Control | Effect |
 |---|---|
-| Device box | The device name. The watermark shows `Device name, e.g. CLIENT01`. |
-| Site server box | The SMS Provider computer. The watermark shows `Site server, e.g. cm01.contoso.com`. |
+| Device box | The device name. The watermark shows `Device name, e.g. WS01`. |
+| Site server box | The SMS Provider computer. The watermark shows `Site server, e.g. sms01.example.com`. |
 | **Site only** | Skips the connection to the device. |
 | **Inspect** | Reads the device and the site. |
 | **Export JSON**, **Export HTML** | Save the inspection. See [Export](export.md). They turn on when an inspection exists. |
