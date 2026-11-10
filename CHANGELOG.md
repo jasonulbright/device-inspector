@@ -2,6 +2,27 @@
 
 All notable changes to Device Inspector are documented in this file.
 
+## [2026.11.10.0005] - 2026-11-10
+
+## 36 user guide images retaken from the fixed window
+
+### Fixed
+
+- Show the app name, not Options, in the message boxes of the Options dialog.
+- Meet 4.5:1 text and 3:1 border contrast in both themes, disabled buttons included.
+- Use the signed-in account, not a credential, when the site server is this computer.
+- Remove the cmdlet warning about the Name wildcard from the command-line report.
+
+### Added
+
+- Add window tests for titles, centering, contrast and clipping. CI runs them.
+- Add capture scripts in tools/guide-capture. One command takes all images again.
+
+### Changed
+
+- Correct the user guide against the code.
+- Retake all 36 images of the user guide.
+
 ## [2026.11.07.0004] - 2026-11-07
 
 ## 1 user guide ships with the release
