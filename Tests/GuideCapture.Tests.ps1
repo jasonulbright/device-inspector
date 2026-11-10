@@ -10,10 +10,13 @@ BeforeAll {
     $script:Root = Split-Path -Parent $PSScriptRoot
     $script:CaptureDir = Join-Path $script:Root 'tools\guide-capture'
     $script:ImageDir = Join-Path $script:Root 'docs\images'
-    # The names of the lab machines, the lab domain, the lab site code and the lab account. They are built
+    # The default names that the public lab builder ships: the machines, the domain, the site code and the
+    # 192.168.50.x addresses. They are public and can show in tracked files, guides and images.
+    $script:PublicLabPattern = '(?i)^(CM01|DC01|CLIENT01|MCM|contoso\.com|[A-Za-z0-9-]+\.contoso\.com|192\.168\.50\.\d{1,3})$'
+    # Values that stay private: the lab account and the file that holds the lab credential. They are built
     # from parts, so this file does not hold them either.
-    $script:LabNames = @(('C', 'M', '0', '1'), ('C', 'LIENT', '0', '1'), ('D', 'C', '0', '1'), ('con', 'toso'), ('M', 'C', 'M'), ('lab', 'admin')) | ForEach-Object { $_ -join '' }
-    $script:LabNamePattern = '(?i)\b(' + (($script:LabNames | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')'
+    $script:PrivateNames = @(('lab', 'admin'), ('lab-', 'credentials')) | ForEach-Object { $_ -join '' }
+    $script:PrivateNamePattern = '(?i)\b(' + (($script:PrivateNames | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')'
 
     # The text of every string and comment token of a script.
     function Get-LiteralText {
@@ -35,21 +38,21 @@ Describe 'Capture scripts' {
         @($errors) | Should -BeNullOrEmpty
     }
 
-    It 'has no host name, address, domain name or account in the strings and comments of <File>' -ForEach $script:CaptureFiles {
+    It 'has no host name, address, domain name or account other than a lab builder default in the strings and comments of <File>' -ForEach $script:CaptureFiles {
         $path = Join-Path $script:CaptureDir $File
         $found = foreach ($text in @(Get-LiteralText -Path $path)) {
             # An IPv4 address, a dotted DNS name, a computer name of letters and a number, or a domain account.
             foreach ($m in [regex]::Matches($text, '\b\d{1,3}(\.\d{1,3}){3}\b|\b[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.(com|net|org|local|lan|corp|internal|test)\b|\b[A-Za-z]{2,}\d{2,}\b|\b[A-Za-z]+\\[A-Za-z]*admin\b')) {
-                # Windows library names are not computer names.
-                if ($m.Value -notin 'user32', 'kernel32') { $m.Value }
+                # Windows library names are not computer names. The lab builder defaults are public.
+                if ($m.Value -notin 'user32', 'kernel32' -and $m.Value -notmatch $script:PublicLabPattern) { $m.Value }
             }
         }
         @($found) | Should -BeNullOrEmpty
     }
 
-    It 'has no lab machine, lab domain, lab site code or lab account name in <File>' -ForEach $script:CaptureFiles {
+    It 'has no lab account name or lab credential file name in <File>' -ForEach $script:CaptureFiles {
         $text = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir $File))
-        @([regex]::Matches($text, $script:LabNamePattern) | ForEach-Object { $_.Value }) | Should -BeNullOrEmpty
+        @([regex]::Matches($text, $script:PrivateNamePattern) | ForEach-Object { $_.Value }) | Should -BeNullOrEmpty
     }
 
     It 'takes the lab computer, the account and the credential script from parameters' {
@@ -108,7 +111,7 @@ Describe 'Capture scripts' {
 }
 
 Describe 'Repository text' {
-    It 'has no lab machine, lab domain, lab site code or lab account name in a tracked text file of the repository' {
+    It 'has no lab account name or lab credential file name in a tracked text file of the repository' {
         # Only the files in git are published. Untracked local files (logs, lab notes) are not scanned.
         if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Set-ItResult -Skipped -Because 'git is not installed'; return }
         $tracked = @(& git -C $script:Root -c core.quotepath=off ls-files 2>$null)
@@ -121,7 +124,7 @@ Describe 'Repository text' {
             $path = Join-Path $script:Root $f
             # A tracked file that is deleted in the work tree has no text to scan.
             if (-not (Test-Path -LiteralPath $path)) { continue }
-            foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($path), $script:LabNamePattern)) { '{0}: {1}' -f $f, $m.Value }
+            foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($path), $script:PrivateNamePattern)) { '{0}: {1}' -f $f, $m.Value }
         }
         @($found) | Should -BeNullOrEmpty
     }
