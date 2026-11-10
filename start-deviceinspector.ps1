@@ -169,37 +169,6 @@ function Set-StatusText {
 # === Title-bar drag fallback: SuiteCommon owns the hook ===
 Install-TitleBarDragFallback -Window $window
 
-# === Owned windows open centered on their owner ===
-# The SuiteCommon message box (Show-ThemedMessage: CenterOwner with SizeToContent) opens with its
-# center on the left edge of its owner. A class handler centers every owned window that asks for
-# CenterOwner when it loads. The shared fix belongs in SuiteCommon (app-packager-suite).
-function Register-OwnerCentering {
-    if ($global:__ownerCenteringRegistered) { return }
-    $global:__ownerCenteringRegistered = $true
-    [System.Windows.EventManager]::RegisterClassHandler([System.Windows.Window], [System.Windows.FrameworkElement]::LoadedEvent, [System.Windows.RoutedEventHandler]{
-            param($s, $e)
-            if (-not $s.Owner -or $s.WindowStartupLocation -ne [System.Windows.WindowStartupLocation]::CenterOwner) { return }
-            # Center after the first layout and after the placement of WPF, which runs after Loaded.
-            $w = $s
-            [void]$s.Dispatcher.BeginInvoke([System.Windows.Threading.DispatcherPriority]::ContextIdle, [action]({
-                    $owner = $w.Owner
-                    if (-not $owner) { return }
-                    # The owner position in device-independent units, also when the owner is maximized.
-                    $left = $owner.Left; $top = $owner.Top
-                    $source = [System.Windows.PresentationSource]::FromVisual($owner)
-                    if ($source -and $source.CompositionTarget) {
-                        $corner = $source.CompositionTarget.TransformFromDevice.Transform($owner.PointToScreen([System.Windows.Point]::new(0, 0)))
-                        $left = $corner.X; $top = $corner.Y
-                    }
-                    $w.WindowStartupLocation = [System.Windows.WindowStartupLocation]::Manual
-                    $w.Left = $left + ($owner.ActualWidth - $w.ActualWidth) / 2
-                    $w.Top = $top + ($owner.ActualHeight - $w.ActualHeight) / 2
-                    $global:__ownerCenteringCount = 1 + [int]$global:__ownerCenteringCount
-                }.GetNewClosure()))
-        })
-}
-Register-OwnerCentering
-
 # === Theme (palette, sidebar, title bar, dialogs: SuiteCommon) ===
 [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($window, 'Dark.Steel')
 
@@ -586,10 +555,10 @@ function Show-OptionsDialog {
                 <TextBlock Text="Configuration Manager Connection" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
                 <TextBlock Text="Site server (SMS Provider FQDN)" FontSize="11" Margin="0,4,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
                 <TextBox x:Name="txtSmsProvider" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="e.g. cm01.contoso.com"/>
+                         Controls:TextBoxHelper.Watermark="e.g. sms01.example.com"/>
                 <TextBlock Text="Site Code" FontSize="11" Margin="0,12,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
                 <TextBox x:Name="txtSiteCode" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="e.g. MCM. Required with a site server." Width="240" HorizontalAlignment="Left"/>
+                         Controls:TextBoxHelper.Watermark="e.g. XYZ. Required with a site server." Width="240" HorizontalAlignment="Left"/>
                 <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The tool needs the Configuration Manager console on this computer. The account needs local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested. The tool only reads."
                            FontSize="11" TextWrapping="Wrap" Margin="0,16,0,0"
                            Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>

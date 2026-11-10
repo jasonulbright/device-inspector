@@ -1,7 +1,6 @@
 # The guide steps. main.ps1 dot-sources this file in the interactive session of the lab workstation.
 # $Capture holds the site code, the SMS Provider and the device names (Invoke-GuideCapture.ps1).
 # The app only reads. No step changes the site or a device.
-$second = ([string]$Capture.SecondDevice).ToLowerInvariant()
 $win = Start-App 'start-deviceinspector.ps1' 'Device Inspector'
 Size-Win $win 1440 900
 $win = Find-Top 'Device Inspector' 10
@@ -54,10 +53,10 @@ Section 'inspect the client' {
 Section 'inspect the server' {
     Show-View 'btnViewDevice'
     Set-Text (Get-El $win 'txtDevice') $Capture.SecondDevice; Invoke-El (Get-El $win 'btnInspect'); Wait-Idle
-    Shot $win ('device-' + $second)
-    Show-View 'btnViewCollections'; Shot $win ('collections-' + $second)
-    Show-View 'btnViewUpdates'; Shot $win ('updates-' + $second)
-    Show-View 'btnViewProblems'; Shot $win ('problems-' + $second)
+    Shot $win 'device-server'
+    Show-View 'btnViewCollections'; Shot $win 'collections-server'
+    Show-View 'btnViewUpdates'; Shot $win 'updates-server'
+    Show-View 'btnViewProblems'; Shot $win 'problems-server'
 }
 Section 'inspect an unreachable device' {
     Show-View 'btnViewDevice'

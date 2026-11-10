@@ -25,17 +25,17 @@ The script inspects one device and prints a report. With `-JsonPath` it also wri
 2. Run the script:
 
    ```powershell
-   .\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -SiteCode MCM
+   .\Invoke-DeviceInspector.ps1 -ComputerName WS01 -SiteServer sms01.example.com -SiteCode XYZ
    ```
 
-3. Read the report. It starts with `Device Inspector report: CLIENT01`, the time and the site server. It has one section for each part: operating system, client health, site record, collections, deployments, updates, applications and problems.
+3. Read the report. It starts with `Device Inspector report: WS01`, the time and the site server. It has one section for each part: operating system, client health, site record, collections, deployments, updates, applications and problems.
 
 ### Write the JSON
 
 1. Add `-JsonPath`:
 
    ```powershell
-   .\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -SiteCode MCM -JsonPath .\client01.json
+   .\Invoke-DeviceInspector.ps1 -ComputerName WS01 -SiteServer sms01.example.com -SiteCode XYZ -JsonPath .\ws01.json
    ```
 
 2. Open the file. It holds all entries of every list.

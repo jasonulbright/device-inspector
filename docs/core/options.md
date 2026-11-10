@@ -21,7 +21,7 @@ None. The dialog does not connect to the site.
 1. Select **Options** in the sidebar.
 2. Select **Connection**.
 3. In **Site server (SMS Provider FQDN)**, enter a computer name or an FQDN.
-4. In **Site Code**, enter the three letters or digits of the site code, for example `MCM`. The site code is required when a site server is set.
+4. In **Site Code**, enter the three letters or digits of the site code, for example `XYZ`. The site code is required when a site server is set.
 5. Select **OK**. Select **Cancel** or press Esc to discard the change.
 
 ![The Connection section of the Options dialog](../images/options-connection.png)

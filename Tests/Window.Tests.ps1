@@ -177,14 +177,12 @@ Describe 'Dialog windows' -Skip:(-not $script:WindowGuard.Allowed) {
 Describe 'Message boxes' -Skip:(-not $script:WindowGuard.Allowed) {
     It 'opens a message box centered on its owner, the <Owner>' -ForEach @(@{ Owner = 'main window'; UseDialog = $false }, @{ Owner = 'Options dialog'; UseDialog = $true }) {
         $xaml = if ($UseDialog) { $script:DialogXaml[0] } else { '' }
-        $fix = $script:ShellAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Register-OwnerCentering' }, $true)
-        $fix | Should -Not -BeNullOrEmpty -Because 'the start script centers owned windows on their owner'
-        $r = Invoke-WpfSta -Arguments @{ Config = $script:AppConfig; Xaml = $xaml; Dark = $true; Fix = $fix.Extent.Text } -Script $script:MessageBoxMeasureScript
+        $r = Invoke-WpfSta -Arguments @{ Config = $script:AppConfig; Xaml = $xaml; Dark = $true } -Script $script:MessageBoxMeasureScript
         $r | Should -Not -BeNullOrEmpty -Because 'the message box must open'
         $r.BoxWidth | Should -BeGreaterThan 0
         $ownerX = $r.OwnerLeft + $r.OwnerWidth / 2; $ownerY = $r.OwnerTop + $r.OwnerHeight / 2
         $boxX = $r.BoxLeft + $r.BoxWidth / 2; $boxY = $r.BoxTop + $r.BoxHeight / 2
-        [math]::Abs($boxX - $ownerX) | Should -BeLessOrEqual 2 -Because ('box center x {0}, owner center x {1}, centered by the app {2} times' -f $boxX, $ownerX, $r.Centered)
+        [math]::Abs($boxX - $ownerX) | Should -BeLessOrEqual 2 -Because ('box center x {0}, owner center x {1}' -f $boxX, $ownerX)
         [math]::Abs($boxY - $ownerY) | Should -BeLessOrEqual 2 -Because ('box center y {0}, owner center y {1}' -f $boxY, $ownerY)
     }
 }

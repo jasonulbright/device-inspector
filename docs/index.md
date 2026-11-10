@@ -46,4 +46,4 @@ The images in `docs/images` come from one command. Run it on a computer with Pow
 .\tools\guide-capture\Invoke-GuideCapture.ps1 -CredentialScript <credential script> -Target <lab workstation> -LogonUser <domain\account> -SmsProvider <site server> -SiteCode <site code> -Device <client device> -SecondDevice <server device>
 ```
 
-The credential script sets `$LabCredential`. Keep it outside the repository. The images of the server end with the lower-case name of `-SecondDevice`. The steps are in `tools/guide-capture/steps-guide.ps1` and `tools/guide-capture/steps-console-missing.ps1`.
+The credential script sets `$LabCredential`. Keep it outside the repository. The images of the `-SecondDevice` server end with `-server`. The steps are in `tools/guide-capture/steps-guide.ps1` and `tools/guide-capture/steps-console-missing.ps1`.

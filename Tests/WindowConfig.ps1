@@ -113,18 +113,14 @@ $script:DialogMeasureScript = {
 # Runs in the STA runspace. Opens the main window (and, for the Options case, the Options dialog
 # owned by it), opens a SuiteCommon message box owned by that window, and reads the place and the
 # title of both windows while the box is open. A timer on the dispatcher reads the box and closes it,
-# because Show-ThemedMessage waits in ShowDialog. Arguments: Config, Xaml (dialog XAML or empty), Dark,
-# Fix (the text of the Register-OwnerCentering function of the start script).
+# because Show-ThemedMessage waits in ShowDialog. Arguments: Config, Xaml (dialog XAML or empty), Dark.
 $script:MessageBoxMeasureScript = {
     $cfg = $Arguments.Config
     $main = Open-TestWindow -XamlPath (Join-Path $Root $cfg.Xaml) -Dark $Arguments.Dark -Width 1024 -Height 720
     Initialize-ShellTheme -Window $main -Dark $Arguments.Dark -Views $cfg.Views -OptionsButtonName $cfg.OptionsButton -LogLabelName $cfg.LogLabel -ActiveView $cfg.Views[0].Name
-    # Windows treats -32000,-32000 as the place of a minimized window, and CenterOwner then places the
-    # box on the left edge of the owner. Put the owner on screen, where a person sees it.
+    # Put the owner on screen, where a person sees it, at its minimum size.
     $main.Left = 0; $main.Top = 0; $main.Width = $main.MinWidth; $main.Height = $main.MinHeight
     Wait-Layout $main
-    # The fix of the start script (Register-OwnerCentering), as the app runs it before any dialog opens.
-    if ($Arguments.Fix) { . ([scriptblock]::Create($Arguments.Fix)); Register-OwnerCentering }
     $owner = $main
     $dialog = $null
     if ($Arguments.Xaml) {
@@ -144,18 +140,19 @@ $script:MessageBoxMeasureScript = {
     $timer.Interval = [TimeSpan]::FromMilliseconds(100)
     $timer.Add_Tick({
             $global:HarnessTicks++
-            $box = @($global:HarnessOwner.OwnedWindows) | Where-Object { $_.IsLoaded } | Select-Object -First 1
+            # The owner also owns the glow windows of MahApps (one on each edge), so the box is found by its button.
+            $box = @($global:HarnessOwner.OwnedWindows) | Where-Object { $_.IsLoaded -and $_ -is [MahApps.Metro.Controls.MetroWindow] -and $_.FindName('btnPrimary') } | Select-Object -First 1
             # Read the box some ticks after it loaded, so SizeToContent and the start location are applied.
             if ($box -and -not $global:HarnessBox -and $global:HarnessTicks -ge 10) {
                 $o = $global:HarnessOwner
                 $global:HarnessBox = [PSCustomObject]@{
                     OwnerTitle = $o.Title; BoxTitle = $box.Title
                     OwnerLeft = $o.Left; OwnerTop = $o.Top; OwnerWidth = $o.ActualWidth; OwnerHeight = $o.ActualHeight
-                    BoxLeft = $box.Left; BoxTop = $box.Top; BoxWidth = $box.ActualWidth; BoxHeight = $box.ActualHeight; Centered = [int]$global:__ownerCenteringCount
+                    BoxLeft = $box.Left; BoxTop = $box.Top; BoxWidth = $box.ActualWidth; BoxHeight = $box.ActualHeight
                 }
                 $box.Close()
             }
-            elseif ($global:HarnessTicks -ge 100) { foreach ($b in @($global:HarnessOwner.OwnedWindows)) { $b.Close() } }
+            elseif ($global:HarnessTicks -ge 100) { foreach ($b in @($global:HarnessOwner.OwnedWindows | Where-Object { $_ -is [MahApps.Metro.Controls.MetroWindow] })) { $b.Close() } }
         })
     $timer.Start()
     try { [void](Show-ThemedMessage -Owner $owner -Title 'Device Inspector' -Message 'A site server needs a site code. Enter it in Options.' -Icon Warn) }

@@ -61,7 +61,7 @@ Leave the site server empty to read only the device. Select **Site only** to rea
 
 ![Updates](docs/images/updates-panel.png)
 
-![Collections](docs/images/collections-dc01.png)
+![Collections](docs/images/collections-server.png)
 
 ![Problems](docs/images/problems-unreachable.png)
 
@@ -72,7 +72,7 @@ The right-click menus of the Applications, Updates and Collections grids and the
 The window wraps the same module as the script `Invoke-DeviceInspector.ps1`. The script prints the text report and writes JSON with `-JsonPath`:
 
 ```powershell
-.\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -SiteCode MCM -JsonPath .\client01.json
+.\Invoke-DeviceInspector.ps1 -ComputerName WS01 -SiteServer sms01.example.com -SiteCode XYZ -JsonPath .\ws01.json
 ```
 
 | Parameter | Meaning |

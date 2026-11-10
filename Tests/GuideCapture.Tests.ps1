@@ -10,6 +10,10 @@ BeforeAll {
     $script:Root = Split-Path -Parent $PSScriptRoot
     $script:CaptureDir = Join-Path $script:Root 'tools\guide-capture'
     $script:ImageDir = Join-Path $script:Root 'docs\images'
+    # The names of the lab machines, the lab domain, the lab site code and the lab account. They are built
+    # from parts, so this file does not hold them either.
+    $script:LabNames = @(('C', 'M', '0', '1'), ('C', 'LIENT', '0', '1'), ('D', 'C', '0', '1'), ('con', 'toso'), ('M', 'C', 'M'), ('lab', 'admin')) | ForEach-Object { $_ -join '' }
+    $script:LabNamePattern = '(?i)\b(' + (($script:LabNames | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')'
 
     # The text of every string and comment token of a script.
     function Get-LiteralText {
@@ -43,6 +47,11 @@ Describe 'Capture scripts' {
         @($found) | Should -BeNullOrEmpty
     }
 
+    It 'has no lab machine, lab domain, lab site code or lab account name in <File>' -ForEach $script:CaptureFiles {
+        $text = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir $File))
+        @([regex]::Matches($text, $script:LabNamePattern) | ForEach-Object { $_.Value }) | Should -BeNullOrEmpty
+    }
+
     It 'takes the lab computer, the account and the credential script from parameters' {
         $cmd = Get-Command (Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1')
         foreach ($name in 'CredentialScript', 'Target', 'LogonUser', 'SmsProvider', 'SiteCode', 'Device', 'SecondDevice') {
@@ -62,10 +71,7 @@ Describe 'Capture scripts' {
     It 'makes every image of the guide' {
         $steps = (Get-ChildItem -LiteralPath $script:CaptureDir -Filter 'steps-*.ps1' | ForEach-Object { [System.IO.File]::ReadAllText($_.FullName) }) -join "`n"
         $missing = foreach ($png in Get-ChildItem -LiteralPath $script:ImageDir -Filter '*.png') {
-            $name = $png.BaseName
-            # A fixed name, or a name that ends with the second device name (the prefix and $second).
-            $prefix = $name -replace '-[^-]+$', ''
-            if ($steps -notmatch ("'{0}'" -f [regex]::Escape($name)) -and $steps -notmatch ("'{0}-'\s*\+\s*\`$second" -f [regex]::Escape($prefix))) { $png.Name }
+            if ($steps -notmatch ("'{0}'" -f [regex]::Escape($png.BaseName))) { $png.Name }
         }
         @($missing) | Should -BeNullOrEmpty
     }
@@ -74,5 +80,18 @@ Describe 'Capture scripts' {
         $index = [System.IO.File]::ReadAllText((Join-Path $script:Root 'docs\index.md'))
         $index | Should -Match '(?m)^## Retake the captures'
         $index | Should -Match 'tools\\guide-capture\\Invoke-GuideCapture\.ps1'
+    }
+}
+
+Describe 'Repository text' {
+    It 'has no lab machine, lab domain, lab site code or lab account name in a text file of the repository' {
+        # The vendored Lib folder is the copy of another repository and is left out.
+        $files = @(Get-ChildItem -LiteralPath $script:Root -Recurse -File -Include '*.ps1', '*.psm1', '*.psd1', '*.md', '*.xaml', '*.yml', '*.yaml', '*.json', '*.txt' |
+                Where-Object { $_.FullName -notmatch '[\/](\.git|Lib)[\/]' })
+        $files.Count | Should -BeGreaterThan 10
+        $found = foreach ($f in $files) {
+            foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f.FullName), $script:LabNamePattern)) { '{0}: {1}' -f $f.FullName.Substring($script:Root.Length + 1), $m.Value }
+        }
+        @($found) | Should -BeNullOrEmpty
     }
 }

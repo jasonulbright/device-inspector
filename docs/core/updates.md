@@ -21,13 +21,13 @@ An inspection that read the site, the device or both.
 1. Select **Updates** in the sidebar.
 2. Read the columns: **Source**, **Article**, **Severity**, **State**, **Deadline (UTC)** and **Title**.
 
-![The Updates panel of CLIENT01](../images/updates-panel.png)
+![The Updates panel of the workstation](../images/updates-panel.png)
 
 A **Site** row with the state `Required (superseded)` is an update that a newer update replaces. The site still lists it. Expired updates are left out.
 
 A **Device** row has the evaluation state of the client, for example `None`. The severity and the deadline are empty when the client policy has no value.
 
-![The Updates panel of a server](../images/updates-dc01.png)
+![The Updates panel of a server](../images/updates-server.png)
 
 ### Updates panel in the light theme
 

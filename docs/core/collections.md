@@ -22,7 +22,7 @@ An inspection that read the site. A **Site only** inspection and a full inspecti
 2. Read the upper grid: **Collection ID** and **Collection**.
 3. Read the lower grid: **Deployment**, **Type**, **Intent**, **Collection** and **Deadline (UTC)**. The **Collection** column names the collection that brings the deployment to the device.
 
-![The Collections panel of a server that is in two collections](../images/collections-dc01.png)
+![The Collections panel of a server that is in two collections](../images/collections-server.png)
 
 ### The right-click menus
 

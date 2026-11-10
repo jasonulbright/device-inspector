@@ -32,8 +32,7 @@
     The client device that the capture inspects (most panels of the guide).
 
 .PARAMETER SecondDevice
-    A second device, a server, for the server images. Its lower-case name ends the
-    image names (for example device-<name>.png), so it must match the images in docs\images.
+    A second device, a server, for the server images (device-server.png and the others).
 
 .PARAMETER UnreachableDevice
     A device name that does not exist, for the images of an unreachable device.

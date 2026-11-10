@@ -10,9 +10,9 @@ BeforeAll {
 
     function New-WindowTestInspection {
         [pscustomobject]@{
-            ComputerName = 'CLIENT01'
+            ComputerName = 'WS01'
             InspectedAt  = '2026-11-06T09:00:00Z'
-            SiteServer   = 'cm01.contoso.com'
+            SiteServer   = 'sms01.example.com'
             SiteCode     = 'ABC'
             Site         = [pscustomobject]@{
                 Found                 = $true
@@ -29,7 +29,7 @@ BeforeAll {
                     [pscustomobject]@{ Name = 'Inventory Only App'; Version = '2.0'; Publisher = '' }
                 )
                 Collections           = @([pscustomobject]@{ CollectionId = 'SMS00001'; Name = 'All Systems' })
-                Deployments           = @([pscustomobject]@{ DeploymentId = 'D1'; CollectionId = 'SMS00001'; CollectionName = 'All Systems'; Name = 'Contoso <App>'; Type = 'Application'; Intent = 'Available'; EnforcementDeadline = $null })
+                Deployments           = @([pscustomobject]@{ DeploymentId = 'D1'; CollectionId = 'SMS00001'; CollectionName = 'All Systems'; Name = 'Example <App>'; Type = 'Application'; Intent = 'Available'; EnforcementDeadline = $null })
                 RequiredUpdates       = @(
                     [pscustomobject]@{ CIId = 1; ArticleId = '5001'; Title = 'Cumulative update'; Severity = 'Critical'; IsSuperseded = $false }
                     [pscustomobject]@{ CIId = 2; ArticleId = ''; Title = 'Old update'; Severity = 'Low'; IsSuperseded = $true }
@@ -38,7 +38,7 @@ BeforeAll {
             Device       = [pscustomobject]@{
                 Reachable             = $true
                 OperatingSystem       = [pscustomobject]@{ Caption = 'Windows 11'; Version = '10.0.26200'; BuildNumber = '26200'; Architecture = '64-bit'; LastBootUp = '2026-11-05T02:50:41Z' }
-                Client                = [pscustomobject]@{ ServiceState = 'Running'; ServiceStartMode = 'Auto'; Version = '5.00.9146.1009'; AssignedSiteCode = 'ABC'; CurrentManagementPoint = 'cm01.contoso.com'; LastHardwareInventoryCycle = '2026-11-03T00:50:53Z'; LastDiscoveryDataCycle = '2026-11-05T04:02:36Z' }
+                Client                = [pscustomobject]@{ ServiceState = 'Running'; ServiceStartMode = 'Auto'; Version = '5.00.9146.1009'; AssignedSiteCode = 'ABC'; CurrentManagementPoint = 'sms01.example.com'; LastHardwareInventoryCycle = '2026-11-03T00:50:53Z'; LastDiscoveryDataCycle = '2026-11-05T04:02:36Z' }
                 InstalledApplications = @(
                     [pscustomobject]@{ Name = '7-zip'; Version = '26.03'; Publisher = 'Igor Pavlov' }
                     [pscustomobject]@{ Name = 'Edge'; Version = '2.0'; Publisher = 'Microsoft' }
@@ -60,15 +60,15 @@ AfterAll {
 
 Describe 'Test-DeviceInspectorInput' {
     It 'accepts a device name with a site server and trims the text' {
-        $objInput = Test-DeviceInspectorInput -ComputerName ' client01 ' -SiteServer ' cm01.contoso.com ' -SiteCode ' ABC '
+        $objInput = Test-DeviceInspectorInput -ComputerName ' ws01 ' -SiteServer ' sms01.example.com ' -SiteCode ' ABC '
         $objInput.IsValid | Should -BeTrue
-        $objInput.ComputerName | Should -Be 'client01'
-        $objInput.SiteServer | Should -Be 'cm01.contoso.com'
+        $objInput.ComputerName | Should -Be 'ws01'
+        $objInput.SiteServer | Should -Be 'sms01.example.com'
         $objInput.SiteCode | Should -Be 'ABC'
     }
 
     It 'accepts a device name alone, which means the device is read without the site' {
-        (Test-DeviceInspectorInput -ComputerName 'client01').IsValid | Should -BeTrue
+        (Test-DeviceInspectorInput -ComputerName 'ws01').IsValid | Should -BeTrue
     }
 
     It 'refuses an empty name and a name that carries a query or a path' {
@@ -80,14 +80,14 @@ Describe 'Test-DeviceInspectorInput' {
     }
 
     It 'refuses a site server without a site code' {
-        $objInput = Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'cm01'
+        $objInput = Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'sms01'
         $objInput.IsValid | Should -BeFalse
         $objInput.Errors | Should -Contain 'A site server needs a site code. Enter it in Options.'
     }
 
     It 'refuses a bad site server, a bad site code and a site code without a site server' {
-        (Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'cm01;calc' -SiteCode 'ABC').IsValid | Should -BeFalse
-        (Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'cm01' -SiteCode 'ABCD').IsValid | Should -BeFalse
+        (Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'sms01;calc' -SiteCode 'ABC').IsValid | Should -BeFalse
+        (Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'sms01' -SiteCode 'ABCD').IsValid | Should -BeFalse
         $objInput = Test-DeviceInspectorInput -ComputerName 'a' -SiteCode 'ABC'
         $objInput.IsValid | Should -BeFalse
         $objInput.Errors | Should -Contain 'A site code needs a site server.'
@@ -172,13 +172,13 @@ Describe 'Reports' {
         $strJson = ConvertTo-DeviceInspectionJson -Inspection $script:objInspection
         $strJson | Should -Not -BeLike "*`r*"
         $strJson.EndsWith("`n") | Should -BeTrue
-        ($strJson | ConvertFrom-Json).ComputerName | Should -Be 'CLIENT01'
+        ($strJson | ConvertFrom-Json).ComputerName | Should -Be 'WS01'
     }
 
     It 'returns an HTML page with encoded values, no script and no external resource' {
         $strHtml = ConvertTo-DeviceInspectionHtml -Inspection $script:objInspection
         $strHtml | Should -BeLike '<!DOCTYPE html>*'
-        $strHtml | Should -BeLike '*Contoso &lt;App&gt;*'
+        $strHtml | Should -BeLike '*Example &lt;App&gt;*'
         $strHtml | Should -BeLike '*Device: example problem &lt;b&gt;*'
         $strHtml | Should -Not -BeLike '*<b>*'
         $strHtml | Should -Not -BeLike '*<script*'
@@ -247,7 +247,7 @@ Describe 'Update facts' {
                     Problems              = @()
                 }
             }
-            $objDevice = Get-DeviceFact -ComputerName 'CLIENT01'
+            $objDevice = Get-DeviceFact -ComputerName 'WS01'
             $objDevice.PendingUpdates[0].State | Should -Be 'Installing'
             $objDevice.PendingUpdates[1].State | Should -Be 'State 99'
             $objDevice.PendingUpdates[1].Deadline | Should -Be '2026-11-09T00:00:00Z'
@@ -257,14 +257,14 @@ Describe 'Update facts' {
     It 'keeps an application whose evaluation time is missing' {
         InModuleScope DeviceInspectorCommon {
             Mock Invoke-Command { [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @([pscustomobject]@{ Name = 'App'; InstallState = 'Installed'; EvaluationState = 1; LastEvaluation = $null }); Problems = @() } }
-            @((Get-DeviceFact -ComputerName 'CLIENT01').ClientApplications).Count | Should -Be 1
+            @((Get-DeviceFact -ComputerName 'WS01').ClientApplications).Count | Should -Be 1
         }
     }
 
     It 'keeps working when the device returns no pending update list' {
         InModuleScope DeviceInspectorCommon {
             Mock Invoke-Command { [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @() } }
-            @((Get-DeviceFact -ComputerName 'CLIENT01').PendingUpdates).Count | Should -Be 0
+            @((Get-DeviceFact -ComputerName 'WS01').PendingUpdates).Count | Should -Be 0
         }
     }
 }

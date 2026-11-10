@@ -29,9 +29,9 @@
 # The most entries to print in each list of the report. The default is 25.
 #
 # .EXAMPLE
-# .\Invoke-DeviceInspector.ps1 -ComputerName CLIENT01 -SiteServer cm01.contoso.com -SiteCode MCM -Credential $LabCredential -JsonPath .\client01.json
+# .\Invoke-DeviceInspector.ps1 -ComputerName WS01 -SiteServer sms01.example.com -SiteCode XYZ -Credential $LabCredential -JsonPath .\ws01.json
 #
-# # Prints the report for CLIENT01 and writes client01.json.
+# # Prints the report for WS01 and writes ws01.json.
 #
 # .INPUTS
 # None. You can't pipe objects to this script.

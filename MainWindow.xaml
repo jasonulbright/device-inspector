@@ -294,9 +294,9 @@
                             Style="{StaticResource SquareInlineButtonStyle}" MinWidth="120"
                             ToolTip="Read the device and the site. Nothing changes."/>
                     <TextBox x:Name="txtDevice" Grid.Column="1" FontSize="12" Padding="6,4,6,4" Margin="8,0,8,0"
-                             Controls:TextBoxHelper.Watermark="Device name, e.g. CLIENT01"/>
+                             Controls:TextBoxHelper.Watermark="Device name, e.g. WS01"/>
                     <TextBox x:Name="txtSiteServer" Grid.Column="2" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
-                             Controls:TextBoxHelper.Watermark="Site server, e.g. cm01.contoso.com"/>
+                             Controls:TextBoxHelper.Watermark="Site server, e.g. sms01.example.com"/>
                     <CheckBox x:Name="chkSiteOnly" Grid.Column="3" Content="Site only" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center"
                               ToolTip="Skip the connection to the device and read only the site"/>
                     <Button x:Name="btnExportJson" Grid.Column="4" Content="Export JSON" Style="{StaticResource SquareInlineButtonStyle}"

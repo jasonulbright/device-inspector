@@ -422,9 +422,9 @@ function Connect-InspectorSite {
     # An optional credential for the site drive.
     #
     # .EXAMPLE
-    # $objConnection = Connect-InspectorSite -SiteServer 'cm01' -SiteCode 'MCM'
+    # $objConnection = Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ'
     #
-    # # The current location is now MCM:
+    # # The current location is now XYZ:
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
@@ -614,7 +614,7 @@ function Get-SiteFact {
     # A list that receives one text line for each part that failed.
     #
     # .EXAMPLE
-    # $objSite = Get-SiteFact -ComputerName 'CLIENT01' -Problems $listProblem
+    # $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
     #
     # # $objSite.Found is $true when the site knows the device.
     #
@@ -809,7 +809,7 @@ function Get-DeviceFact {
     # An optional credential for the WinRM connection.
     #
     # .EXAMPLE
-    # $objDevice = Get-DeviceFact -ComputerName 'CLIENT01'
+    # $objDevice = Get-DeviceFact -ComputerName 'WS01'
     #
     # # $objDevice.OperatingSystem.Caption = 'Microsoft Windows 11 Enterprise Evaluation'
     #
@@ -1057,12 +1057,12 @@ function Get-DeviceInspection {
     # Skip the facts from the device itself.
     #
     # .EXAMPLE
-    # $objInspection = Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' -Credential $objCredential
+    # $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01.example.com' -SiteCode 'XYZ' -Credential $objCredential
     #
-    # # $objInspection.Site.Collections lists the collections of CLIENT01.
+    # # $objInspection.Site.Collections lists the collections of WS01.
     #
     # .EXAMPLE
-    # Get-DeviceInspection -ComputerName 'CLIENT01' -SkipDevice -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' | ConvertTo-Json -Depth 6
+    # Get-DeviceInspection -ComputerName 'WS01' -SkipDevice -SiteServer 'sms01.example.com' -SiteCode 'XYZ' | ConvertTo-Json -Depth 6
     #
     # # Prints the site facts as JSON. The device is not contacted.
     #
@@ -1190,7 +1190,7 @@ function ConvertTo-DeviceInspectionReport {
     # The most entries to print in each list. The default is 25.
     #
     # .EXAMPLE
-    # Get-DeviceInspection -ComputerName 'CLIENT01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM' | ConvertTo-DeviceInspectionReport
+    # Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01.example.com' -SiteCode 'XYZ' | ConvertTo-DeviceInspectionReport
     #
     # # Prints the report.
     #
@@ -1339,7 +1339,7 @@ function Test-DeviceInspectorInput {
     # The site code as typed. May be empty.
     #
     # .EXAMPLE
-    # $objInput = Test-DeviceInspectorInput -ComputerName 'client01' -SiteServer 'cm01.contoso.com' -SiteCode 'MCM'
+    # $objInput = Test-DeviceInspectorInput -ComputerName 'ws01' -SiteServer 'sms01.example.com' -SiteCode 'XYZ'
     #
     # # $objInput.IsValid = $true
     #
@@ -1846,7 +1846,7 @@ function Write-DeviceInspectionFile {
     # The text to write.
     #
     # .EXAMPLE
-    # $strPath = Write-DeviceInspectionFile -Path 'C:\reports\client01.html' -Text $strHtml
+    # $strPath = Write-DeviceInspectionFile -Path 'C:\reports\ws01.html' -Text $strHtml
     #
     # # Returns the absolute path written.
     #
