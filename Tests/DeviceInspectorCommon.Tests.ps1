@@ -221,12 +221,15 @@ Describe 'Get-SiteFact' {
     }
 
     It 'hides the cmdlet warning about the Name wildcard on the device lookup only' {
-        InModuleScope DeviceInspectorCommon {
-            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
-            Should -Invoke Get-CMDevice -Times 1 -Exactly -ParameterFilter { $PSBoundParameters['WarningAction'] -eq 'SilentlyContinue' }
-            Should -Invoke Get-CMDeviceCollection -Times 0 -Exactly -ParameterFilter { $PSBoundParameters.ContainsKey('WarningAction') }
-        }
+        # Pester drops common parameters from the mock filter, so the call is read from the source.
+        $objAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strModuleFile, [ref]$null, [ref]$null)
+        $arrWarningCall = @($objAst.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CommandAst] -and @($objNode.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] -and $_.ParameterName -eq 'WarningAction' }).Count -gt 0 }, $true))
+        @($arrWarningCall | ForEach-Object { $_.GetCommandName() }) | Should -Not -Contain 'Get-CMDeviceCollection'
+        $arrWarningCall = @($arrWarningCall | Where-Object { $_.GetCommandName() -eq 'Get-CMDevice' })
+        $arrWarningCall.Count | Should -Be 1
+        $arrElement = @($arrWarningCall[0].CommandElements)
+        $intIndex = [array]::FindIndex($arrElement, [System.Predicate[object]] { param($objElement) $objElement -is [System.Management.Automation.Language.CommandParameterAst] -and $objElement.ParameterName -eq 'WarningAction' })
+        $arrElement[$intIndex + 1].Extent.Text | Should -Be 'SilentlyContinue'
     }
 
     It 'shows no warning when the device lookup warns about the Name wildcard' {
@@ -421,7 +424,7 @@ Describe 'Connect-InspectorSite with a credential' {
 
     It 'opens the site drive with no credential when the site server is this computer' {
         $objConnection = InModuleScope DeviceInspectorCommon -Parameters @{ Server = $env:COMPUTERNAME; Cred = $script:objTestCredential } {
-            param ($Server, $Cred)
+            param ($Server, [System.Management.Automation.PSCredential]$Cred)
             Connect-InspectorSite -SiteServer $Server -SiteCode 'XYZ' -Credential $Cred
         }
         $objConnection.CreatedDrive | Should -BeTrue
@@ -431,7 +434,7 @@ Describe 'Connect-InspectorSite with a credential' {
 
     It 'opens the site drive with no credential for localhost' {
         InModuleScope DeviceInspectorCommon -Parameters @{ Cred = $script:objTestCredential } {
-            param ($Cred)
+            param ([System.Management.Automation.PSCredential]$Cred)
             $null = Connect-InspectorSite -SiteServer 'localhost' -SiteCode 'XYZ' -Credential $Cred
         }
         Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 1 -Exactly -Scope It -ParameterFilter { $null -eq $Credential }
@@ -439,7 +442,7 @@ Describe 'Connect-InspectorSite with a credential' {
 
     It 'says in one verbose line why the signed-in account is used' {
         $arrVerbose = @(InModuleScope DeviceInspectorCommon -Parameters @{ Server = $env:COMPUTERNAME; Cred = $script:objTestCredential } {
-                param ($Server, $Cred)
+                param ($Server, [System.Management.Automation.PSCredential]$Cred)
                 Connect-InspectorSite -SiteServer $Server -SiteCode 'XYZ' -Credential $Cred -Verbose 4>&1
             })
         @($arrVerbose | Where-Object { [string]$_ -eq 'The site server is this computer. Windows does not allow credentials for a local connection, so the signed-in account is used.' }).Count | Should -Be 1
@@ -447,7 +450,7 @@ Describe 'Connect-InspectorSite with a credential' {
 
     It 'keeps the credential for a remote site server' {
         InModuleScope DeviceInspectorCommon -Parameters @{ Cred = $script:objTestCredential } {
-            param ($Cred)
+            param ([System.Management.Automation.PSCredential]$Cred)
             $null = Connect-InspectorSite -SiteServer 'sms01.example.com' -SiteCode 'XYZ' -Credential $Cred
         }
         Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 1 -Exactly -Scope It -ParameterFilter { $null -ne $Credential -and $Credential.UserName -eq 'u' -and $Root -eq 'sms01.example.com' }
@@ -456,7 +459,7 @@ Describe 'Connect-InspectorSite with a credential' {
     It 'says why and what to do when Windows still refuses the credential for a local connection' {
         Mock -ModuleName DeviceInspectorCommon New-PSDrive { throw 'User credentials cannot be used for local connections' }
         { InModuleScope DeviceInspectorCommon -Parameters @{ Cred = $script:objTestCredential } {
-                param ($Cred)
+                param ([System.Management.Automation.PSCredential]$Cred)
                 Connect-InspectorSite -SiteServer 'sms01.example.com' -SiteCode 'XYZ' -Credential $Cred
             } } | Should -Throw 'Cannot open site XYZ on sms01.example.com. The site server is this computer, and Windows does not allow credentials for a local connection.*'
     }
