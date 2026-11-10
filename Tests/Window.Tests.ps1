@@ -170,6 +170,11 @@ Describe 'Dialog windows' -Skip:(-not $script:WindowGuard.Allowed) {
         $first = @($script:DialogMeasured[$Theme])[0].Size
         $views = @($script:DialogMeasured[$Theme] | Where-Object Size -eq $first)
         $views.Count | Should -Be $script:AppConfig.DialogPanes.Count
+        # An empty measurement has no violation. Each pane shows a heading, body text and the OK, Cancel and category buttons.
+        foreach ($v in $views) {
+            $v.Text.Count | Should -BeGreaterThan 2 -Because "pane $($v.Pane) shows text"
+            $v.Interactive.Count | Should -BeGreaterThan 2 -Because "pane $($v.Pane) shows buttons"
+        }
         Get-ContrastViolation -Views $views | Should -BeNullOrEmpty
     }
 }

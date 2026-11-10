@@ -68,6 +68,30 @@ Describe 'Capture scripts' {
         $text.IndexOf('No image was replaced') | Should -BeLessThan $text.IndexOf('Copy-Item $png.FullName')
     }
 
+    It 'quotes the app folder name in the command line of the scheduled task' {
+        $text = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1'))
+        $text | Should -Match '-App `"\$a`"'
+        $text | Should -Not -Match '-App \$a\b'
+    }
+
+    It 'stops the app on the lab computer and reports a failed cleanup of C:\guide' {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1'), [ref]$null, [ref]$null)
+        $try = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.TryStatementAst] -and $n.Finally }, $false))[0]
+        $try | Should -Not -BeNullOrEmpty
+        $finally = $try.Finally.Extent.Text
+        # The finally block runs after a timeout and after a failure. It stops the app before it removes the folder.
+        $finally | Should -Match 'Invoke-Command \$session \$stopCapture'
+        $finally.IndexOf('$stopCapture') | Should -BeLessThan $finally.IndexOf('Remove-Item C:\guide')
+        $finally | Should -Match 'Remove-Item C:\\guide -Recurse -Force -ErrorAction Stop'
+        $finally | Should -Not -Match 'Remove-Item C:\\guide[^\r\n]*SilentlyContinue'
+        $finally | Should -Match 'The cleanup of C:\\guide on the lab computer failed'
+        $stop = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -eq '$stopCapture' }, $true))[0]
+        $stop | Should -Not -BeNullOrEmpty
+        $stop.Right.Extent.Text | Should -Match 'Stop-ScheduledTask'
+        $stop.Right.Extent.Text | Should -Match 'Stop-Process'
+        $stop.Right.Extent.Text | Should -Match 'throw'
+    }
+
     It 'makes every image of the guide' {
         $steps = (Get-ChildItem -LiteralPath $script:CaptureDir -Filter 'steps-*.ps1' | ForEach-Object { [System.IO.File]::ReadAllText($_.FullName) }) -join "`n"
         $missing = foreach ($png in Get-ChildItem -LiteralPath $script:ImageDir -Filter '*.png') {
@@ -84,14 +108,20 @@ Describe 'Capture scripts' {
 }
 
 Describe 'Repository text' {
-    It 'has no lab machine, lab domain, lab site code or lab account name in a text file of the repository' {
+    It 'has no lab machine, lab domain, lab site code or lab account name in a tracked text file of the repository' {
+        # Only the files in git are published. Untracked local files (logs, lab notes) are not scanned.
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Set-ItResult -Skipped -Because 'git is not installed'; return }
+        $tracked = @(& git -C $script:Root -c core.quotepath=off ls-files 2>$null)
+        if ($LASTEXITCODE -ne 0) { Set-ItResult -Skipped -Because 'the folder is not a git work tree'; return }
         # The vendored Lib folder is the copy of another repository and is left out.
         $extensions = '.ps1', '.psm1', '.psd1', '.md', '.xaml', '.yml', '.yaml', '.json', '.txt'
-        $files = @(Get-ChildItem -LiteralPath $script:Root -Recurse -File |
-                Where-Object { $extensions -contains $_.Extension -and $_.FullName -notmatch '[\\/](\.git|Lib)[\\/]' })
+        $files = @($tracked | Where-Object { $extensions -contains [System.IO.Path]::GetExtension($_) -and $_ -notmatch '^Lib/' })
         $files.Count | Should -BeGreaterThan 10
         $found = foreach ($f in $files) {
-            foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f.FullName), $script:LabNamePattern)) { '{0}: {1}' -f $f.FullName.Substring($script:Root.Length + 1), $m.Value }
+            $path = Join-Path $script:Root $f
+            # A tracked file that is deleted in the work tree has no text to scan.
+            if (-not (Test-Path -LiteralPath $path)) { continue }
+            foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($path), $script:LabNamePattern)) { '{0}: {1}' -f $f, $m.Value }
         }
         @($found) | Should -BeNullOrEmpty
     }
