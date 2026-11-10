@@ -220,6 +220,30 @@ Describe 'Get-SiteFact' {
         }
     }
 
+    It 'hides the cmdlet warning about the Name wildcard on the device lookup only' {
+        # Pester drops common parameters from the mock filter, so the call is read from the source.
+        $objAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strModuleFile, [ref]$null, [ref]$null)
+        $arrWarningCall = @($objAst.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CommandAst] -and @($objNode.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] -and $_.ParameterName -eq 'WarningAction' }).Count -gt 0 }, $true))
+        @($arrWarningCall | ForEach-Object { $_.GetCommandName() }) | Should -Not -Contain 'Get-CMDeviceCollection'
+        $arrWarningCall = @($arrWarningCall | Where-Object { $_.GetCommandName() -eq 'Get-CMDevice' })
+        $arrWarningCall.Count | Should -Be 1
+        $arrElement = @($arrWarningCall[0].CommandElements)
+        $intIndex = [array]::FindIndex($arrElement, [System.Predicate[object]] { param($objElement) $objElement -is [System.Management.Automation.Language.CommandParameterAst] -and $objElement.ParameterName -eq 'WarningAction' })
+        $arrElement[$intIndex + 1].Extent.Text | Should -Be 'SilentlyContinue'
+    }
+
+    It 'shows no warning when the device lookup warns about the Name wildcard' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Get-CMDevice {
+                Write-Warning -Message 'The Name parameter has a wildcard.'
+                [pscustomobject]@{ ResourceID = 1; IsClient = $true; ClientVersion = '1'; IsActive = $true; DeviceOS = 'x'; LastLogonUser = 'u'; LastHardwareScan = $null }
+            }
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $arrWarning = @(Get-SiteFact -ComputerName 'WS01' -Problems $listProblem 3>&1 | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+            $arrWarning.Count | Should -Be 0
+        }
+    }
+
     It 'reads collections, deployments and updates with one cmdlet call each' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
@@ -383,6 +407,117 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
             Disconnect-InspectorSite -Connection $null
         }
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 0 -Scope It
+    }
+}
+
+Describe 'Connect-InspectorSite with a credential' {
+    BeforeEach {
+        Mock -ModuleName DeviceInspectorCommon Resolve-ConfigurationManagerModulePath { 'C:\Console\bin\ConfigurationManager.psd1' }
+        Mock -ModuleName DeviceInspectorCommon Get-Module { [pscustomobject]@{ Name = 'ConfigurationManager' } }
+        Mock -ModuleName DeviceInspectorCommon Get-PSDrive { }
+        Mock -ModuleName DeviceInspectorCommon New-PSDrive { }
+        Mock -ModuleName DeviceInspectorCommon Set-Location { }
+        Mock -ModuleName DeviceInspectorCommon Remove-PSDrive { }
+        Mock -ModuleName DeviceInspectorCommon Get-CMSite { [pscustomobject]@{ SiteCode = 'XYZ' } }
+        $script:objTestCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList 'u', (ConvertTo-SecureString -String 'p' -AsPlainText -Force)
+    }
+
+    It 'opens the site drive with no credential when the site server is this computer' {
+        $objConnection = InModuleScope DeviceInspectorCommon -Parameters @{ Server = $env:COMPUTERNAME; Cred = $script:objTestCredential } {
+            param ($Server, [System.Management.Automation.PSCredential]$Cred)
+            Connect-InspectorSite -SiteServer $Server -SiteCode 'XYZ' -Credential $Cred
+        }
+        $objConnection.CreatedDrive | Should -BeTrue
+        Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 1 -Exactly -Scope It -ParameterFilter { $null -eq $Credential -and $Root -eq $env:COMPUTERNAME }
+        Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 0 -Scope It -ParameterFilter { $null -ne $Credential }
+    }
+
+    It 'opens the site drive with no credential for localhost' {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Cred = $script:objTestCredential } {
+            param ([System.Management.Automation.PSCredential]$Cred)
+            $null = Connect-InspectorSite -SiteServer 'localhost' -SiteCode 'XYZ' -Credential $Cred
+        }
+        Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 1 -Exactly -Scope It -ParameterFilter { $null -eq $Credential }
+    }
+
+    It 'says in one verbose line why the signed-in account is used' {
+        $arrVerbose = @(InModuleScope DeviceInspectorCommon -Parameters @{ Server = $env:COMPUTERNAME; Cred = $script:objTestCredential } {
+                param ($Server, [System.Management.Automation.PSCredential]$Cred)
+                Connect-InspectorSite -SiteServer $Server -SiteCode 'XYZ' -Credential $Cred -Verbose 4>&1
+            })
+        @($arrVerbose | Where-Object { [string]$_ -eq 'The site server is this computer. Windows does not allow credentials for a local connection, so the signed-in account is used.' }).Count | Should -Be 1
+    }
+
+    It 'keeps the credential for a remote site server' {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Cred = $script:objTestCredential } {
+            param ([System.Management.Automation.PSCredential]$Cred)
+            $null = Connect-InspectorSite -SiteServer 'sms01.example.com' -SiteCode 'XYZ' -Credential $Cred
+        }
+        Should -Invoke -ModuleName DeviceInspectorCommon New-PSDrive -Times 1 -Exactly -Scope It -ParameterFilter { $null -ne $Credential -and $Credential.UserName -eq 'u' -and $Root -eq 'sms01.example.com' }
+    }
+
+    It 'says why and what to do when Windows still refuses the credential for a local connection' {
+        Mock -ModuleName DeviceInspectorCommon New-PSDrive { throw 'User credentials cannot be used for local connections' }
+        { InModuleScope DeviceInspectorCommon -Parameters @{ Cred = $script:objTestCredential } {
+                param ([System.Management.Automation.PSCredential]$Cred)
+                Connect-InspectorSite -SiteServer 'sms01.example.com' -SiteCode 'XYZ' -Credential $Cred
+            } } | Should -Throw 'Cannot open site XYZ on sms01.example.com. The site server is this computer, and Windows does not allow credentials for a local connection.*'
+    }
+}
+
+Describe 'Test-InspectorLocalComputer' {
+    BeforeEach {
+        Mock -ModuleName DeviceInspectorCommon Get-InspectorLocalIdentity {
+            [pscustomobject]@{
+                Name    = @('WS01', 'ws01.example.com')
+                Address = @([System.Net.IPAddress]::Parse('10.0.0.5'), [System.Net.IPAddress]::Parse('fe80::1'))
+            }
+        }
+    }
+
+    It 'returns true for <Value>' -ForEach @(
+        @{ Value = 'WS01' }
+        @{ Value = 'ws01' }
+        @{ Value = 'WS01.EXAMPLE.COM' }
+        @{ Value = 'ws01.example.com' }
+        @{ Value = 'ws01.example.com.' }
+        @{ Value = 'localhost' }
+        @{ Value = 'LOCALHOST' }
+        @{ Value = '.' }
+        @{ Value = ' ws01 ' }
+        @{ Value = '10.0.0.5' }
+        @{ Value = '127.0.0.1' }
+        @{ Value = '::1' }
+        @{ Value = 'fe80::1' }
+    ) {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Value = $Value } {
+            param ($Value)
+            Test-InspectorLocalComputer -ComputerName $Value | Should -BeTrue
+        }
+    }
+
+    It 'returns false for <Value>' -ForEach @(
+        @{ Value = 'sms01' }
+        @{ Value = 'sms01.example.com' }
+        @{ Value = 'ws01.example.org' }
+        @{ Value = 'ws011' }
+        @{ Value = '10.0.0.6' }
+        @{ Value = '' }
+        @{ Value = '   ' }
+        @{ Value = $null }
+    ) {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Value = $Value } {
+            param ($Value)
+            Test-InspectorLocalComputer -ComputerName $Value | Should -BeFalse
+        }
+    }
+}
+
+Describe 'Get-InspectorLocalIdentity' {
+    It 'finds the name of the real computer' {
+        InModuleScope DeviceInspectorCommon {
+            Get-InspectorLocalIdentity | Select-Object -ExpandProperty Name | Should -Contain $env:COMPUTERNAME
+        }
     }
 }
 

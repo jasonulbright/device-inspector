@@ -401,6 +401,141 @@ function Test-DeviceInspectorConsole {
     }
 }
 
+function Get-InspectorLocalIdentity {
+    # .SYNOPSIS
+    # Returns the names and the IP addresses of this computer.
+    #
+    # .DESCRIPTION
+    # Reads the NetBIOS name, the DNS host name, the full DNS name and the unicast
+    # addresses of all network interfaces. It sends no DNS query. A part that cannot
+    # be read is left out.
+    #
+    # .EXAMPLE
+    # $objIdentity = Get-InspectorLocalIdentity
+    #
+    # # $objIdentity.Name holds the short name and the full name of this computer.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties: Name (string[]), Address (System.Net.IPAddress[]).
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
+    # return shape, and positional contract may change without notice.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param ()
+
+    process {
+        $listName = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $listAddress = New-Object -TypeName 'System.Collections.Generic.List[System.Net.IPAddress]'
+        if (-not [string]::IsNullOrEmpty($env:COMPUTERNAME)) {
+            $listName.Add($env:COMPUTERNAME)
+        }
+        try {
+            $objProperty = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+            if (-not [string]::IsNullOrEmpty($objProperty.HostName)) {
+                $listName.Add($objProperty.HostName)
+                if (-not [string]::IsNullOrEmpty($objProperty.DomainName)) {
+                    $listName.Add(('{0}.{1}' -f $objProperty.HostName, $objProperty.DomainName))
+                }
+            }
+        } catch {
+            Write-Debug -Message ('Get-InspectorLocalIdentity names: {0}' -f $_.Exception.Message)
+        }
+        try {
+            foreach ($objInterface in [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) {
+                foreach ($objUnicast in $objInterface.GetIPProperties().UnicastAddresses) {
+                    $listAddress.Add($objUnicast.Address)
+                }
+            }
+        } catch {
+            Write-Debug -Message ('Get-InspectorLocalIdentity addresses: {0}' -f $_.Exception.Message)
+        }
+        [pscustomobject]@{
+            Name    = $listName.ToArray()
+            Address = $listAddress.ToArray()
+        }
+    }
+}
+
+function Test-InspectorLocalComputer {
+    # .SYNOPSIS
+    # Tells if a computer name or an IP address is this computer.
+    #
+    # .DESCRIPTION
+    # Returns $true for the short name, the full DNS name, localhost, '.', a loopback
+    # address and an IP address of this computer. The test ignores case, spaces at
+    # the ends and a trailing dot. An empty value returns $false. It sends no DNS
+    # query, so an alias name of this computer returns $false.
+    #
+    # .PARAMETER ComputerName
+    # The name or the IP address to test.
+    #
+    # .EXAMPLE
+    # Test-InspectorLocalComputer -ComputerName 'localhost'
+    #
+    # # Returns $true.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [bool]
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
+    # return shape, and positional contract may change without notice.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param (
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$ComputerName
+    )
+
+    process {
+        if ([string]::IsNullOrWhiteSpace($ComputerName)) {
+            return $false
+        }
+        $strName = $ComputerName.Trim()
+        if ($strName -eq '.' -or $strName -eq 'localhost') {
+            return $true
+        }
+        $strName = $strName.TrimEnd('.')
+        $objIdentity = Get-InspectorLocalIdentity
+        $objAddress = $null
+        if ([System.Net.IPAddress]::TryParse($strName, [ref]$objAddress)) {
+            if ([System.Net.IPAddress]::IsLoopback($objAddress)) {
+                return $true
+            }
+            foreach ($objLocalAddress in @($objIdentity.Address)) {
+                if ($null -ne $objLocalAddress -and $objLocalAddress.Equals($objAddress)) {
+                    return $true
+                }
+            }
+            return $false
+        }
+        foreach ($strLocalName in @($objIdentity.Name)) {
+            if ($strLocalName -eq $strName) {
+                return $true
+            }
+        }
+        $false
+    }
+}
+
 function Connect-InspectorSite {
     # .SYNOPSIS
     # Imports the ConfigurationManager module and opens the site drive.
@@ -419,7 +554,9 @@ function Connect-InspectorSite {
     # The three-character site code.
     #
     # .PARAMETER Credential
-    # An optional credential for the site drive.
+    # An optional credential for the site drive. When the site server is this
+    # computer, the function does not use it, because Windows does not allow
+    # credentials for a local connection. The signed-in account is used.
     #
     # .EXAMPLE
     # $objConnection = Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ'
@@ -466,15 +603,22 @@ function Connect-InspectorSite {
             if (-not (Get-Module -Name 'ConfigurationManager')) {
                 Import-Module -Name $objCheck.Path -DisableNameChecking -ErrorAction Stop
             }
+            # Windows refuses a credential for a connection to this computer, so the
+            # site drive of a local site server opens with the signed-in account.
+            $boolUseCredential = $PSBoundParameters.ContainsKey('Credential') -and ($null -ne $Credential)
+            if ($boolUseCredential -and (Test-InspectorLocalComputer -ComputerName $SiteServer)) {
+                Write-Verbose -Message 'The site server is this computer. Windows does not allow credentials for a local connection, so the signed-in account is used.'
+                $boolUseCredential = $false
+            }
             $objDrive = Get-PSDrive -Name $SiteCode -PSProvider 'CMSite' -ErrorAction SilentlyContinue
-            if ($null -ne $objDrive -and (($objDrive.Root -ne $SiteServer) -or $PSBoundParameters.ContainsKey('Credential'))) {
+            if ($null -ne $objDrive -and (($objDrive.Root -ne $SiteServer) -or $boolUseCredential)) {
                 Set-Location -LiteralPath $env:SystemDrive
                 Remove-PSDrive -Name $SiteCode -PSProvider 'CMSite' -Force -ErrorAction SilentlyContinue
                 $objDrive = $null
             }
             if ($null -eq $objDrive) {
                 $hashtableDrive = @{ Name = $SiteCode; PSProvider = 'CMSite'; Root = $SiteServer; Scope = 'Global'; ErrorAction = 'Stop' }
-                if ($PSBoundParameters.ContainsKey('Credential')) {
+                if ($boolUseCredential) {
                     $hashtableDrive['Credential'] = $Credential
                 }
                 [void](New-PSDrive @hashtableDrive)
@@ -487,6 +631,9 @@ function Connect-InspectorSite {
             Set-Location -LiteralPath $objPrevious.Path -ErrorAction SilentlyContinue
             if ($boolCreated) {
                 Remove-PSDrive -Name $SiteCode -PSProvider 'CMSite' -Force -ErrorAction SilentlyContinue
+            }
+            if ($_.Exception.Message -like '*credentials cannot be used for local connections*') {
+                throw ('Cannot open site {0} on {1}. The site server is this computer, and Windows does not allow credentials for a local connection. Enter the name of this computer as the site server, or run without a credential. {2}' -f $SiteCode, $SiteServer, $_.Exception.Message)
             }
             throw ('Cannot open site {0} on {1}. Check the site code and the site server name, and the account rights. {2}' -f $SiteCode, $SiteServer, $_.Exception.Message)
         }
@@ -647,7 +794,8 @@ function Get-SiteFact {
     )
 
     process {
-        $arrResource = @(Get-CMDevice -Name $ComputerName -Fast -DisableWildcardHandling -ErrorAction Stop)
+        # The cmdlet warns about a wildcard in Name even with DisableWildcardHandling.
+        $arrResource = @(Get-CMDevice -Name $ComputerName -Fast -DisableWildcardHandling -ErrorAction Stop -WarningAction SilentlyContinue)
         if ($arrResource.Count -eq 0) {
             return [pscustomobject]@{
                 Found                 = $false
