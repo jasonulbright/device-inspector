@@ -146,7 +146,9 @@ Describe 'Dialog windows' -Skip:(-not $script:WindowGuard.Allowed) {
         $r = Invoke-WpfSta -Arguments @{ Xaml = $script:DialogXaml[0] } -Script {
             [xml]$x = $Arguments.Xaml
             $w = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $x))
-            $names = [regex]::Matches($Arguments.Xaml, 'x:Name="([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+            # Names inside a ControlTemplate belong to the template, not to the window, so FindName does not see them.
+            $names = @($x.SelectNodes('//*[@*[local-name()="Name"]]') | Where-Object { -not $_.SelectSingleNode('ancestor::*[local-name()="ControlTemplate"]') } |
+                    ForEach-Object { $_.GetAttribute('Name', 'http://schemas.microsoft.com/winfx/2006/xaml') } | Where-Object { $_ })
             [PSCustomObject]@{ Type = $w.GetType().Name; Missing = @($names | Where-Object { -not $w.FindName($_) }); Count = @($names).Count }
         }
         $r.Type | Should -Be 'MetroWindow'
@@ -175,7 +177,9 @@ Describe 'Dialog windows' -Skip:(-not $script:WindowGuard.Allowed) {
 Describe 'Message boxes' -Skip:(-not $script:WindowGuard.Allowed) {
     It 'opens a message box centered on its owner, the <Owner>' -ForEach @(@{ Owner = 'main window'; UseDialog = $false }, @{ Owner = 'Options dialog'; UseDialog = $true }) {
         $xaml = if ($UseDialog) { $script:DialogXaml[0] } else { '' }
-        $r = Invoke-WpfSta -Arguments @{ Config = $script:AppConfig; Xaml = $xaml; Dark = $true } -Script $script:MessageBoxMeasureScript
+        $fix = $script:ShellAst.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Register-OwnerCentering' }, $true)
+        $fix | Should -Not -BeNullOrEmpty -Because 'the start script centers owned windows on their owner'
+        $r = Invoke-WpfSta -Arguments @{ Config = $script:AppConfig; Xaml = $xaml; Dark = $true; Fix = $fix.Extent.Text } -Script $script:MessageBoxMeasureScript
         $r | Should -Not -BeNullOrEmpty -Because 'the message box must open'
         $r.BoxWidth | Should -BeGreaterThan 0
         $ownerX = $r.OwnerLeft + $r.OwnerWidth / 2; $ownerY = $r.OwnerTop + $r.OwnerHeight / 2

@@ -60,14 +60,14 @@
                  theme colours, content at 60 percent, grey border. That keeps 4.5:1 text and 3:1 border in both themes. -->
             <ControlTemplate x:Key="AppButtonTemplate" TargetType="ButtonBase">
                 <Grid>
-                    <Border x:Name="Bd"
+                    <Border x:Name="AppBd"
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             SnapsToDevicePixels="True"/>
-                    <Rectangle x:Name="HoverOverlay" Margin="{TemplateBinding BorderThickness}" Opacity="0"
+                    <Rectangle x:Name="AppHover" Margin="{TemplateBinding BorderThickness}" Opacity="0"
                                Fill="{DynamicResource MahApps.Brushes.Gray.SemiTransparent}"/>
-                    <ContentPresenter x:Name="Content"
+                    <ContentPresenter x:Name="AppContent"
                                       Margin="{TemplateBinding Padding}"
                                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
@@ -76,10 +76,10 @@
                 </Grid>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="HoverOverlay" Property="Opacity" Value="1"/>
+                        <Setter TargetName="AppHover" Property="Opacity" Value="1"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="HoverOverlay" Property="Opacity" Value="0"/>
+                        <Setter TargetName="AppHover" Property="Opacity" Value="0"/>
                         <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
                     </Trigger>
@@ -87,7 +87,7 @@
                         <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
-                        <Setter TargetName="Content" Property="Opacity" Value="0.6"/>
+                        <Setter TargetName="AppContent" Property="Opacity" Value="0.6"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>

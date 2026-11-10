@@ -24,7 +24,10 @@ function Get-ContrastViolation {
                 $value = $c.$metric
                 if ($null -eq $value) { continue }
                 $min = if ($metric -like '*Text') { 4.5 } else { 3.0 }
-                if ($value -lt $min) { [void]$lines.Add(('{0}:{1} = {2}' -f $c.Name, $metric, $value)) }
+                if ($value -lt $min) {
+                    $detail = if ($metric -eq 'EnabledText') { $c.EnabledDetail } elseif ($metric -eq 'DisabledText') { $c.DisabledDetail } else { $null }
+                    [void]$lines.Add(('{0}:{1} = {2}{3}' -f $c.Name, $metric, $value, $(if ($detail) { ' (' + $detail + ')' })))
+                }
             }
         }
         if ($v.TitleBar) {

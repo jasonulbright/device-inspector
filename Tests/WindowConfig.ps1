@@ -113,7 +113,8 @@ $script:DialogMeasureScript = {
 # Runs in the STA runspace. Opens the main window (and, for the Options case, the Options dialog
 # owned by it), opens a SuiteCommon message box owned by that window, and reads the place and the
 # title of both windows while the box is open. A timer on the dispatcher reads the box and closes it,
-# because Show-ThemedMessage waits in ShowDialog. Arguments: Config, Xaml (dialog XAML or empty), Dark.
+# because Show-ThemedMessage waits in ShowDialog. Arguments: Config, Xaml (dialog XAML or empty), Dark,
+# Fix (the text of the Register-OwnerCentering function of the start script).
 $script:MessageBoxMeasureScript = {
     $cfg = $Arguments.Config
     $main = Open-TestWindow -XamlPath (Join-Path $Root $cfg.Xaml) -Dark $Arguments.Dark -Width 1024 -Height 720
@@ -122,6 +123,8 @@ $script:MessageBoxMeasureScript = {
     # box on the left edge of the owner. Put the owner on screen, where a person sees it.
     $main.Left = 0; $main.Top = 0; $main.Width = $main.MinWidth; $main.Height = $main.MinHeight
     Wait-Layout $main
+    # The fix of the start script (Register-OwnerCentering), as the app runs it before any dialog opens.
+    if ($Arguments.Fix) { . ([scriptblock]::Create($Arguments.Fix)); Register-OwnerCentering }
     $owner = $main
     $dialog = $null
     if ($Arguments.Xaml) {

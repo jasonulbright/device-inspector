@@ -169,6 +169,30 @@ function Set-StatusText {
 # === Title-bar drag fallback: SuiteCommon owns the hook ===
 Install-TitleBarDragFallback -Window $window
 
+# === Owned windows open centered on their owner ===
+# The SuiteCommon message box (Show-ThemedMessage: CenterOwner with SizeToContent) opens with its
+# center on the left edge of its owner. A class handler centers every owned window that asks for
+# CenterOwner when it loads. The shared fix belongs in SuiteCommon (app-packager-suite).
+function Register-OwnerCentering {
+    if ($global:__ownerCenteringRegistered) { return }
+    $global:__ownerCenteringRegistered = $true
+    [System.Windows.EventManager]::RegisterClassHandler([System.Windows.Window], [System.Windows.FrameworkElement]::LoadedEvent, [System.Windows.RoutedEventHandler]{
+            param($s, $e)
+            $owner = $s.Owner
+            if (-not $owner -or $s.WindowStartupLocation -ne [System.Windows.WindowStartupLocation]::CenterOwner) { return }
+            # The owner position in device-independent units, also when the owner is maximized.
+            $left = $owner.Left; $top = $owner.Top
+            $source = [System.Windows.PresentationSource]::FromVisual($owner)
+            if ($source -and $source.CompositionTarget) {
+                $corner = $source.CompositionTarget.TransformFromDevice.Transform($owner.PointToScreen([System.Windows.Point]::new(0, 0)))
+                $left = $corner.X; $top = $corner.Y
+            }
+            $s.Left = $left + ($owner.ActualWidth - $s.ActualWidth) / 2
+            $s.Top = $top + ($owner.ActualHeight - $s.ActualHeight) / 2
+        })
+}
+Register-OwnerCentering
+
 # === Theme (palette, sidebar, title bar, dialogs: SuiteCommon) ===
 [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($window, 'Dark.Steel')
 
@@ -481,21 +505,21 @@ function Show-OptionsDialog {
             <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7A7A7A"/>
             <ControlTemplate x:Key="AppButtonTemplate" TargetType="ButtonBase">
                 <Grid>
-                    <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    <Border x:Name="AppBd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True"/>
-                    <Rectangle x:Name="HoverOverlay" Margin="{TemplateBinding BorderThickness}" Opacity="0"
+                    <Rectangle x:Name="AppHover" Margin="{TemplateBinding BorderThickness}" Opacity="0"
                                Fill="{DynamicResource MahApps.Brushes.Gray.SemiTransparent}"/>
-                    <ContentPresenter x:Name="Content" Margin="{TemplateBinding Padding}"
+                    <ContentPresenter x:Name="AppContent" Margin="{TemplateBinding Padding}"
                                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                       RecognizesAccessKey="True" SnapsToDevicePixels="True"/>
                 </Grid>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="HoverOverlay" Property="Opacity" Value="1"/>
+                        <Setter TargetName="AppHover" Property="Opacity" Value="1"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="HoverOverlay" Property="Opacity" Value="0"/>
+                        <Setter TargetName="AppHover" Property="Opacity" Value="0"/>
                         <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
                     </Trigger>
@@ -503,7 +527,7 @@ function Show-OptionsDialog {
                         <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
-                        <Setter TargetName="Content" Property="Opacity" Value="0.6"/>
+                        <Setter TargetName="AppContent" Property="Opacity" Value="0.6"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>

@@ -166,15 +166,16 @@ $script:MeasureFunctions = {
         $backdrop = Get-BackdropColor $Control $under $Window
         if ($own -and ($own.Color.A * $own.Opacity) -gt 0) { $backdrop = Merge-Color $own.Color $own.Opacity $backdrop }
         $o = Get-ElementOpacity $Control
-        $row = [ordered]@{ Name = $Control.Name; Type = $Control.GetType().Name; Backdrop = $backdrop.ToString(); TextRatio = $null; BorderRatio = $null }
+        $row = [ordered]@{ Name = $Control.Name; Type = $Control.GetType().Name; Backdrop = $backdrop.ToString(); TextRatio = $null; BorderRatio = $null; WorstText = $null }
         $worst = $null
         foreach ($t in (Get-VisualDescendants $Control)) {
-            if ($t -isnot [System.Windows.Controls.TextBlock] -or [string]::IsNullOrWhiteSpace($t.Text) -or $t.ActualWidth -le 0) { continue }
+            # Text that is not visible (a Hidden template part keeps its size) is not read.
+            if ($t -isnot [System.Windows.Controls.TextBlock] -or [string]::IsNullOrWhiteSpace($t.Text) -or $t.ActualWidth -le 0 -or -not (Test-VisibleInTree $t)) { continue }
             $sc = Get-SolidColor $t.Foreground
             if (-not $sc) { continue }
             $fgc = Merge-Color $sc.Color ((Get-ElementOpacity $t) * $sc.Opacity) $backdrop
             $r = Get-ContrastRatio $fgc $backdrop
-            if ($null -eq $worst -or $r -lt $worst) { $worst = $r }
+            if ($null -eq $worst -or $r -lt $worst) { $worst = $r; $row.WorstText = ('"{0}" {1} on {2}' -f $t.Text, $fgc, $backdrop) }
         }
         if ($Control -is [System.Windows.Controls.TextBox] -and -not [string]::IsNullOrWhiteSpace($Control.Text)) {
             $sc = Get-SolidColor $Control.Foreground
@@ -210,7 +211,7 @@ $script:MeasureFunctions = {
                 if ($local -eq [System.Windows.DependencyProperty]::UnsetValue) { $c.ClearValue([System.Windows.UIElement]::IsEnabledProperty) } else { $c.IsEnabled = [bool]$local }
                 Wait-Layout $Window 1
             }
-            $rows += [PSCustomObject]@{ Name = $c.Name; Type = $en.Type; EnabledText = $en.TextRatio; DisabledText = $dis.TextRatio; EnabledBorder = $en.BorderRatio; DisabledBorder = $dis.BorderRatio }
+            $rows += [PSCustomObject]@{ Name = $c.Name; Type = $en.Type; EnabledText = $en.TextRatio; DisabledText = $dis.TextRatio; EnabledBorder = $en.BorderRatio; DisabledBorder = $dis.BorderRatio; EnabledDetail = $en.WorstText; DisabledDetail = $dis.WorstText }
         }
         return $rows
     }
