@@ -116,7 +116,7 @@ Describe 'Policy update script on the device' {
             Mock Invoke-CimMethod { $script:intCall++; if ($script:intCall -eq 2) { throw 'Generic failure' }; [pscustomobject]@{ ReturnValue = 0 } }
             $objRaw = & $script:scriptBlockPolicyUpdate $false
             $objRaw.Succeeded | Should -BeFalse
-            $objRaw.Summary | Should -Match 'The steps before it ran'
+            $objRaw.Summary | Should -Match 'The earlier steps, if any, ran'
             $objRaw.Steps[1] | Should -Match '^Triggered .*000000000021'
             $objRaw.Steps[2] | Should -Match 'failed: Generic failure'
         }
@@ -212,7 +212,7 @@ Describe 'Action gate in the window' {
 
     It 'writes a start record before a run and stops when it cannot write it' {
         $intStart = $script:strStart.IndexOf("-Outcome 'STARTED'")
-        $intWork = $script:strStart.IndexOf('Start-BackgroundWork -Title $title')
+        $intWork = $script:strStart.IndexOf('Start-ActionWork -Title $title')
         $intStart | Should -BeGreaterThan 0
         $intStart | Should -BeLessThan $intWork
         $script:strStart | Should -Match "(?s)-Outcome 'STARTED'.*?catch \{.*?the run does not start.*?return\s*\}"

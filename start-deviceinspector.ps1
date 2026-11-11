@@ -811,7 +811,22 @@ function Invoke-DeviceAction {
     $script:ActionPending = @{ Name = $Name; Device = $device; DryRun = $dry }
     $arguments = @{ Function = $Function; Parameters = (@{ ComputerName = $device; DryRun = $dry } + $Parameters) }
     $title = $(if ($dry) { 'Dry run: {0} on {1}' -f $Name, $device } else { '{0} on {1}' -f $Name, $device })
-    Start-BackgroundWork -Title $title -Step 'Connecting to the device...' -Arguments $arguments -Work {
+    try {
+        Start-ActionWork -Title $title -Arguments $arguments
+    }
+    catch {
+        $script:IsBusy = $false
+        $progressOverlay.Visibility = [System.Windows.Visibility]::Collapsed
+        Update-ControlState
+        $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -Summary ('The run did not start: {0}' -f $_.Exception.Message) -Steps @()
+        Write-ActionResult -Result $failed
+        [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ('The run did not start: {0}' -f $_.Exception.Message) -Icon Error)
+    }
+}
+
+function Start-ActionWork {
+    param([Parameter(Mandatory)][string]$Title, [Parameter(Mandatory)][hashtable]$Arguments)
+    Start-BackgroundWork -Title $Title -Step 'Connecting to the device...' -Arguments $Arguments -Work {
         param($A, $State)
         try {
             $p = $A.Parameters

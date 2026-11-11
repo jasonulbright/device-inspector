@@ -41,7 +41,7 @@ $script:scriptBlockPolicyUpdate = {
             $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
         } catch {
             $listStep.Add(('{0} failed: {1}' -f $hashtableSchedule.Name, $_.Exception.Message))
-            return [pscustomobject]@{ Succeeded = $false; Summary = ('{0} failed. The steps before it ran.' -f $hashtableSchedule.Name); Steps = @($listStep) }
+            return [pscustomobject]@{ Succeeded = $false; Summary = ('{0} failed. The earlier steps, if any, ran.' -f $hashtableSchedule.Name); Steps = @($listStep) }
         }
         if ($boolRefused) {
             $listStep.Add(('{0} failed: TriggerSchedule returned {1}.' -f $hashtableSchedule.Name, $objReturnValue))

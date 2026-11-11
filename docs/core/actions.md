@@ -67,7 +67,7 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 | Message | Cause | Fix |
 |---|---|---|
 | Cannot run the action on <device>: ... | WinRM to the device failed. On a run, a step can have run before the failure. | Check that the device is on and that your account is a local administrator on it. Inspect the device to see its state. |
-| <step> failed. The steps before it ran. | A method call on the client failed. | Read the step lines in the log. Read `PolicyAgent.log` on the device. |
+| <step> failed. The earlier steps, if any, ran. | A method call on the client failed. | Read the step lines in the log. Read `PolicyAgent.log` on the device. |
 | The action log cannot be written, so the run does not start. | The `Logs` folder is not writable. | Make the folder of the script writable. |
 | The Configuration Manager client does not answer: ... | The client is not installed or its WMI namespace is broken. | Install or repair the client. |
 | ... failed with return value <n>. | The client refused the request. | Read `PolicyAgent.log` on the device. |
