@@ -916,8 +916,8 @@ function Set-MenuItemState {
 # A right-click selects the row under the pointer when that row is not selected,
 # so a menu entry acts on the row that the person points at.
 function Select-RowUnderPointer {
-    param([Parameter(Mandatory)]$Grid, [Parameter(Mandatory)]$EventArgs)
-    $node = $EventArgs.OriginalSource
+    param([Parameter(Mandatory)]$Grid, [Parameter(Mandatory)]$MouseArgs)
+    $node = $MouseArgs.OriginalSource
     while ($node -and -not ($node -is [System.Windows.Controls.DataGridRow])) {
         if ($node -is [System.Windows.Media.Visual] -or $node -is [System.Windows.Media.Media3D.Visual3D]) { $node = [System.Windows.Media.VisualTreeHelper]::GetParent($node) }
         else { $node = [System.Windows.LogicalTreeHelper]::GetParent($node) }
@@ -927,7 +927,7 @@ function Select-RowUnderPointer {
         $node.IsSelected = $true
     }
 }
-$gridUpdates.Add_PreviewMouseRightButtonDown({ param($s, $e) Select-RowUnderPointer -Grid $gridUpdates -EventArgs $e })
+$gridUpdates.Add_PreviewMouseRightButtonDown({ param($s, $e) Select-RowUnderPointer -Grid $gridUpdates -MouseArgs $e })
 
 $gridUpdates.ContextMenu.Add_Opened({
     $all = Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)
