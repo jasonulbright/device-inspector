@@ -2011,7 +2011,10 @@ function ConvertTo-DeviceInspectionApplicationRow {
                 $listOwnRow.Add($hashtableClient[$strKey])
             }
         }
-        foreach ($objClientApplication in @(@($listOwnRow) + @($listClientExtra) | Sort-Object -Property Name, Id)) {
+        foreach ($objExtra in $listClientExtra) {
+            $listOwnRow.Add($objExtra)
+        }
+        foreach ($objClientApplication in @($listOwnRow | Sort-Object -Property Name, Id)) {
             & $scriptBlockRow ([string]$objClientApplication.Name).Trim() ([string]$objClientApplication.SoftwareVersion) '' ([string]$objClientApplication.Publisher) 'Client application' $objClientApplication
         }
     }
