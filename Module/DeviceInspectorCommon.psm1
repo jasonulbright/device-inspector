@@ -2619,7 +2619,7 @@ function Get-DeviceInspectorDeviceList {
         try {
             $objConnection = Connect-InspectorSite @hashtableConnect
             if ([string]::IsNullOrEmpty($CollectionId)) {
-                $arrRaw = @(Get-CMDevice -Name $NamePattern -Fast -ErrorAction Stop -WarningAction SilentlyContinue)
+                $arrRaw = @(Get-CMDevice -Name $NamePattern -Fast -ErrorAction Stop)
             } else {
                 $hashtableMember = @{ CollectionId = $CollectionId; ErrorAction = 'Stop' }
                 if (-not [string]::IsNullOrEmpty($NamePattern)) {
