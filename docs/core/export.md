@@ -34,7 +34,7 @@ Select **Cancel** in the dialog to stop. The tool writes nothing.
 
 | Button | File | Content |
 |---|---|---|
-| **Export JSON** | `.json` | All facts, with every list entry. |
+| **Export JSON** | `.json` | All facts, with every list entry, and the inventory check (`InventoryCheck`). |
 | **Export HTML** | `.html` | One page with the same facts. The page has no script and no external resource. |
 
 ## Limits

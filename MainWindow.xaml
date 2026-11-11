@@ -326,6 +326,9 @@
                         <Button x:Name="btnFullInventory" Content="Full hardware inventory..."
                                 Style="{StaticResource SquareInlineButtonStyle}" MinWidth="190"
                                 ToolTip="Delete the hardware inventory status on the device and start a hardware inventory, so the site gets a full report. Needs Enable actions."/>
+                        <Button x:Name="btnRepairInventory" Content="Repair inventory..."
+                                Style="{StaticResource SquareInlineButtonStyle}" MinWidth="160"
+                                ToolTip="On only when the inventory check says Corrupt: the site inventory is current, but its applications differ from the device. Runs a full hardware inventory. Needs Enable actions."/>
                     </WrapPanel>
                     <DataGrid x:Name="gridFacts" Grid.Row="2"
                               Style="{StaticResource ViewDataGrid}"

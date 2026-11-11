@@ -166,6 +166,9 @@ Describe 'Get-SiteFact' {
                         [pscustomobject]@{ CI_ID = 101 }
                         [pscustomobject]@{ CI_ID = 102 }
                     }
+                    '*SMS_G_System_WORKSTATION_STATUS*' {
+                        [pscustomobject]@{ LastHardwareScan = [datetime]'2026-11-10T19:22:32' }
+                    }
                 }
             }
             Mock Get-CMDeviceCollection {
@@ -212,6 +215,35 @@ Describe 'Get-SiteFact' {
         }
     }
 
+    It 'keeps the hardware scan time of the site as the local clock time of the client' {
+        InModuleScope DeviceInspectorCommon {
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.HardwareScanClientTime | Should -Be '2026-11-10T19:22:32'
+            Should -Invoke Invoke-SiteQuery -ParameterFilter { $Query -eq 'SELECT LastHardwareScan FROM SMS_G_System_WORKSTATION_STATUS WHERE ResourceID = 16777221' }
+        }
+    }
+
+    It 'reads the hardware scan time also from DMTF text with no zone' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery { if ($Query -like '*WORKSTATION_STATUS*') { [pscustomobject]@{ LastHardwareScan = '20261110192232.000000+***' } } }
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            (Get-SiteFact -ComputerName 'WS01' -Problems $listProblem).HardwareScanClientTime | Should -Be '2026-11-10T19:22:32'
+        }
+    }
+
+    It 'counts the rows of each application class and marks a failed class read' {
+        InModuleScope DeviceInspectorCommon {
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.ApplicationReadComplete | Should -BeTrue
+            $objSite.ApplicationRowsByClass.SMS_G_System_ADD_REMOVE_PROGRAMS | Should -Be 2
+            $objSite.ApplicationRowsByClass.SMS_G_System_ADD_REMOVE_PROGRAMS_64 | Should -Be 1
+            Mock Invoke-SiteQuery { if ($Query -like '*ADD_REMOVE_PROGRAMS_64*') { throw 'class missing' } }
+            (Get-SiteFact -ComputerName 'WS01' -Problems $listProblem).ApplicationReadComplete | Should -BeFalse
+        }
+    }
+
     It 'reads the device record with Get-CMDevice by exact name' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
@@ -254,10 +286,11 @@ Describe 'Get-SiteFact' {
         }
     }
 
-    It 'uses a query only for the three reads that have no cmdlet' {        InModuleScope DeviceInspectorCommon {
+    It 'uses a query only for the four reads that have no cmdlet' {        InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
-            Should -Invoke Invoke-SiteQuery -Times 4 -Exactly
+            Should -Invoke Invoke-SiteQuery -Times 5 -Exactly
+            Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_G_System_WORKSTATION_STATUS *' }
             Should -Invoke Invoke-SiteQuery -Times 0 -Exactly -ParameterFilter { $Query -like '*SMS_R_System*' -or $Query -like '*SMS_DeploymentSummary*' -or $Query -like '*FROM SMS_SoftwareUpdate*' -or $Query -like '*FROM SMS_Collection *' }
         }
     }
@@ -770,8 +803,8 @@ Describe 'Module surface' {
                 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow',
                 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionHtml', 'ConvertTo-DeviceInspectionJson',
                 'ConvertTo-DeviceInspectionReport', 'ConvertTo-DeviceInspectionUpdateRow', 'Get-DeviceInspection',
-                'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog',
-                'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+                'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory',
+                'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
             ) | Sort-Object)
     }
 

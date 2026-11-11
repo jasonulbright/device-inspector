@@ -427,3 +427,162 @@ Describe 'Full hardware inventory' {
         $script:strStart | Should -Match '\$btnFullInventory\.IsEnabled = Test-DeviceActionReady'
     }
 }
+
+Describe 'Corrupt-inventory check and repair' {
+    BeforeAll {
+        $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+        function New-CheckInspection {
+            param([string]$SiteDate = '2026-11-10T10:01:00', [string]$Cycle = '2026-11-10T10:00:00', [object[]]$DeviceApp, [object[]]$SiteApp)
+            [pscustomobject]@{
+                ComputerName = 'WS01'; InspectedAt = '2026-11-11T00:00:00Z'; SiteServer = 's'; SiteCode = 'XYZ'
+                Site = [pscustomobject]@{ Found = $true; LastHardwareInventory = '2026-11-05T17:41:51Z'; HardwareScanClientTime = $SiteDate; InstalledApplications = @($SiteApp) }
+                Device = [pscustomobject]@{ Client = [pscustomobject]@{ LastHardwareInventoryCycle = '2026-11-10T15:00:00Z'; HardwareCycleLocalTime = $Cycle }; InstalledApplications = @($DeviceApp) }
+                Problems = @()
+            }
+        }
+        $script:objAppA = [pscustomobject]@{ Name = 'App A'; Version = '1.0'; Publisher = ''; InstallDate = '20260101' }
+        $script:objAppASite = [pscustomobject]@{ Name = 'App A '; Version = '1.0'; Publisher = '' }
+    }
+
+    It 'compares the client local times, not the cmdlet date of the device record' {
+        $objInspection = New-CheckInspection -SiteDate '2026-11-10T19:22:32' -Cycle '2026-11-10T19:21:32' -DeviceApp @($script:objAppA) -SiteApp @($script:objAppASite)
+        $objInspection.Site.LastHardwareInventory = '2026-11-05T17:41:51Z'
+        (Test-DeviceInspectionInventory -Inspection $objInspection).State | Should -Be 'Current'
+    }
+
+    It 'says Current when the site inventory is current and the applications match, names trimmed' {
+        $objCheck = Test-DeviceInspectionInventory -Inspection (New-CheckInspection -DeviceApp @($script:objAppA) -SiteApp @($script:objAppASite))
+        $objCheck.State | Should -Be 'Current'
+        $objCheck.Differences | Should -Be 0
+    }
+
+    It 'says Corrupt when the site inventory is current and an application differs' {
+        $objOld = [pscustomobject]@{ Name = 'Old App'; Version = '2.0'; Publisher = ''; InstallDate = '20250101' }
+        $objCheck = Test-DeviceInspectionInventory -Inspection (New-CheckInspection -DeviceApp @($script:objAppA, $objOld) -SiteApp @($script:objAppASite))
+        $objCheck.State | Should -Be 'Corrupt'
+        $objCheck.Differences | Should -Be 1
+        $objCheck.Applications | Should -Be @('Device only: Old App')
+        $objCheck.Message | Should -Match 'can be corrupt'
+    }
+
+    It 'counts an application that only the site lists' {
+        $objGone = [pscustomobject]@{ Name = 'Gone App'; Version = '1.0'; Publisher = '' }
+        (Test-DeviceInspectionInventory -Inspection (New-CheckInspection -DeviceApp @($script:objAppA) -SiteApp @($script:objAppASite, $objGone))).State | Should -Be 'Corrupt'
+    }
+
+    It 'does not count an application installed on or after the day of the last cycle' {
+        $objNew = [pscustomobject]@{ Name = 'New App'; Version = '1.0'; Publisher = ''; InstallDate = '20261110' }
+        (Test-DeviceInspectionInventory -Inspection (New-CheckInspection -DeviceApp @($script:objAppA, $objNew) -SiteApp @($script:objAppASite))).State | Should -Be 'Current'
+    }
+
+    It 'says NotCurrent when the site has not processed the last cycle' {
+        $objOld = [pscustomobject]@{ Name = 'Old App'; Version = '2.0'; Publisher = ''; InstallDate = '20250101' }
+        $objCheck = Test-DeviceInspectionInventory -Inspection (New-CheckInspection -SiteDate '2026-11-10T19:20:00' -Cycle '2026-11-10T19:21:32' -DeviceApp @($objOld) -SiteApp @())
+        $objCheck.State | Should -Be 'NotCurrent'
+        $objCheck.Differences | Should -Be 0
+    }
+
+    It 'says Unknown without the site record, without the client facts, or without a date' {
+        $objNoSite = New-CheckInspection -DeviceApp @() -SiteApp @()
+        $objNoSite.Site = $null
+        (Test-DeviceInspectionInventory -Inspection $objNoSite).State | Should -Be 'Unknown'
+        $objNoClient = New-CheckInspection -DeviceApp @() -SiteApp @()
+        $objNoClient.Device.Client = $null
+        (Test-DeviceInspectionInventory -Inspection $objNoClient).State | Should -Be 'Unknown'
+        (Test-DeviceInspectionInventory -Inspection (New-CheckInspection -SiteDate '' -DeviceApp @() -SiteApp @())).State | Should -Be 'Unknown'
+    }
+
+    It 'counts a version that differs, and an install date before the cycle day, in any known format' {
+        $objNewer = [pscustomobject]@{ Name = 'App A'; Version = '2.0'; Publisher = ''; InstallDate = '2026-11-09' }
+        $objCheck = Test-DeviceInspectionInventory -Inspection (New-CheckInspection -DeviceApp @($objNewer) -SiteApp @($script:objAppASite))
+        $objCheck.State | Should -Be 'Corrupt'
+        $objCheck.Applications | Should -Be @('Version differs: App A')
+    }
+
+    It 'does not count an upgrade on the cycle day, with the date as <Format>' -ForEach @(
+        @{ Format = 'yyyyMMdd'; Date = '20261110' }, @{ Format = 'yyyy/MM/dd'; Date = '2026/11/10' }, @{ Format = 'M/d/yyyy'; Date = '11/10/2026' }
+    ) {
+        $objNewer = [pscustomobject]@{ Name = 'App A'; Version = '2.0'; Publisher = ''; InstallDate = $Date }
+        (Test-DeviceInspectionInventory -Inspection (New-CheckInspection -DeviceApp @($objNewer) -SiteApp @($script:objAppASite))).State | Should -Be 'Current'
+    }
+
+    It 'counts an application with an install date it cannot read' {
+        $objOdd = [pscustomobject]@{ Name = 'Odd App'; Version = '1.0'; Publisher = ''; InstallDate = 'yesterday' }
+        (Test-DeviceInspectionInventory -Inspection (New-CheckInspection -DeviceApp @($script:objAppA, $objOdd) -SiteApp @($script:objAppASite))).State | Should -Be 'Corrupt'
+    }
+
+    It 'says Unknown when the site application read failed' {
+        $objInspection = New-CheckInspection -DeviceApp @($script:objAppA) -SiteApp @()
+        $objInspection.Site | Add-Member -NotePropertyName 'ApplicationReadComplete' -NotePropertyValue $false
+        $objCheck = Test-DeviceInspectionInventory -Inspection $objInspection
+        $objCheck.State | Should -Be 'Unknown'
+        $objCheck.Message | Should -Match 'not read completely'
+    }
+
+    It 'says Unknown when a site inventory class has no rows' {
+        $objInspection = New-CheckInspection -DeviceApp @($script:objAppA) -SiteApp @($script:objAppASite)
+        $objInspection.Site | Add-Member -NotePropertyName 'ApplicationReadComplete' -NotePropertyValue $true
+        $objInspection.Site | Add-Member -NotePropertyName 'ApplicationRowsByClass' -NotePropertyValue ([pscustomobject]@{ SMS_G_System_ADD_REMOVE_PROGRAMS = 1; SMS_G_System_ADD_REMOVE_PROGRAMS_64 = 0 })
+        $objCheck = Test-DeviceInspectionInventory -Inspection $objInspection
+        $objCheck.State | Should -Be 'Unknown'
+        $objCheck.Message | Should -Match 'no rows in SMS_G_System_ADD_REMOVE_PROGRAMS_64'
+    }
+
+    It 'says Unknown when the device application read failed' {
+        $objInspection = New-CheckInspection -DeviceApp @() -SiteApp @($script:objAppASite)
+        $objInspection.Device | Add-Member -NotePropertyName 'Problems' -NotePropertyValue @('Installed applications: Access denied')
+        (Test-DeviceInspectionInventory -Inspection $objInspection).State | Should -Be 'Unknown'
+    }
+
+    It 'says Unknown when the cycle record is missing' {
+        $objCheck = Test-DeviceInspectionInventory -Inspection (New-CheckInspection -Cycle '' -DeviceApp @() -SiteApp @())
+        $objCheck.State | Should -Be 'Unknown'
+        $objCheck.Message | Should -Match 'no hardware inventory cycle record'
+    }
+
+    It 'adds a Corrupt check to the problems of the inspection' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 's'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
+            Mock Disconnect-InspectorSite { }
+            Mock Get-SiteFact { [pscustomobject]@{ Found = $true; LastHardwareInventory = $null; HardwareScanClientTime = '2026-11-10T10:01:00'; ApplicationReadComplete = $true; ApplicationRowsByClass = $null; InstalledApplications = @() } }
+            Mock Get-DeviceFact { [pscustomobject]@{ Client = [pscustomobject]@{ HardwareCycleLocalTime = '2026-11-10T10:00:00' }; InstalledApplications = @([pscustomobject]@{ Name = 'Old App'; Version = '1'; Publisher = ''; InstallDate = '20200101' }); Problems = @() } }
+            $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 's' -SiteCode 'XYZ'
+            $objInspection.InventoryCheck.State | Should -Be 'Corrupt'
+            @($objInspection.Problems | Where-Object { $_ -like 'Inventory: *can be corrupt*' }).Count | Should -Be 1
+        }
+    }
+
+    It 'clears the check after a repair or a full inventory, so the button turns off' {
+        $script:strStart | Should -Match "(?s)function Clear-InventoryCheck \{.*?State = 'Unknown'.*?-notlike 'Inventory: \*'.*?Show-Inspection -Inspection \`$script:Inspection.*?Update-ControlState"
+        $script:strStart | Should -Match "-Function 'Invoke-DeviceInspectorFullInventory' -AfterRun \{ param\(\`$r\) Clear-InventoryCheck \}"
+        $script:strStart | Should -Match '-AfterRun \{ param\(\$r\) Clear-InventoryCheck;'
+    }
+
+    It 'adds the check to the facts of the Device panel' {
+        $objInspection = New-CheckInspection -DeviceApp @($script:objAppA) -SiteApp @()
+        $objInspection | Add-Member -NotePropertyName 'InventoryCheck' -NotePropertyValue (Test-DeviceInspectionInventory -Inspection $objInspection)
+        $objInspection.Site | Add-Member -NotePropertyName 'ResourceId' -NotePropertyValue 1
+        foreach ($strName in 'ClientInstalled', 'ClientVersion', 'Active', 'OperatingSystem', 'LastLogonUserName') { $objInspection.Site | Add-Member -NotePropertyName $strName -NotePropertyValue '' }
+        $objInspection.Device | Add-Member -NotePropertyName 'OperatingSystem' -NotePropertyValue $null
+        $objInspection.Device.Client = $null
+        $arrRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection | Where-Object Group -eq 'Inventory check')
+        $arrRow.Count | Should -Be 3
+        $arrRow[0].Value | Should -Be 'Corrupt'
+        $arrRow[2].Value | Should -Be 'Device only: App A'
+    }
+
+    It 'repairs with the full hardware inventory script under its own action name' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+        $objResult = Invoke-DeviceInspectorInventoryRepair -ComputerName 'WS01' -DryRun
+        $objResult.Action | Should -Be 'Corrupt-inventory repair'
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript -Times 1 -Exactly -ParameterFilter { $ScriptBlock.ToString() -match 'InventoryActionStatus' -and $ArgumentList[0] -eq $true }
+    }
+
+    It 'turns the Repair inventory button on only for the state Corrupt' {
+        $script:strXaml | Should -Match 'x:Name="btnRepairInventory"'
+        $script:strStart | Should -Match '\$btnRepairInventory\.IsEnabled = \(Test-DeviceActionReady\) -and \(Test-InventoryCorrupt\)'
+        $script:strStart | Should -Match "(?s)function Test-InventoryCorrupt \{.*?State -eq 'Corrupt'"
+        $script:strStart | Should -Match "(?s)\`$btnRepairInventory\.Add_Click\(\{\s*if \(-not \(Test-InventoryCorrupt\)\).*?Invoke-DeviceAction -Name 'Corrupt-inventory repair' -Function 'Invoke-DeviceInspectorInventoryRepair'"
+    }
+}
