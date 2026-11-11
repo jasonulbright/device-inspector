@@ -105,10 +105,12 @@ Describe 'Window XAML text' {
 }
 
 Describe 'Dialog text' {
-    It 'finds the Options dialog XAML first and the action confirmation XAML second in the script' {
-        $script:DialogXaml.Count | Should -Be 2
+    It 'finds the Options dialog XAML first, the action confirmation XAML second and the result window XAML third in the script' {
+        $script:DialogXaml.Count | Should -Be 3
         $script:DialogXaml[0] | Should -Match 'x:Name="paneConnection"'
         $script:DialogXaml[1] | Should -Match 'x:Name="btnActionRun"'
+        $script:DialogXaml[2] | Should -Match 'ShowActivated="False"'
+        $script:DialogXaml[2] | Should -Match 'x:Name="txtMsg"'
     }
 
     It 'has every control that the dialog code looks up' {

@@ -759,7 +759,7 @@ Describe 'Install pending updates' {
     It 'sends the confirmed IDs also for all, and selects the row under the pointer' {
         $script:strStart | Should -Match "(?s)function Invoke-UpdateInstall \{.*?UpdateId = \[string\[\]\]@\(\`$Rows \| ForEach-Object"
         $script:strStart | Should -Match '\$gridUpdates\.Add_PreviewMouseRightButtonDown\(\{ param\(\$s, \$e\) try \{ Select-RowUnderPointer -Grid \$gridUpdates'
-        $script:strStart | Should -Match "Wait for the running task to end"
+        $script:strStart | Should -Match "\`$gate = Get-ActionGateText"
     }
 
     It 'marks only device rows that the client lists as missing as installable' {
@@ -1641,7 +1641,8 @@ Describe 'Background device actions' {
             return (New-DeviceInspectorActionRun -ActionId (New-DeviceInspectorActionId) -Action $Action -ComputerName $ComputerName -DryRun $DryRun)
         }
         function New-TestList {
-            return (New-Object -TypeName 'System.Collections.ObjectModel.ObservableCollection[object]')
+            # The comma keeps an empty collection from becoming nothing on the way out of the function.
+            return , (New-Object -TypeName 'System.Collections.ObjectModel.ObservableCollection[object]')
         }
         $script:objDeviceInspection = [pscustomobject]@{ SiteServer = $null; Site = $null; Device = [pscustomobject]@{} }
     }
@@ -1801,7 +1802,7 @@ Describe 'Background device actions' {
             $strText = Get-TestFunctionText -Name 'Show-ActionResultNotice'
             $strText | Should -Match 'ShowActivated="False"'
             $strText | Should -Match '\$dlg\.Show\(\)'
-            $strText | Should -Not -Match 'ShowDialog'
+            $strText | Should -Not -Match 'Show(Dialog)'
             Get-TestFunctionText -Name 'Complete-DeviceActionRun' | Should -Match 'Show-ActionResultNotice'
             Get-TestFunctionText -Name 'Complete-DeviceActionRun' | Should -Not -Match 'Show-ThemedMessage'
         }

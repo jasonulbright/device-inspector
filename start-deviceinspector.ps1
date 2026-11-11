@@ -984,7 +984,7 @@ function Invoke-DeviceAction {
     } elseif (-not (Test-DeviceActionReady)) {
         $why = Get-ActionBlockText -Kind Device
         Add-LogLine ('{0}: {1}' -f $Name, $why)
-        if (Get-DeviceInspectorRunBlock -Run @($script:RunList) -ComputerName (Get-ActionTargetName)) { [void](Show-ThemedMessage -Owner $window -Title $Name -Message $why -Icon Warn) }
+        if (Get-DeviceInspectorRunBlock -Run @($script:RunList) -ComputerName (Get-ActionTargetName)) { [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message $why -Icon Warn) }
         return
     }
     $device = [string]$script:Inspection.ComputerName
@@ -999,7 +999,7 @@ function Invoke-DeviceAction {
         try { Register-DeviceInspectorActionRun -Runs $script:RunList -Run $run }
         catch {
             Add-LogLine ('{0}: {1}' -f $Name, $_.Exception.Message)
-            [void](Show-ThemedMessage -Owner $window -Title $Name -Message $_.Exception.Message -Icon Warn)
+            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message $_.Exception.Message -Icon Warn)
             return
         }
         Update-ControlState
