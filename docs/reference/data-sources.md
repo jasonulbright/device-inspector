@@ -42,7 +42,9 @@ Compared on 2026-11-06 on the lab site for the workstation and the site server. 
 
 ### Last hardware inventory differs
 
-| Device | Device, live (inventory cycle start) | New: `Get-CMDevice` | Old: `SMS_G_System_WORKSTATION_STATUS` |
+The table is dated 2026-11-06.
+
+| Device | Device, live (inventory cycle start) | Cmdlet: `Get-CMDevice` | Class: `SMS_G_System_WORKSTATION_STATUS` (CIM read) |
 |---|---|---|---|
 | Workstation | 2026-11-05T17:40:51Z | 2026-11-05T17:41:51Z | 2026-11-05T13:41:51Z |
 | Site server | 2026-11-02T12:11:51Z | 2026-11-02T12:12:40Z | 2026-11-02T08:12:40Z |

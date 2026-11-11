@@ -34,7 +34,7 @@ The table has three columns: **Group**, **Fact** and **Value**.
 | Inspection | The device, the time of the inspection (UTC) and the site server with the site code. |
 | Operating system (device) | The caption, the version with the build and the architecture, and the last boot time (UTC). |
 | Client health (device) | The state and the start mode of the `CcmExec` service, the client version, the assigned site code, the current management point, and the last hardware inventory cycle and the last discovery data cycle (UTC). |
-| Site record | The resource ID, whether the client is installed, the client version, whether the device is active, the operating system, the last logon user and the last hardware inventory date. |
+| Site record | The resource ID, whether the client is installed, the client version, whether the device is active, the operating system, the last logon user and the last hardware inventory time. |
 
 The **Last hardware inventory** fact of the site record is the scan time of the site inventory record (`SMS_G_System_WORKSTATION_STATUS`). The fact ends with "(device local time)". The site stores this time as the local clock time of the device, with no zone, and the tool does not convert it. The inventory check uses the same value.
 

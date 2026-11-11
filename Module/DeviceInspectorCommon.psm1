@@ -1027,7 +1027,7 @@ function Get-DeviceFact {
     #
     # Positional parameters: none.
     #
-    # Version: 1.1.20261110.0
+    # Version: 1.2.20261111.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -2033,7 +2033,7 @@ function ConvertTo-DeviceInspectionFactRow {
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.1.20261111.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (

@@ -247,6 +247,39 @@ Describe 'Get-SiteFact' {
         }
     }
 
+    It 'falls back to the Get-CMDevice value and records one problem when the class read throws' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery { if ($Query -like '*WORKSTATION_STATUS*') { throw 'class read failed' } }
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.LastHardwareInventorySource | Should -Be 'Get-CMDevice'
+            $listProblem.Count | Should -Be 1
+            $listProblem[0] | Should -BeLike '*class read failed*'
+        }
+    }
+
+    It 'falls back to the Get-CMDevice value when the row has a null LastHardwareScan' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery { if ($Query -like '*WORKSTATION_STATUS*') { [pscustomobject]@{ LastHardwareScan = $null } } }
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.HardwareScanClientTime | Should -BeNullOrEmpty
+            $objSite.LastHardwareInventorySource | Should -Be 'Get-CMDevice'
+            $listProblem.Count | Should -Be 0
+        }
+    }
+
+    It 'gives the source None when neither value exists' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery { }
+            Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 16777221; Name = 'WS01'; IsClient = $true; ClientVersion = '1'; IsActive = $true; DeviceOS = 'os'; LastLogonUser = 'u'; LastHardwareScan = $null } }
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.LastHardwareInventorySource | Should -Be 'None'
+            (Get-SiteHardwareInventoryFact -Site $objSite).Value | Should -Be ''
+        }
+    }
+
     It 'names the scan time of the class as the source when the class has a row' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'

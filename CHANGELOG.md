@@ -17,7 +17,7 @@ All notable changes to Device Inspector are documented in this file.
 
 ### Fixed
 
-- End the process by an explicit exit after Close anyway with a run open, when the script owns the process (started with `-File`, as the suite launcher does). The end of Windows PowerShell waits for an open remoting call. In an isolated test, a process with a held call stayed until the call returned (38 s of a 40 s hold); the explicit exit ended it in 2.3 s. In the app on CLIENT01 and on DC01 the process ended after 2.7 s with and without this change, so the long wait was not reproduced in the app. The earlier desktop check against CM01 saw 70 s in 3 of 6 samples.
+- End the process by an explicit exit after Close anyway with a run open, when the script owns the process (started with `-File`, as the suite launcher does). The end of Windows PowerShell waits for an open remoting call. In an isolated test, a process with a held call stayed until the call returned (38 s of a 40 s hold); the explicit exit ended it in 2.3 s. In the app on CLIENT01 and on DC01 the process ended after 2.7 s with and without this change, so the long wait was not reproduced in the app. An earlier desktop check saw 70 s in 3 of 6 samples; its cause is not known.
 - Do not end the process when an admin runs the script inside a console. The script returns as normal and the console stays open.
 - Write the `CLOSED` line before the exit, as before. The `CLOSED` line still says that the result of the run is not known. The tool does not claim that the run stopped.
 - Write "1 action is still running" in the close warning for one run. Write "2 actions are still running" for more runs.
