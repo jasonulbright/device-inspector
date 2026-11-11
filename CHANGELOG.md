@@ -8,24 +8,27 @@ All notable changes to Device Inspector are documented in this file.
 
 ### Added
 
-- Turn on actions with Enable actions. The switch is off at each start.
-- Confirm each action in a dialog that shows the device count, or run a dry run first.
-- Write each run and dry run to Logs\DeviceInspector-actions.log.
+- Add an Enable actions switch that is off at each start.
+- Confirm each action in a dialog that shows the device count.
+- Run a dry run of each action before the real run.
+- Write each run and dry run to a separate action log.
 - Request and evaluate machine policy on the device.
 - Start a full hardware inventory on the device.
-- Flag a corrupt site inventory and repair it with a full hardware inventory.
+- Flag a corrupt site inventory.
+- Repair a corrupt site inventory with a full hardware inventory.
 - Install selected or all pending software updates from the Updates panel.
-- Uninstall or repair a Configuration Manager application from the Applications panel.
+- Uninstall a Configuration Manager application from the Applications panel.
+- Repair a Configuration Manager application from the Applications panel.
 - Remove the device from a collection, for a direct membership rule only.
 - Add the device to a collection that you pick in a collection browser.
 - Find devices of the site by name or collection in the Device list panel.
-- Write the full report of each inspection to the log file. Open it with Open log file.
+- Write the full report of each inspection to the log file.
+- Open the log file with Open log file.
 
 ### Changed
 
 - Show the membership rule of each collection, in the window and in the HTML report.
 - List installed Configuration Manager applications as their own rows in the Applications panel.
-- Compare system components too, and names without spaces at the ends.
 
 ## [2026.11.10.0005] - 2026-11-10
 
