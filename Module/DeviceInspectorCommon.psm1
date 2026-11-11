@@ -1359,7 +1359,7 @@ function ConvertTo-DeviceInspectionReport {
         [pscustomobject]$Inspection,
 
         [Parameter(Mandatory = $false)]
-        [ValidateRange(1, 100000)]
+        [ValidateRange(1, 2147483647)]
         [int]$MaximumListedItems = 25
     )
 
@@ -1983,6 +1983,70 @@ function ConvertTo-DeviceInspectionHtml {
     }
 }
 
+function Write-DeviceInspectionFullLog {
+    # .SYNOPSIS
+    # Writes the full report of an inspection to the log file of the session.
+    #
+    # .DESCRIPTION
+    # Builds the report with no list limit and writes it with one Write-Log call,
+    # between a start line and an end line. One call keeps the log write short on
+    # the window thread. The function does not throw. It returns $false when the
+    # report cannot be built or the log file did not grow, because Write-Log drops
+    # a line without an error after three failed writes.
+    #
+    # .PARAMETER Inspection
+    # The object that Get-DeviceInspection returns.
+    #
+    # .PARAMETER LogPath
+    # The log file that Initialize-Logging set for this session.
+    #
+    # .EXAMPLE
+    # $boolWritten = Write-DeviceInspectionFullLog -Inspection $objInspection -LogPath $strLogPath
+    #
+    # # $boolWritten is $true when the report is in the log file.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [bool]
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Inspection,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$LogPath
+    )
+
+    process {
+        try {
+            $intLengthBefore = 0
+            if (Test-Path -LiteralPath $LogPath) {
+                $intLengthBefore = (Get-Item -LiteralPath $LogPath).Length
+            }
+            $strReport = ConvertTo-DeviceInspectionReport -Inspection $Inspection -MaximumListedItems ([int]::MaxValue)
+            $strTitle = 'Full report: {0}' -f $Inspection.ComputerName
+            $strText = '----- {0} -----{1}{2}{1}----- end of {0} -----' -f $strTitle, [System.Environment]::NewLine, ($strReport -replace "`n", [System.Environment]::NewLine)
+            Write-Log -Message $strText -Quiet
+            if (-not (Test-Path -LiteralPath $LogPath)) {
+                return $false
+            }
+            return ((Get-Item -LiteralPath $LogPath).Length -gt $intLengthBefore)
+        } catch {
+            Write-Debug -Message $_.Exception.Message
+            return $false
+        }
+    }
+}
+
 function Write-DeviceInspectionFile {
     # .SYNOPSIS
     # Writes text to a file as UTF-8 without a byte order mark.
@@ -2034,4 +2098,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Invoke-DeviceInspectorPolicyUpdate', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Invoke-DeviceInspectorPolicyUpdate', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'

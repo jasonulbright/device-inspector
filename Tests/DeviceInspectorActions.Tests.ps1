@@ -1,4 +1,4 @@
-[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake device names.')]
+﻿[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake device names.')]
 param ()
 
 BeforeAll {
@@ -229,11 +229,44 @@ Describe 'Full output log file' {
     BeforeAll {
         $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
         $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+        $script:objLargeInspection = [pscustomobject]@{
+            ComputerName = 'WS01'; InspectedAt = '2026-11-10T00:00:00Z'; SiteServer = $null; SiteCode = $null; Site = $null
+            Device = [pscustomobject]@{ OperatingSystem = $null; Client = $null; ClientApplications = @(); PendingUpdates = @()
+                InstalledApplications = @(1..60 | ForEach-Object { [pscustomobject]@{ Name = ('App {0:d2}' -f $_); Version = '1.0'; Publisher = '' } }) }
+            Problems = @()
+        }
     }
 
-    It 'writes the full report of each inspection to the log file' {
-        $script:strStart | Should -Match "(?s)Inspection of \{0\} finished.*?Write-FullOutput -Title \('Full report: \{0\}' -f \`$r\.ComputerName\) -Lines \(\(ConvertTo-DeviceInspectionReport -Inspection \`$r -MaximumListedItems 100000\)"
-        $script:strStart | Should -Match '(?s)function Write-FullOutput \{.*?Write-Log -Message \$line -Quiet'
+    AfterEach {
+        Initialize-Logging -LogPath ''
+    }
+
+    It 'writes the full report, blank lines included, to the log file and returns $true' {
+        $strLog = Join-Path -Path $TestDrive -ChildPath 'session.log'
+        Initialize-Logging -LogPath $strLog
+        Write-DeviceInspectionFullLog -Inspection $script:objLargeInspection -LogPath $strLog | Should -BeTrue
+        $strText = Get-Content -LiteralPath $strLog -Raw
+        $strText | Should -Match '----- Full report: WS01 -----'
+        $strText | Should -Match '----- end of Full report: WS01 -----'
+        $strText | Should -Match 'App 01 1\.0'
+        $strText | Should -Match 'App 60 1\.0'
+        $strText | Should -Match '== Problems \(0\) =='
+        $strText | Should -Not -Match 'more \(see the JSON output\)'
+    }
+
+    It 'returns $false and does not throw when the report cannot be built' {
+        $strLog = Join-Path -Path $TestDrive -ChildPath 'broken.log'
+        Initialize-Logging -LogPath $strLog
+        Write-DeviceInspectionFullLog -Inspection ([pscustomobject]@{ ComputerName = 'WS01' }) -LogPath $strLog | Should -BeFalse
+    }
+
+    It 'returns $false when nothing reaches the log file' {
+        Initialize-Logging -LogPath ''
+        Write-DeviceInspectionFullLog -Inspection $script:objLargeInspection -LogPath (Join-Path -Path $TestDrive -ChildPath 'never.log') | Should -BeFalse
+    }
+
+    It 'writes the full report after each inspection and says so when it cannot' {
+        $script:strStart | Should -Match "(?s)Inspection of \{0\} finished.*?if \(-not \(Write-DeviceInspectionFullLog -Inspection \`$r -LogPath \`$script:ToolLogPath\)\) \{ Add-LogLine"
     }
 
     It 'writes each window log line to the log file' {
@@ -242,18 +275,6 @@ Describe 'Full output log file' {
 
     It 'has an Open log file button that opens the log of this session' {
         $script:strXaml | Should -Match 'x:Name="btnOpenLog"[^>]*Content="Open log file"'
-        $script:strStart | Should -Match '(?s)\$btnOpenLog\.Add_Click\(\{.*?Invoke-Item -LiteralPath \$script:ToolLogPath'
-    }
-
-    It 'lists every entry in the report when the maximum is large' {
-        $objInspection = [pscustomobject]@{
-            ComputerName = 'WS01'; InspectedAt = '2026-11-10T00:00:00Z'; SiteServer = $null; SiteCode = $null; Site = $null
-            Device = [pscustomobject]@{ OperatingSystem = $null; Client = $null; ClientApplications = @(); PendingUpdates = @()
-                InstalledApplications = @(1..60 | ForEach-Object { [pscustomobject]@{ Name = ('App {0:d2}' -f $_); Version = '1.0'; Publisher = '' } }) }
-            Problems = @()
-        }
-        $strReport = ConvertTo-DeviceInspectionReport -Inspection $objInspection -MaximumListedItems 100000
-        $strReport | Should -Match 'App 60 1\.0'
-        $strReport | Should -Not -Match 'more \(see the JSON output\)'
+        $script:strStart | Should -Match '(?s)\$btnOpenLog\.Add_Click\(\{.*?Invoke-Item -LiteralPath \$script:ToolLogPath -ErrorAction Stop'
     }
 }

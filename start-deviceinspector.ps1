@@ -166,17 +166,6 @@ function Add-LogLine {
     try { Write-Log -Message $Message -Quiet } catch { $null = $_ }
 }
 
-# The window log shows one line for each event. The log file also gets the full text:
-# the whole report of each inspection, with every list entry, and each action with its steps.
-function Write-FullOutput {
-    param([Parameter(Mandatory)][string]$Title, [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Lines)
-    try {
-        Write-Log -Message ('----- {0} -----' -f $Title) -Quiet
-        foreach ($line in $Lines) { Write-Log -Message $line -Quiet }
-        Write-Log -Message ('----- end of {0} -----' -f $Title) -Quiet
-    } catch { $null = $_ }
-}
-
 function Set-StatusText {
     param([Parameter(Mandatory)][string]$Text)
     $txtStatus.Text = $Text
@@ -468,7 +457,7 @@ function Invoke-Inspect {
         $r = $State.Result
         Show-Inspection -Inspection $r
         Add-LogLine ('Inspection of {0} finished: {1} problems.' -f $r.ComputerName, @($r.Problems).Count)
-        Write-FullOutput -Title ('Full report: {0}' -f $r.ComputerName) -Lines ((ConvertTo-DeviceInspectionReport -Inspection $r -MaximumListedItems 100000) -split "`n")
+        if (-not (Write-DeviceInspectionFullLog -Inspection $r -LogPath $script:ToolLogPath)) { Add-LogLine 'The full report could not be written to the log file.' }
         foreach ($p in @($r.Problems)) { Add-LogLine ('  problem: {0}' -f $p) }
     }
 }
@@ -875,7 +864,7 @@ $btnPolicyUpdate.Add_Click({
 # === Log file ===
 $btnOpenLog.Add_Click({
     if (-not (Test-Path -LiteralPath $script:ToolLogPath)) { Add-LogLine ('The log file does not exist yet: {0}' -f $script:ToolLogPath); return }
-    try { Invoke-Item -LiteralPath $script:ToolLogPath; Add-LogLine ('Opened the log file: {0}' -f $script:ToolLogPath) }
+    try { Invoke-Item -LiteralPath $script:ToolLogPath -ErrorAction Stop; Add-LogLine ('Opened the log file: {0}' -f $script:ToolLogPath) }
     catch { Add-LogLine ('The log file cannot be opened: {0}' -f $_.Exception.Message) }
 })
 

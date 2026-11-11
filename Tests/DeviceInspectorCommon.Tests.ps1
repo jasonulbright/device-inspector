@@ -770,7 +770,7 @@ Describe 'Module surface' {
                 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow',
                 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionHtml', 'ConvertTo-DeviceInspectionJson',
                 'ConvertTo-DeviceInspectionReport', 'ConvertTo-DeviceInspectionUpdateRow', 'Get-DeviceInspection',
-                'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile',
+                'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog',
                 'Invoke-DeviceInspectorPolicyUpdate', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
             ) | Sort-Object)
     }

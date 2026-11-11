@@ -25,6 +25,7 @@
         'ConvertTo-DeviceInspectionJson'
         'ConvertTo-DeviceInspectionHtml'
         'Write-DeviceInspectionFile'
+        'Write-DeviceInspectionFullLog'
         'Invoke-DeviceInspectorPolicyUpdate'
         'ConvertTo-DeviceInspectorActionText'
         'Write-DeviceInspectorActionLog'
