@@ -351,7 +351,7 @@ Describe 'Full hardware inventory' {
             Mock Invoke-CimMethod { }
             $objRaw = & $script:scriptBlockFullInventory $false
             $objRaw.Succeeded | Should -BeFalse
-            $objRaw.Summary | Should -Match 'cannot be deleted\. Nothing changed'
+            $objRaw.Summary | Should -Match 'cannot be deleted\. The schedule was not triggered'
             Should -Invoke Invoke-CimMethod -Times 0 -Exactly
         }
     }
@@ -366,6 +366,58 @@ Describe 'Full hardware inventory' {
             $objRaw = & $script:scriptBlockFullInventory $false
             $objRaw.Succeeded | Should -BeFalse
             $objRaw.Summary | Should -Match 'The status record is deleted, but the cycle did not start'
+        }
+    }
+
+    It 'reports a refused trigger after the delete' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 2 } }
+            $objRaw = & $script:scriptBlockFullInventory $false
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'return value 2'
+        }
+    }
+
+    It 'stops before any change when <Case>' -ForEach @(
+        @{ Case = 'the client read throws'; Client = { throw 'Invalid namespace' }; Status = { }; Expected = 'does not answer' }
+        @{ Case = 'the client is missing'; Client = { }; Status = { }; Expected = 'not installed' }
+        @{ Case = 'the status read throws'; Client = { [pscustomobject]@{ ClientVersion = '5.00' } }; Status = { throw 'Access denied' }; Expected = 'status cannot be read' }
+    ) {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Client = $Client; Status = $Status; Expected = $Expected } {
+            param($Client, $Status, $Expected)
+            Mock Get-CimInstance $Client -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance $Status -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Remove-CimInstance { }
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockFullInventory $false
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match $Expected
+            Should -Invoke Remove-CimInstance -Times 0 -Exactly
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'lists only the trigger in a dry run with no record, and accepts null dates' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            $objRaw = & $script:scriptBlockFullInventory $true
+            ($objRaw.Steps -join "`n") | Should -Not -Match 'would delete'
+            ($objRaw.Steps -join "`n") | Should -Match 'would trigger'
+            $objNull = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = $null; LastReportDate = $null; LastMajorReportVersion = [uint32]0; LastMinorReportVersion = [uint32]0 }
+            Mock Get-CimInstance { $objNull } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            (& $script:scriptBlockFullInventory $true).Succeeded | Should -BeTrue
+        }
+    }
+
+    It 'requires the DryRun argument in every device script' {
+        InModuleScope DeviceInspectorCommon {
+            foreach ($scriptBlockDevice in @($script:scriptBlockPolicyUpdate, $script:scriptBlockFullInventory)) {
+                $objParameter = $scriptBlockDevice.Ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'DryRun' }
+                ($objParameter.Attributes | Where-Object { $_.TypeName.Name -eq 'Parameter' }).Extent.Text | Should -Match 'Mandatory = \$true'
+            }
         }
     }
 

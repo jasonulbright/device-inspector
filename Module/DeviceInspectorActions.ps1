@@ -10,7 +10,7 @@
 # Runs on the device. Requests machine policy, then evaluates it. A ReturnValue other
 # than 0 stops the run, because the evaluation of old policy has no use.
 $script:scriptBlockPolicyUpdate = {
-    param ([bool]$DryRun)
+    param ([Parameter(Mandatory = $true)][bool]$DryRun)
 
     $ErrorActionPreference = 'Stop'
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
@@ -60,7 +60,7 @@ $script:scriptBlockPolicyUpdate = {
 # starts a hardware inventory cycle. Without the record, the client sends a full report
 # instead of a delta, so the site replaces all hardware inventory of the device.
 $script:scriptBlockFullInventory = {
-    param ([bool]$DryRun)
+    param ([Parameter(Mandatory = $true)][bool]$DryRun)
 
     $ErrorActionPreference = 'Stop'
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
@@ -77,36 +77,41 @@ $script:scriptBlockFullInventory = {
     }
     $listStep.Add(('Client version {0} answers.' -f [string]$objClient.ClientVersion))
     try {
-        $objStatus = Get-CimInstance -Namespace 'root\ccm\invagt' -ClassName 'InventoryActionStatus' -Filter ("InventoryActionID = '{0}'" -f $strActionId)
+        $arrStatus = @(Get-CimInstance -Namespace 'root\ccm\invagt' -ClassName 'InventoryActionStatus' -Filter ("InventoryActionID = '{0}'" -f $strActionId))
     } catch {
         return [pscustomobject]@{ Succeeded = $false; Summary = ('The hardware inventory status cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
     }
-    if ($null -ne $objStatus) {
-        $strCycle = ''
-        $strReport = ''
-        if ($null -ne $objStatus.LastCycleStartedDate) {
-            $strCycle = ([datetime]$objStatus.LastCycleStartedDate).ToUniversalTime().ToString($strFormat, $objCulture)
+    foreach ($objStatus in $arrStatus) {
+        try {
+            $strCycle = ''
+            $strReport = ''
+            if ($null -ne $objStatus.LastCycleStartedDate) {
+                $strCycle = ([datetime]$objStatus.LastCycleStartedDate).ToUniversalTime().ToString($strFormat, $objCulture)
+            }
+            if ($null -ne $objStatus.LastReportDate) {
+                $strReport = ([datetime]$objStatus.LastReportDate).ToUniversalTime().ToString($strFormat, $objCulture)
+            }
+            $listStep.Add(('Hardware inventory status: last cycle {0}, last report {1}, report version {2}.{3}.' -f $strCycle, $strReport, $objStatus.LastMajorReportVersion, $objStatus.LastMinorReportVersion))
+        } catch {
+            $listStep.Add('Hardware inventory status: a record exists. Its values cannot be read.')
         }
-        if ($null -ne $objStatus.LastReportDate) {
-            $strReport = ([datetime]$objStatus.LastReportDate).ToUniversalTime().ToString($strFormat, $objCulture)
-        }
-        $listStep.Add(('Hardware inventory status: last cycle {0}, last report {1}, report version {2}.{3}.' -f $strCycle, $strReport, $objStatus.LastMajorReportVersion, $objStatus.LastMinorReportVersion))
-    } else {
+    }
+    if ($arrStatus.Count -eq 0) {
         $listStep.Add('No hardware inventory status record exists. The next cycle sends a full report.')
     }
     if ($DryRun) {
-        if ($null -ne $objStatus) {
+        foreach ($objStatus in $arrStatus) {
             $listStep.Add(('Dry run: would delete the InventoryActionStatus record {0} in root\ccm\invagt.' -f $strActionId))
         }
         $listStep.Add(('Dry run: would trigger Hardware Inventory {0}.' -f $strActionId))
         return [pscustomobject]@{ Succeeded = $true; Summary = 'Dry run: the client answers. Nothing changed.'; Steps = @($listStep) }
     }
-    if ($null -ne $objStatus) {
+    foreach ($objStatus in $arrStatus) {
         try {
             Remove-CimInstance -InputObject $objStatus
         } catch {
             $listStep.Add(('Delete of the status record failed: {0}' -f $_.Exception.Message))
-            return [pscustomobject]@{ Succeeded = $false; Summary = 'The hardware inventory status record cannot be deleted. Nothing changed.'; Steps = @($listStep) }
+            return [pscustomobject]@{ Succeeded = $false; Summary = 'The hardware inventory status record cannot be deleted. The schedule was not triggered.'; Steps = @($listStep) }
         }
         $listStep.Add(('Deleted the InventoryActionStatus record {0}.' -f $strActionId))
     }
@@ -126,7 +131,7 @@ $script:scriptBlockFullInventory = {
         return [pscustomobject]@{ Succeeded = $false; Summary = ('The cycle did not start (return value {0}). The next scheduled cycle sends a full report.' -f $objReturnValue); Steps = @($listStep) }
     }
     $listStep.Add(('Triggered Hardware Inventory {0}.' -f $strActionId))
-    [pscustomobject]@{ Succeeded = $true; Summary = 'The client started a full hardware inventory. The site gets the full report in the next minutes.'; Steps = @($listStep) }
+    [pscustomobject]@{ Succeeded = $true; Summary = 'The client started a hardware inventory cycle with no status record, so it sends a full report. InventoryAgent.log on the device shows the report.'; Steps = @($listStep) }
 }
 
 #endregion Remote script blocks
