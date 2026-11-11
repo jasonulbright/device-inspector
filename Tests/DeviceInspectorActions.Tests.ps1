@@ -1139,7 +1139,7 @@ Describe 'Add to collection' {
     }
 
     It 'refuses the add when the device is not a member of the limiting collection, also in a dry run' {
-        Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { } -ParameterFilter { $CollectionId -eq 'SMS00001' }
+        Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { }
         $objDry = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ00030' -Operation Add -DryRun
         $objDry.Succeeded | Should -BeFalse
         $objDry.Summary | Should -Match 'not a member of the limiting collection SMS00001'
