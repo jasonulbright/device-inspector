@@ -248,6 +248,12 @@ function Test-DeviceActionReady {
     return [bool]($script:ActionsEnabled -and -not $script:IsBusy -and $script:Inspection -and $null -ne $script:Inspection.Device)
 }
 
+# After a full inventory or a repair the check is out of date until the next inspection.
+function Clear-InventoryCheck {
+    if ($script:Inspection -and $null -ne $script:Inspection.PSObject.Properties['InventoryCheck']) { $script:Inspection.InventoryCheck = $null }
+    Update-ControlState
+}
+
 function Test-InventoryCorrupt {
     if (-not $script:Inspection) { return $false }
     $check = $script:Inspection.PSObject.Properties['InventoryCheck']
@@ -872,7 +878,7 @@ $btnPolicyUpdate.Add_Click({
 })
 
 $btnFullInventory.Add_Click({
-    Invoke-DeviceAction -Name 'Full hardware inventory' -Function 'Invoke-DeviceInspectorFullInventory' `
+    Invoke-DeviceAction -Name 'Full hardware inventory' -Function 'Invoke-DeviceInspectorFullInventory' -AfterRun { param($r) Clear-InventoryCheck } `
         -Message 'The tool deletes the hardware inventory status record on the device (InventoryActionStatus, root\ccm\invagt), then starts a hardware inventory cycle. The client then sends a full report, and the site replaces all hardware inventory of the device.'
 })
 
@@ -881,7 +887,7 @@ $btnRepairInventory.Add_Click({
     $check = $script:Inspection.InventoryCheck
     Invoke-DeviceAction -Name 'Corrupt-inventory repair' -Function 'Invoke-DeviceInspectorInventoryRepair' `
         -Message ('{0} The tool deletes the hardware inventory status record on the device and starts a hardware inventory. The client sends a full report, and the site replaces the hardware inventory of the device. Inspect again after the site processes the report.' -f $check.Message) `
-        -AfterRun { param($r) Add-LogLine ('{0}: inspect {1} again after the site processes the full report.' -f $r.Action, $r.ComputerName) }
+        -AfterRun { param($r) Clear-InventoryCheck; Add-LogLine ('{0}: inspect {1} again after the site processes the full report.' -f $r.Action, $r.ComputerName) }
 })
 
 # === Log file ===

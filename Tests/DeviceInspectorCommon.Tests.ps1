@@ -224,6 +224,26 @@ Describe 'Get-SiteFact' {
         }
     }
 
+    It 'reads the hardware scan time also from DMTF text with no zone' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery { if ($Query -like '*WORKSTATION_STATUS*') { [pscustomobject]@{ LastHardwareScan = '20261110192232.000000+***' } } }
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            (Get-SiteFact -ComputerName 'WS01' -Problems $listProblem).HardwareScanClientTime | Should -Be '2026-11-10T19:22:32'
+        }
+    }
+
+    It 'counts the rows of each application class and marks a failed class read' {
+        InModuleScope DeviceInspectorCommon {
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.ApplicationReadComplete | Should -BeTrue
+            $objSite.ApplicationRowsByClass.SMS_G_System_ADD_REMOVE_PROGRAMS | Should -Be 2
+            $objSite.ApplicationRowsByClass.SMS_G_System_ADD_REMOVE_PROGRAMS_64 | Should -Be 1
+            Mock Invoke-SiteQuery { if ($Query -like '*ADD_REMOVE_PROGRAMS_64*') { throw 'class missing' } }
+            (Get-SiteFact -ComputerName 'WS01' -Problems $listProblem).ApplicationReadComplete | Should -BeFalse
+        }
+    }
+
     It 'reads the device record with Get-CMDevice by exact name' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'

@@ -58,9 +58,9 @@ Each inspection with the site and the device runs an inventory check. The Device
 | **Current** | The hardware scan time of the site is not older than the start of the last hardware inventory cycle on the device, and the installed applications of the site inventory and of the device match. Both times are local clock times of the device. |
 | **Corrupt** | The site inventory is current, but applications differ. The rows **Difference** name them. The **Problems** panel gets a line. |
 | **NotCurrent** | The site has not processed the last hardware inventory cycle of the device yet. The check does not compare the applications. |
-| **Unknown** | The site record, the client facts or a date is missing. |
+| **Unknown** | The site record, the client facts, a date or the cycle record is missing; the site or the device application read failed; or a site inventory class has no rows (the class can be off in the client settings). |
 
-An application on the device with an install date on or after the day of the last cycle does not count, because the next cycle reports it.
+An application on the device with an install date on or after the day of the last cycle does not count, because the next cycle reports it. The install date can be `yyyyMMdd`, `yyyy-MM-dd`, `yyyy/MM/dd` or `M/d/yyyy`. An application that is removed or changed after the last cycle also shows as a difference, so the state **Corrupt** is a hint. Check the **Difference** rows before you repair.
 
 The check reads the hardware scan time from `SMS_G_System_WORKSTATION_STATUS`. The site stores it as the local clock time of the client, with no zone. The **Last hardware inventory** fact of the site record comes from `Get-CMDevice`. On the lab on 2026-11-11 it showed the date of an older report for hours after the site processed a new full report. The check does not use it.
 
@@ -71,7 +71,7 @@ The **Repair inventory...** button is on the Device panel. It is on only when th
 3. Select **Repair inventory...**. The dialog shows the result of the check.
 4. Select **Dry run**, then select **Repair inventory...** again and select **Run**.
 
-The repair runs the same device steps as **Full hardware inventory**, under the action name `Corrupt-inventory repair`. Inspect the device again after the site processes the full report. The state is then **Current**.
+The repair runs the same device steps as **Full hardware inventory**, under the action name `Corrupt-inventory repair`. After the repair, and after **Full hardware inventory**, the button is off until the next inspection. Inspect the device again after the site processes the full report. The state is then **Current**.
 
 ## Options and settings of this page
 
