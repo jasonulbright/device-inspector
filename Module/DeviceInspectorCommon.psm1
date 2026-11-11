@@ -2787,7 +2787,9 @@ function Get-DeviceInspectorActionBlock {
     # .DESCRIPTION
     # The window calls it before it opens a confirmation and before it turns a menu
     # entry on. A device action needs an inspection that reached the device. A site
-    # action needs an inspection that found the device on the site.
+    # action needs an inspection that found the device on the site. A device runs one
+    # action at a time: when Run holds a running action of ComputerName, the function
+    # returns that reason. A running action of another device does not block.
     #
     # .PARAMETER Inspection
     # The inspection on screen, or $null.
@@ -2796,10 +2798,21 @@ function Get-DeviceInspectorActionBlock {
     # The state of the Enable actions switch.
     #
     # .PARAMETER Busy
-    # $true while background work runs.
+    # $true while exclusive background work runs: an inspection, a search or a change of
+    # the site. A running device action does not set it.
     #
     # .PARAMETER Kind
     # Device or Site.
+    #
+    # .PARAMETER Run
+    # The running device actions, from New-DeviceInspectorActionRun. Optional.
+    #
+    # .PARAMETER ComputerName
+    # The device that the action targets. Optional. Without it the function does not check
+    # the running actions.
+    #
+    # .PARAMETER ResourceId
+    # The site resource ID of the device, when the inspection knows it. Optional.
     #
     # .EXAMPLE
     # Get-DeviceInspectorActionBlock -Inspection $null -ActionsEnabled $true -Busy $false -Kind Site
@@ -2815,7 +2828,7 @@ function Get-DeviceInspectorActionBlock {
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.2.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
     param (
@@ -2831,7 +2844,19 @@ function Get-DeviceInspectorActionBlock {
 
         [Parameter(Mandatory = $true)]
         [ValidateSet('Device', 'Site')]
-        [string]$Kind
+        [string]$Kind,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [object[]]$Run = @(),
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyString()]
+        [string]$ComputerName = '',
+
+        [Parameter(Mandatory = $false)]
+        [long]$ResourceId = 0
     )
 
     process {
@@ -2840,6 +2865,10 @@ function Get-DeviceInspectorActionBlock {
         }
         if ($Busy) {
             return 'Wait for the running task to end.'
+        }
+        $strRunBlock = Get-DeviceInspectorRunBlock -Run @($Run) -ComputerName $ComputerName -ResourceId $ResourceId
+        if (-not [string]::IsNullOrEmpty($strRunBlock)) {
+            return $strRunBlock
         }
         if ($Kind -eq 'Device') {
             if ($null -eq $Inspection -or $null -eq $Inspection.PSObject.Properties['Device'] -or $null -eq $Inspection.Device) {
@@ -2905,4 +2934,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Get-DeviceInspectorCollectionList', 'Select-DeviceInspectorAddableCollection', 'Get-DeviceInspectorDeviceList', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Get-DeviceInspectorCollectionList', 'Select-DeviceInspectorAddableCollection', 'Get-DeviceInspectorDeviceList', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord', 'New-DeviceInspectorActionId', 'New-DeviceInspectorActionRun', 'Get-DeviceInspectorRunningAction', 'Get-DeviceInspectorRunBlock', 'Get-DeviceInspectorDeviceKey', 'Test-DeviceInspectorRunFinished', 'Resolve-DeviceInspectorRunResult', 'Register-DeviceInspectorActionRun', 'Unregister-DeviceInspectorActionRun', 'Add-DeviceInspectorActionId', 'Write-DeviceInspectorCloseLog'

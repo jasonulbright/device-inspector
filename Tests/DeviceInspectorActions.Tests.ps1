@@ -138,7 +138,7 @@ Describe 'Policy update script on the device' {
 Describe 'Action log' {
     BeforeAll {
         $script:objSample = [pscustomobject]@{
-            Action = 'Client policy update'; ComputerName = 'WS01'; DryRun = $true; Mode = 'DRY RUN'
+            ActionId = 'a1b2c3d4'; Action = 'Client policy update'; ComputerName = 'WS01'; DryRun = $true; Mode = 'DRY RUN'
             StartedAt = '2026-11-10T20:00:00Z'; Account = 'EXAMPLE\admin'; Succeeded = $true
             Summary = 'Dry run: the client answers. Nothing changed.'; Steps = @('Client version 5.00 answers.', 'Dry run: would trigger x.')
         }
@@ -147,8 +147,16 @@ Describe 'Action log' {
     It 'formats one header line and one line for each step' {
         $arrLine = @(ConvertTo-DeviceInspectorActionText -Result $script:objSample)
         $arrLine.Count | Should -Be 3
-        $arrLine[0] | Should -Be '2026-11-10T20:00:00Z | EXAMPLE\admin | WS01 | Client policy update | DRY RUN | OK | Dry run: the client answers. Nothing changed.'
+        $arrLine[0] | Should -Be '2026-11-10T20:00:00Z | a1b2c3d4 | EXAMPLE\admin | WS01 | Client policy update | DRY RUN | OK | Dry run: the client answers. Nothing changed.'
         $arrLine[1] | Should -Be '    Client version 5.00 answers.'
+    }
+
+    It 'shows a hyphen in the ID field for a result that has no ID' {
+        $objOld = [pscustomobject]@{
+            Action = 'Client policy update'; ComputerName = 'WS01'; DryRun = $false; Mode = 'RUN'
+            StartedAt = '2026-11-10T20:00:00Z'; Account = 'EXAMPLE\admin'; Succeeded = $true; Summary = 'Done.'; Steps = @()
+        }
+        @(ConvertTo-DeviceInspectorActionText -Result $objOld)[0] | Should -Be '2026-11-10T20:00:00Z | - | EXAMPLE\admin | WS01 | Client policy update | RUN | OK | Done.'
     }
 
     It 'writes each field on one line, so device text cannot add a log line' {
@@ -165,7 +173,7 @@ Describe 'Action log' {
     It 'writes a start record with the outcome STARTED' {
         $objStart = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Outcome 'STARTED' -Summary 'The run started.' -Steps @()
         $objStart.Mode | Should -Be 'RUN'
-        @(ConvertTo-DeviceInspectorActionText -Result $objStart)[0] | Should -Match '\| WS01 \| Client policy update \| RUN \| STARTED \| The run started\.$'
+        @(ConvertTo-DeviceInspectorActionText -Result $objStart)[0] | Should -Match '\| - \| \S+ \| WS01 \| Client policy update \| RUN \| STARTED \| The run started\.$'
     }
 
     It 'marks a failed action' {
@@ -208,14 +216,17 @@ Describe 'Action gate in the window' {
     It 'writes every run and every dry run to the action log' {
         $script:strStart | Should -Match '(?s)function Write-ActionResult \{.*?Write-DeviceInspectorActionLog -Path \$script:ActionLogPath'
         $script:strStart | Should -Match '(?s)-OnDone \{.*?Write-ActionResult -Result \$r'
+        $script:strStart | Should -Match '(?s)function Complete-DeviceActionRun \{.*?Resolve-DeviceInspectorRunResult -Run \$run.*?Write-ActionResult -Result \$record'
         $script:strStart | Should -Match '(?s)if \(\$State\.ErrorMsg\) \{\s*\$failed = New-DeviceInspectorActionRecord.*?Write-ActionResult -Result \$failed'
     }
 
     It 'writes a start record before a run and stops when it cannot write it' {
         $intStart = $script:strStart.IndexOf("-Outcome 'STARTED'")
         $intWork = $script:strStart.IndexOf('Start-ActionWork -Title $title')
+        $intRun = $script:strStart.IndexOf('Start-DeviceActionRun -Run $run')
         $intStart | Should -BeGreaterThan 0
         $intStart | Should -BeLessThan $intWork
+        $intStart | Should -BeLessThan $intRun
         $script:strStart | Should -Match "(?s)-Outcome 'STARTED'.*?catch \{.*?the run does not start.*?return\s*\}"
     }
 
@@ -600,8 +611,8 @@ Describe 'Corrupt-inventory check and repair' {
 
     It 'clears the check after a repair or a full inventory, so the button turns off' {
         $script:strStart | Should -Match "(?s)function Clear-InventoryCheck \{.*?State = 'Unknown'.*?-notlike 'Inventory: \*'.*?Show-Inspection -Inspection \`$script:Inspection.*?Update-ControlState"
-        $script:strStart | Should -Match "-Function 'Invoke-DeviceInspectorFullInventory' -AfterRun \{ param\(\`$r\) Clear-InventoryCheck \}"
-        $script:strStart | Should -Match '-AfterRun \{ param\(\$r\) Clear-InventoryCheck;'
+        $script:strStart | Should -Match "-Function 'Invoke-DeviceInspectorFullInventory' -AfterRun \{ param\(\`$r, \`$ctx\) Clear-InventoryCheck \}"
+        $script:strStart | Should -Match '-AfterRun \{ param\(\$r, \$ctx\) Clear-InventoryCheck;'
     }
 
     It 'adds the check to the facts of the Device panel' {
@@ -748,7 +759,7 @@ Describe 'Install pending updates' {
     It 'sends the confirmed IDs also for all, and selects the row under the pointer' {
         $script:strStart | Should -Match "(?s)function Invoke-UpdateInstall \{.*?UpdateId = \[string\[\]\]@\(\`$Rows \| ForEach-Object"
         $script:strStart | Should -Match '\$gridUpdates\.Add_PreviewMouseRightButtonDown\(\{ param\(\$s, \$e\) try \{ Select-RowUnderPointer -Grid \$gridUpdates'
-        $script:strStart | Should -Match "Wait for the running task to end"
+        $script:strStart | Should -Match "\`$gate = Get-ActionGateText"
     }
 
     It 'marks only device rows that the client lists as missing as installable' {
@@ -770,7 +781,7 @@ Describe 'Install pending updates' {
     It 'has two Updates menu entries that open the action through the gate' {
         $script:strXaml | Should -Match 'x:Name="menuInstallSelected"[^>]*ToolTipService.ShowOnDisabled="True"'
         $script:strXaml | Should -Match 'x:Name="menuInstallAll"'
-        $script:strStart | Should -Match "(?s)\`$gridUpdates\.ContextMenu\.Add_Opened\(\{.*?Turn on Enable actions first"
+        $script:strStart | Should -Match "(?s)\`$gridUpdates\.ContextMenu\.Add_Opened\(\{.*?\`$gate = Get-ActionGateText"
         $script:strStart | Should -Match "(?s)function Invoke-UpdateInstall \{.*?Invoke-DeviceAction -Name \`$name -Function 'Invoke-DeviceInspectorUpdateInstall'"
         $script:strStart | Should -Match "(?s)function Get-InstallableUpdateRow \{.*?Source -eq 'Device' -and \`$_\.Required"
     }
@@ -1211,10 +1222,10 @@ Describe 'Uninstall and repair an application' {
 
     It 'names the application in the STARTED line, sends the view and the key name and no command line, and turns the row off after an uninstall' {
         $script:strStart | Should -Match "-Detail @\(\('Application: \{0\} \{1\}, \{2\}, \{3\} view, key \{4\}\.'"
-        $script:strStart | Should -Match "-Outcome 'STARTED' -Summary 'The run started\.' -Steps \`$Detail"
+        $script:strStart | Should -Match "-Outcome 'STARTED' -ActionId \`$actionId -Summary 'The run started\.' -Steps \`$Detail"
         $script:strStart | Should -Match '-Parameters @\{ Operation = \$Operation; View = \[string\]\$row\.View; KeyName = \[string\]\$row\.KeyName \}'
         $script:strStart | Should -Not -Match 'ApplicationId'
-        $script:strStart | Should -Match "(?s)\`$r\.Action -like 'Uninstall\*'.*?\`$script:ApplicationRowDone\.CanUninstall = \`$false; \`$script:ApplicationRowDone\.CanRepair = \`$false.*?Update-AppFilter"
+        $script:strStart | Should -Match "(?s)\`$r\.Action -like 'Uninstall\*'.*?\`$ctx\.Row\.CanUninstall = \`$false; \`$ctx\.Row\.CanRepair = \`$false.*?Update-AppFilter"
         $script:strStart | Should -Match "(?s)function Select-RowUnderPointer \{.*?if \(-not \`$node\) \{\s*\`$Grid\.SelectedItems\.Clear\(\)"
     }
 
@@ -1517,7 +1528,7 @@ Describe 'Add to collection' {
         $script:strXaml | Should -Match 'x:Name="btnAddCollection"'
         $script:strXaml | Should -Match 'x:Name="menuAddCollection"[^>]*ToolTipService.ShowOnDisabled="True"'
         $script:strStart | Should -Match '\$btnAddCollection\.IsEnabled = Test-SiteActionReady'
-        $script:strStart | Should -Match "(?s)function Invoke-AddToCollection \{\s*\`$gate = Get-DeviceInspectorActionBlock .*?-Kind Site"
+        $script:strStart | Should -Match "(?s)function Invoke-AddToCollection \{\s*\`$gate = Get-ActionBlockText -Kind Site"
         $script:strStart | Should -Match "(?s)function Invoke-AddToCollection \{.*?Show-CollectionPickerDialog -Owner \`$window -Collections \`$choices.*?Invoke-DeviceAction -SiteAction -Name 'Add to collection' -Function 'Invoke-DeviceInspectorCollectionChange'"
         $script:strStart | Should -Match 'Select-DeviceInspectorAddableCollection -Collections @\(\$State\.Result\) -Rows @\(\$gridCollections\.ItemsSource\)'
         $script:strStart | Should -Match "(?s)function Invoke-AddToCollection \{.*?-OnDone \{\s*param\(\`$State\)\s*Update-StatusBarSummary"
@@ -1612,5 +1623,378 @@ Describe 'Device list' {
         $script:strXaml | Should -Match 'x:Name="gridDeviceList"'
         $script:strStart | Should -Match "(?s)function Invoke-DeviceListSearch \{.*?Get-DeviceInspectorDeviceList -SiteServer \`$A\.Server -SiteCode \`$A\.Code -NamePattern \`$A\.Pattern -CollectionId \`$A\.Collection"
         $script:strStart | Should -Match "(?s)function Invoke-ListInspect \{.*?\`$txtDevice\.Text = \[string\]\`$row\.Name.*?Set-ActiveView -View 'Device'.*?Invoke-Inspect"
+    }
+}
+
+Describe 'Background device actions' {
+    BeforeAll {
+        $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+        $script:objStartAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strStartPath, [ref]$null, [ref]$null)
+        function Get-TestFunctionText {
+            param([string]$Name)
+            $objFound = $script:objStartAst.Find({ param($objNode) $objNode -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $objNode.Name -eq $Name }, $true)
+            return $objFound.Extent.Text
+        }
+        function New-TestRun {
+            param([string]$ComputerName, [string]$Action = 'Client policy update', [bool]$DryRun = $false)
+            return (New-DeviceInspectorActionRun -ActionId (New-DeviceInspectorActionId) -Action $Action -ComputerName $ComputerName -DryRun $DryRun)
+        }
+        function New-TestList {
+            # The comma keeps an empty collection from becoming nothing on the way out of the function.
+            return , (New-Object -TypeName 'System.Collections.ObjectModel.ObservableCollection[object]')
+        }
+        $script:objDeviceInspection = [pscustomobject]@{ SiteServer = $null; Site = $null; Device = [pscustomobject]@{} }
+    }
+
+    Context 'Action ID' {
+        It 'makes an ID of eight hexadecimal characters, and every ID is different' {
+            $arrId = @(1..200 | ForEach-Object { New-DeviceInspectorActionId })
+            $arrId | ForEach-Object { $_ | Should -Match '^[0-9a-f]{8}$' }
+            @($arrId | Select-Object -Unique).Count | Should -Be 200
+        }
+
+        It 'writes the same ID on the STARTED line and on the result line, with the outcome and the exit code' {
+            Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $false; Summary = 'The installer failed with exit code 1603.'; Steps = @('Command ran.') } }
+            $strId = New-DeviceInspectorActionId
+            $strPath = Join-Path -Path $TestDrive -ChildPath 'Logs\ids.log'
+            $objStart = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Outcome 'STARTED' -ActionId $strId -Summary 'The run started.' -Steps @()
+            $null = Write-DeviceInspectorActionLog -Path $strPath -Result $objStart
+            $objResult = Add-DeviceInspectorActionId -Result (Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01') -ActionId $strId
+            $null = Write-DeviceInspectorActionLog -Path $strPath -Result $objResult
+            $arrHeader = @([System.IO.File]::ReadAllLines($strPath) | Where-Object { $_ -notmatch '^\s' })
+            $arrHeader.Count | Should -Be 2
+            $arrHeader[0] | Should -Match ('^\S+ \| {0} \| \S+ \| WS01 \| Client policy update \| RUN \| STARTED \| The run started\.$' -f $strId)
+            $arrHeader[1] | Should -Match ('^\S+ \| {0} \| \S+ \| WS01 \| Client policy update \| RUN \| FAILED \| The installer failed with exit code 1603\.$' -f $strId)
+        }
+
+        It 'writes an ID on the result line of a dry run' {
+            Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'Dry run: nothing changed.'; Steps = @() } }
+            $strId = New-DeviceInspectorActionId
+            $objResult = Add-DeviceInspectorActionId -Result (Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01' -DryRun) -ActionId $strId
+            $objResult.ActionId | Should -Be $strId
+            @(ConvertTo-DeviceInspectorActionText -Result $objResult)[0] | Should -Match ('\| {0} \| \S+ \| WS01 \| Client policy update \| DRY RUN \| OK \|' -f $strId)
+        }
+
+        It 'gives the record of an action function an empty ID until the window sets it' {
+            Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+            (Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01').ActionId | Should -BeNullOrEmpty
+        }
+
+        It 'makes the window write an ID on the start line, on the result line and on the failure lines' {
+            $script:strStart | Should -Match "(?s)function Invoke-DeviceAction \{.*?\`$actionId = New-DeviceInspectorActionId.*?-Outcome 'STARTED' -ActionId \`$actionId"
+            $script:strStart | Should -Match '(?s)function Complete-DeviceActionRun \{.*?Resolve-DeviceInspectorRunResult -Run \$run'
+        }
+    }
+
+    Context 'One running action for each device' {
+        It 'adds a run to the list and removes it when the run ends' {
+            $listRun = New-TestList
+            $objRun = New-TestRun -ComputerName 'WS01'
+            Register-DeviceInspectorActionRun -Runs $listRun -Run $objRun
+            $listRun.Count | Should -Be 1
+            $listRun[0].ActionId | Should -Be $objRun.ActionId
+            (Unregister-DeviceInspectorActionRun -Runs $listRun -ActionId $objRun.ActionId).ActionId | Should -Be $objRun.ActionId
+            $listRun.Count | Should -Be 0
+            Unregister-DeviceInspectorActionRun -Runs $listRun -ActionId $objRun.ActionId | Should -BeNullOrEmpty
+        }
+
+        It 'refuses a second action on a device that has a running action, without regard to case' {
+            $listRun = New-TestList
+            $objFirst = New-TestRun -ComputerName 'WS01' -Action 'Full hardware inventory'
+            Register-DeviceInspectorActionRun -Runs $listRun -Run $objFirst
+            { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-TestRun -ComputerName 'ws01') } | Should -Throw -ExpectedMessage ('Full hardware inventory (ID {0}) is running on WS01. A device runs one action at a time.' -f $objFirst.ActionId)
+            $listRun.Count | Should -Be 1
+        }
+
+        It 'refuses a dry run on a device that has a running action, and allows a new run after the first one ends' {
+            $listRun = New-TestList
+            $objFirst = New-TestRun -ComputerName 'WS01'
+            Register-DeviceInspectorActionRun -Runs $listRun -Run $objFirst
+            { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-TestRun -ComputerName 'WS01' -DryRun $true) } | Should -Throw
+            $null = Unregister-DeviceInspectorActionRun -Runs $listRun -ActionId $objFirst.ActionId
+            { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-TestRun -ComputerName 'WS01') } | Should -Not -Throw
+            $listRun.Count | Should -Be 1
+        }
+
+        It 'gives the reason, with the action, the ID and the start time, for a device action and for a site action on that device' -ForEach @(@{ Kind = 'Device' }, @{ Kind = 'Site' }) {
+            $objInspection = [pscustomobject]@{ SiteServer = 's'; Site = [pscustomobject]@{ Found = $true }; Device = [pscustomobject]@{} }
+            $objRun = New-TestRun -ComputerName 'WS01' -Action 'Uninstall application'
+            $strReason = Get-DeviceInspectorActionBlock -Inspection $objInspection -ActionsEnabled $true -Busy $false -Kind $Kind -Run @($objRun) -ComputerName 'ws01'
+            $strReason | Should -Be ('Uninstall application (ID {0}) is running on WS01 since {1}. A device runs one action at a time. Wait until it ends.' -f $objRun.ActionId, $objRun.StartedAt)
+        }
+
+        It 'does not block an action on another device, and does not block the window as busy' {
+            $objInspection = [pscustomobject]@{ SiteServer = 's'; Site = [pscustomobject]@{ Found = $true }; Device = [pscustomobject]@{} }
+            $arrRun = @((New-TestRun -ComputerName 'WS01'), (New-TestRun -ComputerName 'WS03'))
+            foreach ($strKind in 'Device', 'Site') {
+                Get-DeviceInspectorActionBlock -Inspection $objInspection -ActionsEnabled $true -Busy $false -Kind $strKind -Run $arrRun -ComputerName 'WS02' | Should -Be ''
+            }
+            Get-DeviceInspectorRunBlock -Run $arrRun -ComputerName 'WS02' | Should -Be ''
+            Get-DeviceInspectorRunningAction -Run $arrRun -ComputerName 'WS02' | Should -BeNullOrEmpty
+            Get-DeviceInspectorRunningAction -Run $arrRun -ComputerName 'ws03' | Should -Not -BeNullOrEmpty
+        }
+
+        It 'keeps the old results of the gate when no run is given' {
+            Get-DeviceInspectorActionBlock -Inspection $script:objDeviceInspection -ActionsEnabled $true -Busy $false -Kind Device | Should -Be ''
+            Get-DeviceInspectorActionBlock -Inspection $script:objDeviceInspection -ActionsEnabled $true -Busy $true -Kind Device | Should -Be 'Wait for the running task to end.'
+        }
+
+        It 'passes the running list and the device of the inspection to the gate in the window' {
+            Get-TestFunctionText -Name 'Test-DeviceActionReady' | Should -Match '-Run @\(\$script:RunList\) -ComputerName \(Get-ActionTargetName\)'
+            Get-TestFunctionText -Name 'Test-SiteActionReady' | Should -Match '-Run @\(\$script:RunList\) -ComputerName \(Get-ActionTargetName\)'
+            Get-TestFunctionText -Name 'Get-ActionGateText' | Should -Match 'Get-ActionBlockText -Kind Device'
+        }
+
+        It 'registers the run before it writes the start line, and takes it off the list when the start fails' {
+            $strText = Get-TestFunctionText -Name 'Invoke-DeviceAction'
+            $strText.IndexOf('Register-DeviceInspectorActionRun') | Should -BeGreaterThan 0
+            $strText.IndexOf('Register-DeviceInspectorActionRun') | Should -BeLessThan $strText.IndexOf("-Outcome 'STARTED'")
+            $strText | Should -Match "(?s)catch \{\s*\`$logProblem.*?Unregister-DeviceInspectorActionRun.*?the run does not start"
+            $strText | Should -Match "(?s)Start-DeviceActionRun -Run \`$run.*?catch \{.*?Unregister-DeviceInspectorActionRun.*?return\s*\}\s*# From here the work executes"
+        }
+    }
+
+    Context 'The window stays free while a device action runs' {
+        It 'does not set the busy state for a device action, and runs it in its own runspace' {
+            foreach ($strName in 'Start-DeviceActionRun', 'Complete-DeviceActionRun', 'Update-DeviceActionRun', 'Get-ActionRunspace') {
+                Get-TestFunctionText -Name $strName | Should -Not -Match 'IsBusy' -Because $strName
+                Get-TestFunctionText -Name $strName | Should -Not -Match 'Start-BackgroundWork' -Because $strName
+            }
+            Get-TestFunctionText -Name 'Start-DeviceActionRun' | Should -Match '\$ps\.BeginInvoke\(\)'
+            Get-TestFunctionText -Name 'Get-ActionRunspace' | Should -Match 'New-SuiteBgRunspace'
+        }
+
+        It 'keeps Inspect, the device list search and the list controls on while only a device action runs' {
+            $strText = Get-TestFunctionText -Name 'Update-ControlState'
+            $strText | Should -Match '\$idle = -not \$script:IsBusy'
+            $strText | Should -Not -Match 'RunList.*btnInspect|btnInspect.*RunList'
+            $strText | Should -Match '\$btnInspect\.IsEnabled\s+= \$idle'
+            $strText | Should -Match '\$btnListSearch\.IsEnabled = \$idle'
+            Get-TestFunctionText -Name 'Invoke-DeviceListSearch' | Should -Match 'if \(\$script:IsBusy\) \{ return \}'
+        }
+
+        It 'has no wait-for-the-running-task gate in the start script, so a run on one device does not block another' {
+            $script:strStart | Should -Not -Match 'Wait for the running task to end'
+        }
+
+        It 'keeps the exclusive busy path for a site action and for the inspection' {
+            Get-TestFunctionText -Name 'Invoke-DeviceAction' | Should -Match '(?s)Start-ActionWork -Title \$title'
+            Get-TestFunctionText -Name 'Start-ActionWork' | Should -Match 'Start-BackgroundWork'
+            Get-TestFunctionText -Name 'Invoke-Inspect' | Should -Match 'Start-BackgroundWork'
+        }
+
+        It 'polls the runs on a DispatcherTimer, so every change of the window runs on the Dispatcher thread' {
+            Get-TestFunctionText -Name 'Start-DeviceActionRun' | Should -Match 'System\.Windows\.Threading\.DispatcherTimer'
+            Get-TestFunctionText -Name 'Start-DeviceActionRun' | Should -Match 'Add_Tick\(\{ Update-DeviceActionRun \}\)'
+            Get-TestFunctionText -Name 'Update-DeviceActionRun' | Should -Match 'Complete-DeviceActionRun -Job \$job'
+        }
+
+        It 'takes the run off the list, writes the result and refreshes the view only when it shows the device of the run' {
+            $strText = Get-TestFunctionText -Name 'Complete-DeviceActionRun'
+            $strText | Should -Match 'Unregister-DeviceInspectorActionRun -Runs \$script:RunList'
+            $strText | Should -Match '\$onScreen = .*?Get-DeviceInspectorRunningAction -Run @\(\$run\) -ComputerName \(Get-ActionTargetName\) -ResourceId \(Get-ActionTargetResourceId\)'
+            $strText.IndexOf('$onScreen') | Should -BeLessThan $strText.IndexOf('& $Job.AfterRun')
+            $strText | Should -Match 'is not the device on screen'
+        }
+
+        It 'shows the result in a window that does not take the focus' {
+            $strText = Get-TestFunctionText -Name 'Show-ActionResultNotice'
+            $strText | Should -Match 'ShowActivated="False"'
+            $strText | Should -Match '\$dlg\.Show\(\)'
+            $strText | Should -Not -Match 'Show(Dialog)'
+            Get-TestFunctionText -Name 'Complete-DeviceActionRun' | Should -Match 'Show-ActionResultNotice'
+            Get-TestFunctionText -Name 'Complete-DeviceActionRun' | Should -Not -Match 'Show-ThemedMessage'
+        }
+
+        It 'shows the running actions in a list with the device, the action, the start time and the ID' {
+            $script:strXaml | Should -Match '(?s)x:Name="panelRuns"[^>]*Visibility="Collapsed".*?x:Name="gridRuns"'
+            foreach ($strBinding in 'ComputerName', 'Action', 'Mode', 'StartedAt', 'ActionId') {
+                $script:strXaml | Should -Match ('(?s)x:Name="gridRuns".*?Binding="\{{Binding {0}\}}"' -f $strBinding)
+            }
+            $script:strStart | Should -Match '\$gridRuns\.ItemsSource = \$script:RunList'
+            Get-TestFunctionText -Name 'Update-RunPanel' | Should -Match 'RunList\.Count'
+            Get-TestFunctionText -Name 'Update-ControlState' | Should -Match 'Update-RunPanel'
+        }
+
+        It 'puts the running list above the views, and keeps the log splitter between the views and the log' {
+            $script:strXaml | Should -Match '(?s)x:Name="panelRuns" Grid\.Row="2".*?<Grid Grid\.Row="3" Margin="8,0,8,0">.*?<GridSplitter Grid\.Row="4".*?<Border Grid\.Row="5">.*?<Border Grid\.Row="6"'
+        }
+
+        It 'gives a button that is off for a running device the reason as its tooltip' {
+            Get-TestFunctionText -Name 'Update-ControlState' | Should -Match 'Get-DeviceInspectorRunBlock -Run @\(\$script:RunList\)'
+            Get-TestFunctionText -Name 'Set-RunTooltip' | Should -Match 'SetShowOnDisabled'
+        }
+
+        It 'uses the reason of the gate as the tooltip of a menu entry that is off' {
+            $script:strStart | Should -Match "(?s)\`$gridApps\.ContextMenu\.Add_Opened\(\{\s*\`$gate = Get-ActionGateText.*?Set-MenuItemState -Item \`$pair\.Item -Enabled \`$false -Reason \`$gate"
+        }
+    }
+
+    Context 'Closing the window while a run is open' {
+        It 'writes one CLOSED line with the ID for each run that is still open' {
+            $strPath = Join-Path -Path $TestDrive -ChildPath 'Logs\close.log'
+            $arrRun = @((New-TestRun -ComputerName 'WS01' -Action 'Application uninstall'), (New-TestRun -ComputerName 'WS02' -Action 'Full hardware inventory' -DryRun $true))
+            (Write-DeviceInspectorCloseLog -Path $strPath -Run $arrRun) | Should -Be 2
+            $arrHeader = @([System.IO.File]::ReadAllLines($strPath) | Where-Object { $_ -notmatch '^\s' })
+            $arrHeader.Count | Should -Be 2
+            $arrHeader[0] | Should -Match ('^\S+ \| {0} \| \S+ \| WS01 \| Application uninstall \| RUN \| CLOSED \| ' -f $arrRun[0].ActionId)
+            $arrHeader[1] | Should -Match ('^\S+ \| {0} \| \S+ \| WS02 \| Full hardware inventory \| DRY RUN \| CLOSED \| ' -f $arrRun[1].ActionId)
+            $arrHeader[0] | Should -Match 'The tool stopped waiting for it\. The run can stop before it is complete\. The result is not known\.$'
+            $arrHeader[0] | Should -Not -Match 'continues'
+        }
+
+        It 'writes no line and no file when no run is open' {
+            $strPath = Join-Path -Path $TestDrive -ChildPath 'Logs\none.log'
+            (Write-DeviceInspectorCloseLog -Path $strPath -Run @()) | Should -Be 0
+            Test-Path -LiteralPath $strPath | Should -BeFalse
+        }
+
+        It 'asks for a confirmation that names the runs, cancels the close on No, and writes the close lines on Yes' {
+            $strClosing = [regex]::Match($script:strStart, '(?s)\$window\.Add_Closing\(\{.*?\r?\n\}\)').Value
+            $strClosing | Should -Match 'if \(\$script:RunList\.Count -gt 0\)'
+            $strClosing | Should -Match 'Show-CloseWarningDialog -Runs @\(\$script:RunList\)'
+            $strClosing | Should -Match "if \(\`$answer -ne 'Close'\) \{ \`$e\.Cancel = \`$true; return \}"
+            $strClosing | Should -Match 'Write-DeviceInspectorCloseLog -Path \$script:ActionLogPath -Run \$open'
+            $strClosing.IndexOf('Write-DeviceInspectorCloseLog') | Should -BeLessThan $strClosing.IndexOf('Stop-DeviceActionRun')
+            # One pass over the runs after the confirmation and before the snapshot of the open runs.
+            $strClosing.IndexOf('Update-DeviceActionRun') | Should -BeGreaterThan $strClosing.IndexOf('Show-CloseWarningDialog')
+            $strClosing.IndexOf('Update-DeviceActionRun') | Should -BeLessThan $strClosing.IndexOf('$open = ')
+        }
+
+        It 'uses the owner text in the close dialog, with Wait as the default button, and never stops an open run' {
+            $strDialog = Get-TestFunctionText -Name 'Show-CloseWarningDialog'
+            $strDialog | Should -Match 'actions are still running\. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete\. Wait for the running actions to end before you close\.'
+            $strDialog | Should -Match 'x:Name="btnWait"[^>]*IsDefault="True" IsCancel="True"'
+            $strDialog | Should -Not -Match 'x:Name="btnCloseAnyway"[^>]*IsDefault'
+            $strStop = Get-TestFunctionText -Name 'Stop-DeviceActionRun'
+            $strStop | Should -Not -Match 'BeginStop|\$job'
+            $script:strStart | Should -Not -Match 'runs on the devices continue'
+        }
+    }
+}
+
+Describe 'Device key for the one-action-for-each-device check' {
+    It 'gives the key <Key> for the name <Name>' -ForEach @(
+        @{ Name = 'WS01'; Key = 'ws01' }
+        @{ Name = 'ws01'; Key = 'ws01' }
+        @{ Name = 'ws01.corp.local'; Key = 'ws01' }
+        @{ Name = 'WS01.CORP.LOCAL'; Key = 'ws01' }
+        @{ Name = '  Ws01.Corp  '; Key = 'ws01' }
+        @{ Name = '10.0.0.5'; Key = '10.0.0.5' }
+        @{ Name = '2001:DB8::1'; Key = '2001:db8::1' }
+        @{ Name = ''; Key = '' }
+    ) {
+        Get-DeviceInspectorDeviceKey -ComputerName $Name | Should -Be $Key
+    }
+
+    It 'treats WS01, ws01.corp.local and WS01.CORP.LOCAL as one device, for a run and for a dry run' {
+        $listRun = New-Object -TypeName 'System.Collections.ObjectModel.ObservableCollection[object]'
+        $objFirst = New-DeviceInspectorActionRun -ActionId 'aaaaaaaa' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false
+        Register-DeviceInspectorActionRun -Runs $listRun -Run $objFirst
+        foreach ($strName in 'ws01.corp.local', 'WS01.CORP.LOCAL', 'Ws01') {
+            { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-DeviceInspectorActionRun -ActionId 'bbbbbbbb' -Action 'Full hardware inventory' -ComputerName $strName -DryRun $true) } | Should -Throw -Because $strName
+        }
+        $listRun.Count | Should -Be 1
+        { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-DeviceInspectorActionRun -ActionId 'cccccccc' -Action 'Full hardware inventory' -ComputerName 'WS02.corp.local' -DryRun $false) } | Should -Not -Throw
+    }
+
+    It 'gives the same reason to the gate of a device action and of a site action for each spelling of the name' -ForEach @(@{ Kind = 'Device' }, @{ Kind = 'Site' }) {
+        $objInspection = [pscustomobject]@{ SiteServer = 's'; Site = [pscustomobject]@{ Found = $true }; Device = [pscustomobject]@{} }
+        $objRun = New-DeviceInspectorActionRun -ActionId 'aaaaaaaa' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false
+        foreach ($strName in 'WS01', 'ws01.corp.local', 'WS01.CORP.LOCAL') {
+            Get-DeviceInspectorActionBlock -Inspection $objInspection -ActionsEnabled $true -Busy $false -Kind $Kind -Run @($objRun) -ComputerName $strName | Should -Match '^Client policy update \(ID aaaaaaaa\) is running on WS01 since ' -Because $strName
+        }
+        Get-DeviceInspectorActionBlock -Inspection $objInspection -ActionsEnabled $true -Busy $false -Kind $Kind -Run @($objRun) -ComputerName 'WS02.corp.local' | Should -Be ''
+    }
+
+    It 'treats two names with the same site resource ID as one device, and an IP address without a resource ID as another' {
+        $objRun = New-DeviceInspectorActionRun -ActionId 'aaaaaaaa' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -ResourceId 16777300
+        Get-DeviceInspectorRunningAction -Run @($objRun) -ComputerName '10.0.0.5' | Should -BeNullOrEmpty
+        Get-DeviceInspectorRunningAction -Run @($objRun) -ComputerName '10.0.0.5' -ResourceId 16777300 | Should -Not -BeNullOrEmpty
+        Get-DeviceInspectorRunningAction -Run @($objRun) -ComputerName '10.0.0.5' -ResourceId 16777301 | Should -BeNullOrEmpty
+        Get-DeviceInspectorRunBlock -Run @($objRun) -ComputerName 'ws01.corp.local' -ResourceId 0 | Should -Match 'is running on WS01'
+        $listRun = New-Object -TypeName 'System.Collections.ObjectModel.ObservableCollection[object]'
+        Register-DeviceInspectorActionRun -Runs $listRun -Run $objRun
+        { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-DeviceInspectorActionRun -ActionId 'bbbbbbbb' -Action 'Full hardware inventory' -ComputerName '10.0.0.5' -DryRun $false -ResourceId 16777300) } | Should -Throw
+    }
+}
+
+Describe 'End of a run' {
+    BeforeAll {
+        $script:objRun = New-DeviceInspectorActionRun -ActionId 'a1b2c3d4' -Action 'Corrupt-inventory repair' -ComputerName 'WS01' -DryRun $false
+        function Get-TestHeaderLine {
+            param([object]$Record)
+            $strPath = Join-Path -Path $TestDrive -ChildPath ('Logs\{0}.log' -f [guid]::NewGuid().ToString('N'))
+            $null = Write-DeviceInspectorActionLog -Path $strPath -Result $Record
+            return , @([System.IO.File]::ReadAllLines($strPath) | Where-Object { $_ -notmatch '^\s' })
+        }
+    }
+
+    It 'says that a run has ended when Done is set, or when the asynchronous call is completed, and not before' {
+        Test-DeviceInspectorRunFinished -State @{ Done = $true } -Handle $null | Should -BeTrue
+        Test-DeviceInspectorRunFinished -State ([hashtable]::Synchronized(@{ Done = $false })) -Handle ([pscustomobject]@{ IsCompleted = $true }) | Should -BeTrue
+        Test-DeviceInspectorRunFinished -State ([pscustomobject]@{ Done = $false }) -Handle ([pscustomobject]@{ IsCompleted = $false }) | Should -BeFalse
+        Test-DeviceInspectorRunFinished -State @{ Done = $false } -Handle $null | Should -BeFalse
+        Test-DeviceInspectorRunFinished -State $null -Handle ([pscustomobject]@{ IsCompleted = $true }) | Should -BeTrue
+    }
+
+    It 'sees a pipeline that ends without the Done flag as ended, and the failure path gives a FAILED record' {
+        $objPs = [powershell]::Create()
+        try {
+            [void]$objPs.AddScript({ throw 'The pipeline stopped.' })
+            $objHandle = $objPs.BeginInvoke()
+            $null = $objHandle.AsyncWaitHandle.WaitOne(30000)
+            $hashtableState = [hashtable]::Synchronized(@{ Done = $false; Result = $null; ErrorMsg = $null })
+            Test-DeviceInspectorRunFinished -State $hashtableState -Handle $objHandle | Should -BeTrue
+            $strProblem = ''
+            try { [void]$objPs.EndInvoke($objHandle) } catch { $strProblem = $_.Exception.Message }
+            $strProblem | Should -Match 'The pipeline stopped\.'
+            $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result $hashtableState.Result -ErrorMessage $strProblem -Detail @()
+            $objRecord.Outcome | Should -Be 'FAILED'
+            $objRecord.Summary | Should -Match 'The pipeline stopped\.'
+        } finally {
+            $objPs.Dispose()
+        }
+    }
+
+    It 'returns the result with the ID and the detail lines when the work returned exactly one result' {
+        $objResult = [pscustomobject]@{ Action = 'Corrupt-inventory repair'; ComputerName = 'WS01'; DryRun = $false; Mode = 'RUN'; StartedAt = '2026-11-11T08:00:00Z'; Account = 'EXAMPLE\admin'; Succeeded = $true; Outcome = 'OK'; Summary = 'Done.'; Steps = @() }
+        $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result @($objResult) -ErrorMessage '' -Detail @('Application: X.')
+        $objRecord.ActionId | Should -Be 'a1b2c3d4'
+        $objRecord.Steps | Should -Be @('Application: X.')
+        $arrLine = @(Get-TestHeaderLine -Record $objRecord)
+        $arrLine.Count | Should -Be 1
+        $arrLine[0] | Should -Match '\| a1b2c3d4 \| \S+ \| WS01 \| Corrupt-inventory repair \| RUN \| OK \| Done\.$'
+    }
+
+    It 'writes exactly one FAILED line that says so for <Case>' -ForEach @(
+        @{ Case = 'no result'; Result = $null; Message = ''; Expected = 'The action returned no result.' }
+        @{ Case = 'an empty array'; Result = @(); Message = ''; Expected = 'The action returned no result.' }
+        @{ Case = 'two results'; Result = @([pscustomobject]@{ Succeeded = $true }, [pscustomobject]@{ Succeeded = $true }); Message = ''; Expected = 'The action returned 2 results instead of one.' }
+        @{ Case = 'an object that is not an action result'; Result = 'text'; Message = ''; Expected = 'The action returned an object that is not an action result.' }
+        @{ Case = 'an error'; Result = $null; Message = 'WinRM cannot complete the operation.'; Expected = 'WinRM cannot complete the operation.' }
+    ) {
+        $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result $Result -ErrorMessage $Message -Detail @('Application: X.')
+        @($objRecord).Count | Should -Be 1
+        $objRecord.Outcome | Should -Be 'FAILED'
+        $objRecord.Summary | Should -Be $Expected
+        $arrLine = @(Get-TestHeaderLine -Record $objRecord)
+        $arrLine.Count | Should -Be 1
+        $arrLine[0] | Should -Match ('\| a1b2c3d4 \| \S+ \| WS01 \| Corrupt-inventory repair \| RUN \| FAILED \| {0}$' -f [regex]::Escape($Expected))
+    }
+
+    It 'writes the result line first and runs the window updates after it, each in its own try' {
+        $strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $objAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strStartPath, [ref]$null, [ref]$null)
+        $strText = $objAst.Find({ param($objNode) $objNode -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $objNode.Name -eq 'Complete-DeviceActionRun' }, $true).Extent.Text
+        $intWrite = $strText.IndexOf('Write-ActionResult -Result $record')
+        $intWrite | Should -BeGreaterThan 0
+        foreach ($strLater in 'Update-ControlState', 'Update-StatusBarSummary', 'Show-ActionResultNotice', '& $Job.AfterRun') {
+            $strText.IndexOf($strLater) | Should -BeGreaterThan $intWrite -Because $strLater
+        }
+        $strText | Should -Match '(?s)try \{ Update-ControlState \} catch.*?try \{ Update-StatusBarSummary \} catch'
+        $strStart | Should -Match '(?s)function Write-ActionResult \{.*?Write-DeviceInspectorActionLog.*?foreach \(\$line in .*?Add-LogLine'
+        $strStart | Should -Match '(?s)function Update-DeviceActionRun \{.*?Test-DeviceInspectorRunFinished -State \$job\.State -Handle \$job\.Handle'
     }
 }

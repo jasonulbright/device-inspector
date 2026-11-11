@@ -263,6 +263,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="120"/>
@@ -308,7 +309,27 @@
                 </Grid>
             </Border>
 
-            <Grid Grid.Row="2" Margin="8,0,8,0">
+            <!-- Running actions: shown only while a device action runs. A run ends, its row goes away. -->
+            <Border x:Name="panelRuns" Grid.Row="2" Visibility="Collapsed" Padding="16,0,16,6">
+                <StackPanel>
+                    <TextBlock x:Name="lblRuns" Text="RUNNING ACTIONS" FontSize="10" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <DataGrid x:Name="gridRuns" MaxHeight="100" SelectionMode="Single" ColumnHeaderHeight="24"
+                              Style="{StaticResource ViewDataGrid}"
+                              ColumnHeaderStyle="{StaticResource GridHeaderStyle}"
+                              CellStyle="{StaticResource GridCellStyle}"
+                              ToolTip="Actions that run on devices now. You can inspect other devices and start actions on them. A device runs one action at a time.">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Device"  Width="2*"  Binding="{Binding ComputerName}"/>
+                            <DataGridTextColumn Header="Action"  Width="3*"  Binding="{Binding Action}"/>
+                            <DataGridTextColumn Header="Mode"    Width="80"  Binding="{Binding Mode}"/>
+                            <DataGridTextColumn Header="Started" Width="80"  Binding="{Binding StartedAt}"/>
+                            <DataGridTextColumn Header="ID"      Width="100" Binding="{Binding ActionId}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </Border>
+
+            <Grid Grid.Row="3" Margin="8,0,8,0">
 
                 <!-- ============================================================ -->
                 <!-- View: Device list                                            -->
@@ -537,11 +558,11 @@
                 </Border>
             </Grid>
 
-            <GridSplitter Grid.Row="3" Height="5" HorizontalAlignment="Stretch"
+            <GridSplitter Grid.Row="4" Height="5" HorizontalAlignment="Stretch"
                           Background="{DynamicResource MahApps.Brushes.Gray8}"
                           ResizeDirection="Rows"/>
 
-            <Border Grid.Row="4">
+            <Border Grid.Row="5">
                 <DockPanel>
                     <DockPanel DockPanel.Dock="Top" LastChildFill="False" Margin="0,2,4,2">
                         <TextBlock x:Name="lblLogOutput" DockPanel.Dock="Left" Text="LOG OUTPUT"
@@ -563,7 +584,7 @@
                 </DockPanel>
             </Border>
 
-            <Border Grid.Row="5" Padding="8,4,8,4"
+            <Border Grid.Row="6" Padding="8,4,8,4"
                     Background="{DynamicResource MahApps.Brushes.Gray10}">
                 <TextBlock x:Name="txtStatus" Text="Ready." FontSize="11"/>
             </Border>

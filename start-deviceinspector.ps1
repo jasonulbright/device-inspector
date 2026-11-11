@@ -11,8 +11,10 @@
     cmdlets and SELECT queries and reads the device with one remote script
     block. Actions change the device or the site. They run only when Enable
     actions is on, after a confirmation, and each run and dry run goes to the
-    action log. The tool uses the permissions of the signed-in user and stores
-    no password. The only files it writes are the log files, the action log
+    action log with an action ID. An action on a device runs in its own
+    background runspace, so the person can inspect other devices and start
+    actions on them while it runs. A device runs one action at a time. The
+    tool uses the permissions of the signed-in user and stores no password. The only files it writes are the log files, the action log
     and the exports that the person names.
 
     Requirements:
@@ -163,6 +165,10 @@ $btnAddCollection     = $window.FindName('btnAddCollection')
 $gridDeployments = $window.FindName('gridDeployments')
 $txtProblems     = $window.FindName('txtProblems')
 
+$panelRuns = $window.FindName('panelRuns')
+$lblRuns   = $window.FindName('lblRuns')
+$gridRuns  = $window.FindName('gridRuns')
+
 $progressOverlay  = $window.FindName('progressOverlay')
 $txtProgressTitle = $window.FindName('txtProgressTitle')
 $txtProgressStep  = $window.FindName('txtProgressStep')
@@ -259,13 +265,59 @@ $script:IsBusy     = $false
 # Actions are off at each start. The switch is not saved.
 $script:ActionsEnabled = $false
 $script:ActionLogPath  = Join-Path $__txDir 'DeviceInspector-actions.log'
+# An action on a device runs in its own runspace and does not set IsBusy. RunList holds the
+# running device actions (the list in the window is bound to it). RunJobs holds the plumbing
+# of each run. IsBusy stays only for the work that must be exclusive: an inspection, a device
+# list search, the collection list and a change of the site.
+$script:RunList       = New-Object -TypeName 'System.Collections.ObjectModel.ObservableCollection[object]'
+$script:RunJobs       = @{}
+$script:RunTimer      = $null
+$script:RunspaceIdle  = @()
+$script:ResultNotices = 0
+$script:WindowClosing = $false
+$script:CloseChoice = 'Wait'
+$script:ButtonTips    = @{}
+$gridRuns.ItemsSource = $script:RunList
+
+# The device that an action would target is the device of the inspection on screen.
+function Get-ActionTargetName {
+    if ($script:Inspection) { return [string]$script:Inspection.ComputerName }
+    return ''
+}
+
+# The site resource ID of the device on screen, when the inspection found the device on the site. 0 otherwise.
+function Get-ActionTargetResourceId {
+    if ($script:Inspection -and $script:Inspection.Site -and $script:Inspection.Site.Found -and $script:Inspection.Site.ResourceId) { return [long]$script:Inspection.Site.ResourceId }
+    return [long]0
+}
 
 function Test-SiteActionReady {
-    return [string]::IsNullOrEmpty((Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Site))
+    return [string]::IsNullOrEmpty((Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Site -Run @($script:RunList) -ComputerName (Get-ActionTargetName) -ResourceId (Get-ActionTargetResourceId)))
 }
 
 function Test-DeviceActionReady {
-    return [string]::IsNullOrEmpty((Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Device))
+    return [string]::IsNullOrEmpty((Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Device -Run @($script:RunList) -ComputerName (Get-ActionTargetName) -ResourceId (Get-ActionTargetResourceId)))
+}
+
+function Get-ActionBlockText {
+    param([Parameter(Mandatory)][ValidateSet('Device', 'Site')][string]$Kind)
+    return [string](Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind $Kind -Run @($script:RunList) -ComputerName (Get-ActionTargetName) -ResourceId (Get-ActionTargetResourceId))
+}
+
+# A button that is off because its device has a running action shows the reason as its tooltip.
+# Any other time the button shows its own tooltip from the markup.
+function Set-RunTooltip {
+    param([Parameter(Mandatory)]$Button, [Parameter(Mandatory)][AllowEmptyString()][string]$Reason)
+    $name = [string]$Button.Name
+    if (-not $script:ButtonTips.ContainsKey($name)) { $script:ButtonTips[$name] = $Button.ToolTip }
+    [System.Windows.Controls.ToolTipService]::SetShowOnDisabled($Button, $true)
+    if ($Reason) { $Button.ToolTip = $Reason } else { $Button.ToolTip = $script:ButtonTips[$name] }
+}
+
+function Update-RunPanel {
+    $count = $script:RunList.Count
+    $panelRuns.Visibility = $(if ($count -gt 0) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed })
+    $lblRuns.Text = $(if ($count -gt 0) { 'RUNNING ACTIONS ({0})' -f $count } else { 'RUNNING ACTIONS' })
 }
 
 # After a full inventory or a repair the check is out of date until the next inspection.
@@ -306,6 +358,9 @@ function Update-ControlState {
     $btnFullInventory.IsEnabled = Test-DeviceActionReady
     $btnAddCollection.IsEnabled = Test-SiteActionReady
     $btnRepairInventory.IsEnabled = (Test-DeviceActionReady) -and (Test-InventoryCorrupt)
+    $runReason = Get-DeviceInspectorRunBlock -Run @($script:RunList) -ComputerName (Get-ActionTargetName) -ResourceId (Get-ActionTargetResourceId)
+    foreach ($button in @($btnPolicyUpdate, $btnFullInventory, $btnRepairInventory, $btnAddCollection)) { Set-RunTooltip -Button $button -Reason $runReason }
+    Update-RunPanel
 }
 
 # === View switching ===
@@ -352,6 +407,7 @@ function Update-StatusBarSummary {
         $parts += 'Enter a device name and click Inspect'
     }
     $parts += $(if ($script:ActionsEnabled) { 'actions on' } else { 'read only' })
+    if ($script:RunList.Count -gt 0) { $parts += ('{0} running' -f $script:RunList.Count) }
     Set-StatusText ($parts -join '   |   ')
 }
 
@@ -409,8 +465,7 @@ $script:BgOnDone       = $null
 $script:ActionChoice   = 'Cancel'
 $script:ActionAfterRun = $null
 $script:ActionPending  = $null
-$script:ApplicationRowDone = $null
-$script:CollectionRowDone  = $null
+$script:ActionContext  = @{}
 
 function Initialize-BgRunspace {
     if ($script:BgRunspace -and $script:BgRunspace.RunspaceStateInfo.State -eq 'Opened') { return }
@@ -827,16 +882,163 @@ function Show-ActionConfirmDialog {
     return $choice
 }
 
+# The action log line comes first, in its own try. A failure of the window log does not drop it.
 function Write-ActionResult {
     param([Parameter(Mandatory)]$Result)
-    $lines = @(ConvertTo-DeviceInspectorActionText -Result $Result)
-    foreach ($line in $lines) { Add-LogLine $line }
+    $logError = ''
     try { $null = Write-DeviceInspectorActionLog -Path $script:ActionLogPath -Result $Result }
-    catch { Add-LogLine ('The action log could not be written: {0}' -f $_.Exception.Message) }
+    catch { $logError = [string]$_.Exception.Message }
+    try {
+        foreach ($line in @(ConvertTo-DeviceInspectorActionText -Result $Result)) { Add-LogLine $line }
+        if ($logError) { Add-LogLine ('The action log could not be written: {0}' -f $logError) }
+    }
+    catch { Write-Log -Message ('The window log could not show an action result: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
+}
+
+# Shows the result of a device run in a window that does not take the focus. The person can
+# keep typing or clicking in the main window. The window goes away with OK or with the main window.
+function Show-ActionResultNotice {
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Message,
+        [ValidateSet('Info', 'Error')][string]$Icon = 'Info'
+    )
+    $dlgXaml = @'
+<Controls:MetroWindow
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+    Title="Action result" Width="460" MinHeight="140" SizeToContent="Height"
+    WindowStartupLocation="CenterOwner" TitleCharacterCasing="Normal"
+    ShowActivated="False" ShowInTaskbar="False" ResizeMode="NoResize" ShowIconOnTitleBar="False"
+    GlowBrush="{DynamicResource MahApps.Brushes.Accent}"
+    NonActiveGlowBrush="{DynamicResource MahApps.Brushes.Accent}"
+    BorderThickness="1">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Controls.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Steel.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="20,18,20,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="txtIcon" Grid.Row="0" Grid.Column="0" FontSize="20" VerticalAlignment="Top" Margin="0,0,14,0"/>
+        <TextBox x:Name="txtMsg" Grid.Row="0" Grid.Column="1" FontSize="13" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
+        <Button x:Name="btnPrimary" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Right" Margin="0,18,0,0"
+                MinWidth="90" Height="32" Content="OK"
+                Style="{DynamicResource MahApps.Styles.Button.Square.Accent}"
+                Controls:ControlsHelper.ContentCharacterCasing="Normal"/>
+    </Grid>
+</Controls:MetroWindow>
+'@
+    [xml]$xml = $dlgXaml
+    $dlg = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xml))
+    Install-TitleBarDragFallback -Window $dlg
+    $theme = [ControlzEx.Theming.ThemeManager]::Current.DetectTheme($window)
+    if ($theme) { [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($dlg, $theme) }
+    $dlg.Owner = $window
+    try {
+        $dlg.WindowTitleBrush          = $window.WindowTitleBrush
+        $dlg.NonActiveWindowTitleBrush = $window.NonActiveWindowTitleBrush
+        $dlg.GlowBrush                 = $window.GlowBrush
+        $dlg.NonActiveGlowBrush        = $window.NonActiveGlowBrush
+    }
+    catch { Add-LogLine ('The result window theme could not be set: {0}' -f $_.Exception.Message) }
+    $dlg.Title = $Title
+    $dlg.FindName('txtIcon').Text = $(if ($Icon -eq 'Error') { [string][char]0x2716 } else { [string][char]0x2139 })
+    $dlg.FindName('txtMsg').Text = $Message
+    $dlg.FindName('btnPrimary').Add_Click({ param($s, $e) [System.Windows.Window]::GetWindow($s).Close() })
+    # Each open result window sits a little lower and to the right of the one before.
+    if ($window.WindowState -eq [System.Windows.WindowState]::Normal) {
+        $step = 28 * ($script:ResultNotices % 6)
+        $dlg.WindowStartupLocation = [System.Windows.WindowStartupLocation]::Manual
+        $dlg.Left = $window.Left + 90 + $step
+        $dlg.Top  = $window.Top + 110 + $step
+    }
+    $dlg.Add_Closed({ $script:ResultNotices = [Math]::Max(0, $script:ResultNotices - 1) })
+    $script:ResultNotices++
+    $dlg.Show()
+}
+
+# Warns before the window closes while device actions run. Wait is the default button and the
+# Escape button, so Enter and Esc do not close the tool. Returns 'Close' or 'Wait'.
+function Show-CloseWarningDialog {
+    param([Parameter(Mandatory)][object[]]$Runs)
+    $dlgXaml = @'
+<Controls:MetroWindow
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+    Title="Actions still running" Width="520" MinHeight="180" SizeToContent="Height"
+    WindowStartupLocation="CenterOwner" TitleCharacterCasing="Normal"
+    ResizeMode="NoResize" ShowIconOnTitleBar="False"
+    GlowBrush="{DynamicResource MahApps.Brushes.Accent}"
+    NonActiveGlowBrush="{DynamicResource MahApps.Brushes.Accent}"
+    BorderThickness="1">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Controls.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Steel.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="20,18,20,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="txtIcon" Grid.Row="0" Grid.Column="0" FontSize="20" VerticalAlignment="Top" Margin="0,0,14,0"/>
+        <TextBox x:Name="txtMsg" Grid.Row="0" Grid.Column="1" FontSize="13" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
+        <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button x:Name="btnWait" MinWidth="90" Height="32" Margin="0,0,8,0" Content="Wait" IsDefault="True" IsCancel="True"
+                    Style="{DynamicResource MahApps.Styles.Button.Square.Accent}"
+                    Controls:ControlsHelper.ContentCharacterCasing="Normal"/>
+            <Button x:Name="btnCloseAnyway" MinWidth="110" Height="32" Content="Close anyway"
+                    Style="{DynamicResource MahApps.Styles.Button.Square}"
+                    Controls:ControlsHelper.ContentCharacterCasing="Normal"/>
+        </StackPanel>
+    </Grid>
+</Controls:MetroWindow>
+'@
+    [xml]$xml = $dlgXaml
+    $dlg = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xml))
+    Install-TitleBarDragFallback -Window $dlg
+    $theme = [ControlzEx.Theming.ThemeManager]::Current.DetectTheme($window)
+    if ($theme) { [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($dlg, $theme) }
+    $dlg.Owner = $window
+    $nl = [Environment]::NewLine
+    $names = (@($Runs) | ForEach-Object { '{0} on {1} (ID {2})' -f $_.Action, $_.ComputerName, $_.ActionId }) -join $nl
+    $dlg.FindName('txtIcon').Text = [string][char]0x26A0
+    $dlg.FindName('txtMsg').Text = ('{0} actions are still running. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete. Wait for the running actions to end before you close.{1}{1}{2}' -f @($Runs).Count, $nl, $names)
+    $script:CloseChoice = 'Wait'
+    $dlg.FindName('btnCloseAnyway').Add_Click({ param($s, $e) $script:CloseChoice = 'Close'; [System.Windows.Window]::GetWindow($s).Close() })
+    [void]$dlg.ShowDialog()
+    return $script:CloseChoice
 }
 
 # Asks, then runs one device action in the background. Function is the name of an action
 # function of the module; it receives ComputerName, DryRun and the extra Parameters.
+# A device action runs in its own runspace and does not make the window busy. A site action
+# (a change of the collections, which acts on the site) keeps the exclusive path: it holds
+# the busy state and the progress overlay until it ends.
+# AfterRun receives the result and Context, a hashtable that the caller fills. It runs only
+# when the run succeeded, was not a dry run, and the device is still the device on screen.
 function Invoke-DeviceAction {
     param(
         [Parameter(Mandatory)][string]$Name,
@@ -844,51 +1046,224 @@ function Invoke-DeviceAction {
         [Parameter(Mandatory)][string]$Function,
         [hashtable]$Parameters = @{},
         [scriptblock]$AfterRun,
+        [hashtable]$Context = @{},
         [string[]]$Detail = @(),
         [switch]$SiteAction
     )
     if ($SiteAction) {
         if (-not (Test-SiteActionReady)) {
-            Add-LogLine ('{0}: turn on Enable actions and inspect a device that the site knows first.' -f $Name)
+            Add-LogLine ('{0}: {1}' -f $Name, (Get-ActionBlockText -Kind Site))
             return
         }
         $Parameters = @{ SiteServer = [string]$script:Inspection.SiteServer; SiteCode = [string]$script:Inspection.SiteCode } + $Parameters
     } elseif (-not (Test-DeviceActionReady)) {
-        Add-LogLine ('{0}: turn on Enable actions and inspect a device that answers first.' -f $Name)
+        $why = Get-ActionBlockText -Kind Device
+        Add-LogLine ('{0}: {1}' -f $Name, $why)
+        if (Get-DeviceInspectorRunBlock -Run @($script:RunList) -ComputerName (Get-ActionTargetName) -ResourceId (Get-ActionTargetResourceId)) { [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message $why -Icon Warn) }
         return
     }
     $device = [string]$script:Inspection.ComputerName
     $choice = Show-ActionConfirmDialog -Title $Name -Message $Message -Devices @($device)
     if ($choice -eq 'Cancel') { Add-LogLine ('{0}: cancelled.' -f $Name); Update-StatusBarSummary; return }
     $dry = ($choice -eq 'DryRun')
+    # Each run and each dry run has an ID. The STARTED line, the result line and the close line carry it.
+    $actionId = New-DeviceInspectorActionId
+    $run = New-DeviceInspectorActionRun -ActionId $actionId -Action $Name -ComputerName $device -DryRun $dry -ResourceId (Get-ActionTargetResourceId)
+    if (-not $SiteAction) {
+        # The confirmation dialog is open for a while. A run can have started on this device since the check above.
+        try { Register-DeviceInspectorActionRun -Runs $script:RunList -Run $run }
+        catch {
+            Add-LogLine ('{0}: {1}' -f $Name, $_.Exception.Message)
+            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message $_.Exception.Message -Icon Warn)
+            return
+        }
+        # The run is on the list. A failure of the window code must not undo that.
+        try { Update-ControlState } catch { Write-Log -Message ('The controls could not update after the run registered: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
+    }
     if (-not $dry) {
         # A run that stops part way (window closed, connection lost) still leaves this line.
-        $start = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $false -Succeeded $false -Outcome 'STARTED' -Summary 'The run started.' -Steps $Detail
+        $start = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $false -Succeeded $false -Outcome 'STARTED' -ActionId $actionId -Summary 'The run started.' -Steps $Detail
         try { $null = Write-DeviceInspectorActionLog -Path $script:ActionLogPath -Result $start }
         catch {
-            Add-LogLine ('{0}: the action log cannot be written, so the run does not start. {1}' -f $Name, $_.Exception.Message)
-            [void](Show-ThemedMessage -Owner $window -Title 'Action log' -Message ('The action log cannot be written, so the run does not start: {0}' -f $_.Exception.Message) -Icon Error)
+            $logProblem = [string]$_.Exception.Message
+            # Nothing runs yet, so the device goes free first, then the window tells the person.
+            if (-not $SiteAction) {
+                [void](Unregister-DeviceInspectorActionRun -Runs $script:RunList -ActionId $actionId)
+                try { Update-ControlState } catch { Write-Log -Message ('The controls could not update: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
+            }
+            Add-LogLine ('{0}: the action log cannot be written, so the run does not start. {1}' -f $Name, $logProblem)
+            [void](Show-ThemedMessage -Owner $window -Title 'Action log' -Message ('The action log cannot be written, so the run does not start: {0}' -f $logProblem) -Icon Error)
             return
         }
     }
-    $script:ActionAfterRun = $AfterRun
-    $script:ActionPending = @{ Name = $Name; Device = $device; DryRun = $dry; Detail = $Detail }
     $arguments = @{ Function = $Function; Parameters = (@{ ComputerName = $device; DryRun = $dry } + $Parameters) }
+    if (-not $SiteAction) {
+        try {
+            Start-DeviceActionRun -Run $run -Arguments $arguments -AfterRun $AfterRun -Context $Context -Detail $Detail
+        }
+        catch {
+            # Start-DeviceActionRun threw before the work began, so no run executes. The device goes free.
+            $startProblem = [string]$_.Exception.Message
+            [void](Unregister-DeviceInspectorActionRun -Runs $script:RunList -ActionId $actionId)
+            try { Update-ControlState } catch { Write-Log -Message ('The controls could not update: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
+            $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -ActionId $actionId -Summary ('The run did not start: {0}' -f $startProblem) -Steps $Detail
+            Write-ActionResult -Result $failed
+            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ('The run did not start: {0}' -f $startProblem) -Icon Error)
+            return
+        }
+        # From here the work executes. A failure of the window code below never takes the run off the list.
+        try {
+            Add-LogLine ('{0} on {1}: {2} started in the background (ID {3}).' -f $Name, $device, $(if ($dry) { 'dry run' } else { 'run' }), $actionId)
+            Update-StatusBarSummary
+        }
+        catch { Write-Log -Message ('The window could not show the start of run {0}: {1}' -f $actionId, $_.Exception.Message) -Level ERROR -Quiet }
+        return
+    }
+    $script:ActionAfterRun = $AfterRun
+    $script:ActionContext = $Context
+    $script:ActionPending = @{ Id = $actionId; Name = $Name; Device = $device; DryRun = $dry; Detail = $Detail }
     $title = $(if ($dry) { 'Dry run: {0} on {1}' -f $Name, $device } else { '{0} on {1}' -f $Name, $device })
     try {
-        Start-ActionWork -Title $title -Arguments $arguments -Step $(if ($SiteAction) { 'Connecting to the site...' } else { 'Connecting to the device...' })
+        Start-ActionWork -Title $title -Arguments $arguments -Step 'Connecting to the site...'
     }
     catch {
         Stop-BackgroundWork
         $script:IsBusy = $false
         $progressOverlay.Visibility = [System.Windows.Visibility]::Collapsed
         Update-ControlState
-        $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -Summary ('The run did not start: {0}' -f $_.Exception.Message) -Steps $Detail
+        $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -ActionId $actionId -Summary ('The run did not start: {0}' -f $_.Exception.Message) -Steps $Detail
         Write-ActionResult -Result $failed
         [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ('The run did not start: {0}' -f $_.Exception.Message) -Icon Error)
     }
 }
 
+# Returns an open runspace for a device run. A runspace that a run left idle is used again, because
+# a new one imports the module first. One runspace runs one pipeline at a time, so each running
+# action needs its own runspace.
+function Get-ActionRunspace {
+    while ($script:RunspaceIdle.Count -gt 0) {
+        $candidate = $script:RunspaceIdle[0]
+        $script:RunspaceIdle = @($script:RunspaceIdle | Select-Object -Skip 1)
+        if ($candidate.RunspaceStateInfo.State -eq 'Opened' -and $candidate.RunspaceAvailability -eq 'Available') { return $candidate }
+        try { $candidate.CloseAsync() } catch { Add-LogLine ('An idle runspace could not be closed: {0}' -f $_.Exception.Message) }
+    }
+    return (New-SuiteBgRunspace -ModulePath $__modulePath -LogPath $script:ToolLogPath)
+}
+
+# Starts the work of one device run. The work runs on a background thread. The window thread
+# reads the state of every run on a DispatcherTimer tick (Update-DeviceActionRun), so every
+# change of the window happens on the Dispatcher thread.
+function Start-DeviceActionRun {
+    param(
+        [Parameter(Mandatory)][pscustomobject]$Run,
+        [Parameter(Mandatory)][hashtable]$Arguments,
+        [scriptblock]$AfterRun,
+        [hashtable]$Context = @{},
+        [string[]]$Detail = @()
+    )
+    $runspace = Get-ActionRunspace
+    $state = [hashtable]::Synchronized(@{ Done = $false; Result = $null; ErrorMsg = $null })
+    $ps = [powershell]::Create()
+    try {
+        $ps.Runspace = $runspace
+        [void]$ps.AddScript({
+            param($A, $State)
+            try {
+                $p = $A.Parameters
+                $State.Result = & $A.Function @p
+            }
+            catch { $State.ErrorMsg = $_.Exception.Message }
+            finally { $State.Done = $true }
+        }).AddArgument($Arguments).AddArgument($state)
+        $handle = $ps.BeginInvoke()
+    }
+    catch {
+        try { $ps.Dispose() } catch { Add-LogLine ('A run object could not be disposed: {0}' -f $_.Exception.Message) }
+        try { $runspace.CloseAsync() } catch { Add-LogLine ('A runspace could not be closed: {0}' -f $_.Exception.Message) }
+        throw
+    }
+    $script:RunJobs[[string]$Run.ActionId] = @{ Run = $Run; PowerShell = $ps; Runspace = $runspace; Handle = $handle; State = $state; AfterRun = $AfterRun; Context = $Context; Detail = @($Detail) }
+    # The work already runs. A failure of the timer must not throw into the caller, which would take a running run off the list.
+    try {
+        if (-not $script:RunTimer) {
+            $script:RunTimer = New-Object System.Windows.Threading.DispatcherTimer
+            $script:RunTimer.Interval = [TimeSpan]::FromMilliseconds(500)
+            $script:RunTimer.Add_Tick({ Update-DeviceActionRun })
+        }
+        $script:RunTimer.Start()
+    }
+    catch { Write-Log -Message ('The timer of the running actions could not start: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
+}
+
+# One tick: finish every run whose work has ended. A run that fails to finish does not stop the others.
+# A run counts as ended when its state says Done or when its asynchronous call is completed, so a
+# pipeline that stopped without the Done flag still releases its device (the failure path writes a FAILED line).
+function Update-DeviceActionRun {
+    foreach ($id in @($script:RunJobs.Keys)) {
+        $job = $script:RunJobs[$id]
+        if (-not $job) { continue }
+        if (-not (Test-DeviceInspectorRunFinished -State $job.State -Handle $job.Handle)) { continue }
+        try { Complete-DeviceActionRun -Job $job }
+        catch { Write-Log -Message ('Action {0}: the end of the run could not be processed: {1}' -f $id, $_.Exception.Message) -Level ERROR -Quiet }
+    }
+    if ($script:RunJobs.Count -eq 0 -and $script:RunTimer) { $script:RunTimer.Stop() }
+}
+
+# Ends one run on the window thread. The order is fixed:
+#   1. read the end state and free the runspace;
+#   2. write the result line of the action log (exactly one record for each run, in its own try);
+#   3. take the run off the list, so the device is free again;
+#   4. update the window. Each step has its own try, so a failure of the window never drops the result line.
+function Complete-DeviceActionRun {
+    param([Parameter(Mandatory)][hashtable]$Job)
+    $run = $Job.Run
+    $state = $Job.State
+    $script:RunJobs.Remove([string]$run.ActionId)
+    $problem = ''
+    try { [void]$Job.PowerShell.EndInvoke($Job.Handle) } catch { $problem = [string]$_.Exception.Message }
+    if ($state.ErrorMsg) { $problem = [string]$state.ErrorMsg }
+    try { $Job.PowerShell.Dispose() } catch { Write-Log -Message ('Action {0}: the background work could not be disposed: {1}' -f $run.ActionId, $_.Exception.Message) -Level WARN -Quiet }
+    $script:RunspaceIdle += ,$Job.Runspace
+    $record = $null
+    try { $record = Resolve-DeviceInspectorRunResult -Run $run -Result $state.Result -ErrorMessage $problem -Detail ([string[]]@($Job.Detail)) }
+    catch { $record = New-DeviceInspectorActionRecord -Action ([string]$run.Action) -ComputerName ([string]$run.ComputerName) -DryRun ([bool]$run.DryRun) -Succeeded $false -ActionId ([string]$run.ActionId) -Summary ('The result could not be read: {0}' -f $_.Exception.Message) -Steps @() }
+    try { Write-ActionResult -Result $record }
+    catch { Write-Log -Message ('Action {0}: the result could not be written: {1}' -f $run.ActionId, $_.Exception.Message) -Level ERROR -Quiet }
+    try { [void](Unregister-DeviceInspectorActionRun -Runs $script:RunList -ActionId ([string]$run.ActionId)) }
+    catch { Write-Log -Message ('Action {0}: the run could not leave the list: {1}' -f $run.ActionId, $_.Exception.Message) -Level ERROR -Quiet }
+    try { Update-ControlState } catch { Write-Log -Message ('Action {0}: the controls could not update: {1}' -f $run.ActionId, $_.Exception.Message) -Level ERROR -Quiet }
+    try { Update-StatusBarSummary } catch { Write-Log -Message ('Action {0}: the status bar could not update: {1}' -f $run.ActionId, $_.Exception.Message) -Level ERROR -Quiet }
+    if (-not $script:WindowClosing) {
+        try {
+            $resultText = '{0} on {1}, {2} (ID {3}): {4}' -f $run.Action, $run.ComputerName, $run.Mode, $run.ActionId, $record.Summary
+            Show-ActionResultNotice -Title $(if ($record.Succeeded) { 'Action result' } else { 'Action failed' }) -Message $resultText -Icon $(if ($record.Succeeded) { 'Info' } else { 'Error' })
+        }
+        catch { Write-Log -Message ('Action {0}: the result window could not open: {1}' -f $run.ActionId, $_.Exception.Message) -Level ERROR -Quiet }
+    }
+    if ($record.Succeeded -and -not $record.DryRun -and $Job.AfterRun) {
+        try {
+            # The same device is the device of the run by its key or by its site resource ID.
+            $onScreen = [bool]($script:Inspection -and (Get-DeviceInspectorRunningAction -Run @($run) -ComputerName (Get-ActionTargetName) -ResourceId (Get-ActionTargetResourceId)))
+            if ($onScreen) { & $Job.AfterRun $record $Job.Context }
+            else { Add-LogLine ('{0}: {1} is not the device on screen. Inspect {1} to see the change.' -f $record.Action, $run.ComputerName) }
+        }
+        catch { Write-Log -Message ('Action {0}: the view could not refresh: {1}' -f $run.ActionId, $_.Exception.Message) -Level ERROR -Quiet }
+    }
+}
+
+# Stops the polling when the window closes. It does not stop the open runs: a stop of the pipeline cuts
+# off the remote call and can leave a run half done, for example after a delete and before the trigger that
+# follows it. The tool only stops waiting. The close line of the action log says that the result is not known.
+# Only idle runspaces are closed.
+function Stop-DeviceActionRun {
+    if ($script:RunTimer) { try { $script:RunTimer.Stop() } catch { Write-Log -Message ('The run timer could not stop: {0}' -f $_.Exception.Message) -Level WARN -Quiet } }
+    foreach ($idle in @($script:RunspaceIdle)) {
+        try { $idle.CloseAsync() } catch { Write-Log -Message ('An idle runspace could not close: {0}' -f $_.Exception.Message) -Level WARN -Quiet }
+    }
+    $script:RunspaceIdle = @()
+}
+
+# Site actions only: one run at a time, with the progress overlay.
 function Start-ActionWork {
     param([Parameter(Mandatory)][string]$Title, [Parameter(Mandatory)][hashtable]$Arguments, [Parameter(Mandatory)][string]$Step)
     Start-BackgroundWork -Title $Title -Step $Step -Arguments $Arguments -Work {
@@ -902,20 +1277,20 @@ function Start-ActionWork {
     } -OnDone {
         param($State)
         if ($State.ErrorMsg) {
-            $failed = New-DeviceInspectorActionRecord -Action $script:ActionPending.Name -ComputerName $script:ActionPending.Device -DryRun ([bool]$script:ActionPending.DryRun) -Succeeded $false -Summary ([string]$State.ErrorMsg) -Steps ([string[]]@($script:ActionPending.Detail))
+            $failed = New-DeviceInspectorActionRecord -Action $script:ActionPending.Name -ComputerName $script:ActionPending.Device -DryRun ([bool]$script:ActionPending.DryRun) -Succeeded $false -ActionId ([string]$script:ActionPending.Id) -Summary ([string]$State.ErrorMsg) -Steps ([string[]]@($script:ActionPending.Detail))
             Write-ActionResult -Result $failed
             Add-LogLine ('Action failed: {0}' -f $State.ErrorMsg)
             Set-StatusText 'Action failed. See the log.'
             [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ([string]$State.ErrorMsg) -Icon Error)
             return
         }
-        $r = $State.Result
+        $r = Add-DeviceInspectorActionId -Result $State.Result -ActionId ([string]$script:ActionPending.Id)
         if (@($r.Steps).Count -eq 0 -and @($script:ActionPending.Detail).Count -gt 0) { $r.Steps = [string[]]@($script:ActionPending.Detail) }
         Write-ActionResult -Result $r
         Update-StatusBarSummary
         $icon = $(if ($r.Succeeded) { 'Info' } else { 'Error' })
-        [void](Show-ThemedMessage -Owner $window -Title 'Action result' -Message ('{0} on {1}, {2}: {3}' -f $r.Action, $r.ComputerName, $r.Mode, $r.Summary) -Icon $icon)
-        if ($r.Succeeded -and -not $r.DryRun -and $script:ActionAfterRun) { & $script:ActionAfterRun $r }
+        [void](Show-ThemedMessage -Owner $window -Title 'Action result' -Message ('{0} on {1}, {2} (ID {3}): {4}' -f $r.Action, $r.ComputerName, $r.Mode, $script:ActionPending.Id, $r.Summary) -Icon $icon)
+        if ($r.Succeeded -and -not $r.DryRun -and $script:ActionAfterRun) { & $script:ActionAfterRun $r $script:ActionContext }
     }
 }
 
@@ -925,7 +1300,7 @@ $btnPolicyUpdate.Add_Click({
 })
 
 $btnFullInventory.Add_Click({
-    Invoke-DeviceAction -Name 'Full hardware inventory' -Function 'Invoke-DeviceInspectorFullInventory' -AfterRun { param($r) Clear-InventoryCheck } `
+    Invoke-DeviceAction -Name 'Full hardware inventory' -Function 'Invoke-DeviceInspectorFullInventory' -AfterRun { param($r, $ctx) Clear-InventoryCheck } `
         -Message 'The tool deletes the hardware inventory status record on the device (InventoryActionStatus, root\ccm\invagt), then starts a hardware inventory cycle. The client then sends a full report, and the site replaces all hardware inventory of the device.'
 })
 
@@ -934,7 +1309,7 @@ $btnRepairInventory.Add_Click({
     $check = $script:Inspection.InventoryCheck
     Invoke-DeviceAction -Name 'Corrupt-inventory repair' -Function 'Invoke-DeviceInspectorInventoryRepair' `
         -Message ('{0} The tool deletes the hardware inventory status record on the device and starts a hardware inventory. The client sends a full report, and the site replaces the hardware inventory of the device. Inspect again after the site processes the report.' -f $check.Message) `
-        -AfterRun { param($r) Clear-InventoryCheck; Add-LogLine ('{0}: inspect {1} again after the site processes the full report.' -f $r.Action, $r.ComputerName) }
+        -AfterRun { param($r, $ctx) Clear-InventoryCheck; Add-LogLine ('{0}: inspect {1} again after the site processes the full report.' -f $r.Action, $r.ComputerName) }
 })
 
 # Update install: only device rows that the client reports as missing (ComplianceState 0) can be installed.
@@ -972,7 +1347,7 @@ $gridUpdates.Add_PreviewMouseRightButtonDown({ param($s, $e) try { Select-RowUnd
 $gridUpdates.ContextMenu.Add_Opened({
     $all = Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)
     $selected = Get-InstallableUpdateRow -Rows @($gridUpdates.SelectedItems)
-    $gate = $(if (-not $script:ActionsEnabled) { 'Turn on Enable actions first.' } elseif ($script:IsBusy) { 'Wait for the running task to end.' } elseif (-not (Test-DeviceActionReady)) { 'Inspect a device that answers first.' } else { '' })
+    $gate = Get-ActionGateText
     if ($gate) {
         Set-MenuItemState -Item $menuInstallSelected -Enabled $false -Reason $gate
         Set-MenuItemState -Item $menuInstallAll -Enabled $false -Reason $gate
@@ -994,16 +1369,15 @@ function Invoke-UpdateInstall {
     $name = $(if ($All) { 'Install all pending updates' } else { 'Install selected pending updates' })
     Invoke-DeviceAction -Name $name -Function 'Invoke-DeviceInspectorUpdateInstall' -Parameters $parameters `
         -Message ('The client on the device downloads and installs these {0} updates now (CCM_SoftwareUpdatesManager.InstallUpdates). The device can restart, as the deployment sets.{1}{1}{2}' -f $Rows.Count, [Environment]::NewLine, $list) `
-        -AfterRun { param($r) Add-LogLine ('{0}: inspect {1} again to see the update states.' -f $r.Action, $r.ComputerName) }
+        -AfterRun { param($r, $ctx) Add-LogLine ('{0}: inspect {1} again to see the update states.' -f $r.Action, $r.ComputerName) }
 }
 $menuInstallSelected.Add_Click({ Invoke-UpdateInstall -Rows (Get-InstallableUpdateRow -Rows @($gridUpdates.SelectedItems)) -All $false })
 $menuInstallAll.Add_Click({ Invoke-UpdateInstall -Rows (Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)) -All $true })
 
+# The reason why a device action cannot start now, or an empty string. The reason names the running
+# action when the device of the inspection has one. A running action of another device does not block.
 function Get-ActionGateText {
-    if (-not $script:ActionsEnabled) { return 'Turn on Enable actions first.' }
-    if ($script:IsBusy) { return 'Wait for the running task to end.' }
-    if (-not (Test-DeviceActionReady)) { return 'Inspect a device that answers first.' }
-    return ''
+    return (Get-ActionBlockText -Kind Device)
 }
 
 $gridApps.Add_PreviewMouseRightButtonDown({ param($s, $e) try { Select-RowUnderPointer -Grid $gridApps -MouseArgs $e } catch { $null = $_ } })
@@ -1037,18 +1411,18 @@ function Invoke-ApplicationOperation {
     $verb = $(if ($Operation -eq 'Uninstall') { 'uninstalls' } else { 'repairs' })
     $nl = [Environment]::NewLine
     $text = ('The device {0} {1} {2} ({3}, {4} view, key {5}) now. It reads the registry key again, then runs this command and waits up to 10 minutes for it:{6}{6}{7}{6}{6}The tool adds no switches. If the installer needs a restart, the tool does not restart the device.' -f $verb, $row.Name, $row.Version, $row.Type, $row.View, $row.KeyName, $nl, $command)
-    $script:ApplicationRowDone = $row
     Invoke-DeviceAction -Name ('{0} application' -f $Operation) -Function 'Invoke-DeviceInspectorApplicationAction' `
         -Parameters @{ Operation = $Operation; View = [string]$row.View; KeyName = [string]$row.KeyName } `
         -Message $text `
+        -Context @{ Row = $row } `
         -Detail @(('Application: {0} {1}, {2}, {3} view, key {4}.' -f $row.Name, $row.Version, $row.Type, $row.View, $row.KeyName), ('Command shown to the person: {0}' -f $command)) `
         -AfterRun {
-            param($r)
+            param($r, $ctx)
             # After a real Uninstall the row stays in the list until the next inspection. Its actions turn off.
-            if ($script:ApplicationRowDone -and $r.Action -like 'Uninstall*') {
+            if ($ctx.Row -and $r.Action -like 'Uninstall*') {
                 $done = 'The entry was uninstalled in this session. Inspect the device again to refresh the list.'
-                $script:ApplicationRowDone.CanUninstall = $false; $script:ApplicationRowDone.CanRepair = $false
-                $script:ApplicationRowDone.UninstallReason = $done; $script:ApplicationRowDone.RepairReason = $done; $script:ApplicationRowDone.Reason = $done
+                $ctx.Row.CanUninstall = $false; $ctx.Row.CanRepair = $false
+                $ctx.Row.UninstallReason = $done; $ctx.Row.RepairReason = $done; $ctx.Row.Reason = $done
                 Update-AppFilter
             }
             Add-LogLine ('{0}: inspect {1} again to see the new state.' -f $r.Action, $r.ComputerName)
@@ -1061,7 +1435,7 @@ $gridCollections.Add_PreviewMouseRightButtonDown({ param($s, $e) try { Select-Ro
 $gridCollections.ContextMenu.Add_Opened({
     $rows = @($gridCollections.SelectedItems)
     $row = $(if ($rows.Count -eq 1) { $rows[0] } else { $null })
-    $gate = Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Site
+    $gate = Get-ActionBlockText -Kind Site
     $reason = $(if ($gate) { $gate }
         elseif (-not $row) { 'Select one row.' }
         elseif ($row.IsBuiltIn) { 'This is a built-in collection. Built-in collections have no direct membership rules.' }
@@ -1077,16 +1451,16 @@ $menuRemoveCollection.Add_Click({
     $rows = @($gridCollections.SelectedItems)
     if ($rows.Count -ne 1 -or $false -eq $rows[0].IsDirect -or $rows[0].IsBuiltIn -or $rows[0].IsRemoved) { Add-LogLine 'Remove from collection: select one row with a direct rule.'; return }
     $row = $rows[0]
-    $script:CollectionRowDone = $row
     Invoke-DeviceAction -SiteAction -Name 'Remove from collection' -Function 'Invoke-DeviceInspectorCollectionChange' `
         -Parameters @{ CollectionId = [string]$row.CollectionId; Operation = 'Remove'; ExpectedResourceId = [int]$script:Inspection.Site.ResourceId } `
         -Message ('The site removes the direct membership rule of the device from {0} ({1}), starts a membership update of the collection, waits up to 60 seconds for the new membership, and then asks the client for machine policy. If another rule also adds the device, the device stays a member. Deployments to this collection stop applying to the device.' -f $row.Name, $row.CollectionId) `
+        -Context @{ Row = $row } `
         -Detail @(('Collection: {0} ({1}).' -f $row.Name, $row.CollectionId)) `
-        -AfterRun { param($r) if ($script:CollectionRowDone) { $script:CollectionRowDone.IsRemoved = $true; $script:CollectionRowDone.Membership = 'Rule removed: inspect again' }; $gridCollections.Items.Refresh(); Add-LogLine ('{0}: inspect {1} again after the membership update.' -f $r.Action, $r.ComputerName) }
+        -AfterRun { param($r, $ctx) if ($ctx.Row) { $ctx.Row.IsRemoved = $true; $ctx.Row.Membership = 'Rule removed: inspect again' }; $gridCollections.Items.Refresh(); Add-LogLine ('{0}: inspect {1} again after the membership update.' -f $r.Action, $r.ComputerName) }
 })
 
 function Invoke-AddToCollection {
-    $gate = Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Site
+    $gate = Get-ActionBlockText -Kind Site
     if ($gate) { Add-LogLine ('Add to collection: {0}' -f $gate); return }
     $arguments = @{ Server = [string]$script:Inspection.SiteServer; Code = [string]$script:Inspection.SiteCode }
     Start-BackgroundWork -Title 'Reading the device collections' -Step 'Connecting to the site...' -Arguments $arguments -Work {
@@ -1114,7 +1488,7 @@ function Invoke-AddToCollection {
             -Parameters @{ CollectionId = [string]$picked.CollectionID; Operation = 'Add'; ExpectedResourceId = [int]$script:Inspection.Site.ResourceId } `
             -Message ('The site adds a direct membership rule for the device to {0} ({1}), starts a membership update of the collection, waits up to 60 seconds for the new membership, and then asks the client for machine policy. Deployments to this collection start to apply to the device.' -f $picked.Name, $picked.CollectionID) `
             -Detail @(('Collection: {0} ({1}).' -f $picked.Name, $picked.CollectionID)) `
-            -AfterRun { param($r) Add-LogLine ('{0}: inspect {1} again to see the new membership.' -f $r.Action, $r.ComputerName) }
+            -AfterRun { param($r, $ctx) Add-LogLine ('{0}: inspect {1} again to see the new membership.' -f $r.Action, $r.ComputerName) }
     }
 }
 $btnAddCollection.Add_Click({ Invoke-AddToCollection })
@@ -1199,8 +1573,29 @@ $btnOpenLog.Add_Click({
 # === Window state (geometry logic: SuiteCommon) ===
 $global:WindowStatePath = Join-Path $PSScriptRoot 'DeviceInspector.windowstate.json'
 
+# Closing with device actions still running needs a confirmation. The tool does not stop the runs. It stops
+# waiting for them, and a run on a device can stop before it is complete. The tool cannot write their result
+# lines after the window closes, so it writes one CLOSED line for each open run (same ID as the STARTED line).
 $window.Add_Closing({
+    param($s, $e)
+    if ($script:RunList.Count -gt 0) {
+        $answer = Show-CloseWarningDialog -Runs @($script:RunList)
+        if ($answer -ne 'Close') { $e.Cancel = $true; return }
+    }
+    $script:WindowClosing = $true
+    if ($script:RunTimer) { $script:RunTimer.Stop() }
+    # One pass first: a run that ended since the last tick gets its real result line, not a CLOSED line.
+    try { Update-DeviceActionRun } catch { Write-Log -Message ('The last pass over the running actions failed: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
+    $open = @($script:RunList)
+    if ($open.Count -gt 0) {
+        try {
+            $written = Write-DeviceInspectorCloseLog -Path $script:ActionLogPath -Run $open
+            Write-Log -Message ('Window closed with {0} running actions. Wrote {1} CLOSED lines to the action log.' -f $open.Count, $written) -Quiet
+        }
+        catch { Write-Log -Message ('The action log could not be written at close: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
+    }
     Save-WindowState -Window $window -Path $global:WindowStatePath -ExtraState @{ ActiveView = $script:ActiveView }
+    Stop-DeviceActionRun
     Stop-BackgroundWork
     Close-SuiteBgRunspace -Runspace $script:BgRunspace
 })

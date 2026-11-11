@@ -878,7 +878,8 @@ Describe 'Module surface' {
                 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionHtml', 'ConvertTo-DeviceInspectionJson',
                 'ConvertTo-DeviceInspectionReport', 'ConvertTo-DeviceInspectionUpdateRow', 'Get-DeviceInspection',
                 'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Get-DeviceInspectorCollectionList', 'Select-DeviceInspectorAddableCollection', 'Get-DeviceInspectorDeviceList',
-                'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+                'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord',
+                'New-DeviceInspectorActionId', 'New-DeviceInspectorActionRun', 'Get-DeviceInspectorRunningAction', 'Get-DeviceInspectorRunBlock', 'Register-DeviceInspectorActionRun', 'Unregister-DeviceInspectorActionRun', 'Add-DeviceInspectorActionId', 'Write-DeviceInspectorCloseLog', 'Get-DeviceInspectorDeviceKey', 'Test-DeviceInspectorRunFinished', 'Resolve-DeviceInspectorRunResult'
             ) | Sort-Object)
     }
 
