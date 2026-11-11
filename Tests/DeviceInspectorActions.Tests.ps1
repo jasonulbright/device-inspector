@@ -828,6 +828,24 @@ Describe 'Uninstall and repair an application' {
         }
     }
 
+    It 'leaves out an ID whose highest revision is not installed, as the device acts on that revision' {
+        $objInspection = [pscustomobject]@{
+            Site = $null
+            Device = [pscustomobject]@{
+                InstalledApplications = @()
+                ClientApplications = @(
+                    [pscustomobject]@{ Name = 'App'; Id = 'S/A'; Revision = '9'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SoftwareVersion = '9'; Publisher = '' }
+                    [pscustomobject]@{ Name = 'App'; Id = 'S/A'; Revision = '12'; InstallState = 'NotInstalled'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Install'); SoftwareVersion = '12'; Publisher = '' }
+                )
+            }
+        }
+        @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection).Count | Should -Be 0
+    }
+
+    It 'puts the application line into a result that has no steps' {
+        $script:strStart | Should -Match 'if \(@\(\$r\.Steps\)\.Count -eq 0 -and @\(\$script:ActionPending\.Detail\)\.Count -gt 0\) \{ \$r\.Steps = \[string\[\]\]@\(\$script:ActionPending\.Detail\) \}'
+    }
+
     It 'turns both entries off for a user-targeted application, and gives each application ID one row' {
         $objInspection = [pscustomobject]@{
             Site = $null

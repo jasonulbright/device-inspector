@@ -1927,13 +1927,17 @@ function ConvertTo-DeviceInspectionApplicationRow {
                 if ($null -eq $objClientApplication.PSObject.Properties['Id'] -or [string]::IsNullOrEmpty([string]$objClientApplication.Id)) {
                     continue
                 }
-                if (([string]$objClientApplication.InstallState) -ne 'Installed') {
-                    continue
-                }
                 $strId = [string]$objClientApplication.Id
                 if (-not $hashtableById.ContainsKey($strId) -or (& $scriptBlockRevision $objClientApplication.Revision) -gt (& $scriptBlockRevision $hashtableById[$strId].Revision)) {
                     $hashtableById[$strId] = $objClientApplication
                 }
+            }
+        }
+        # The device acts on the highest revision of an ID, so the row uses the same
+        # revision and is left out when that revision is not installed.
+        foreach ($strId in @($hashtableById.Keys)) {
+            if (([string]$hashtableById[$strId].InstallState) -ne 'Installed') {
+                $hashtableById.Remove($strId)
             }
         }
         $hashtableClient = @{}

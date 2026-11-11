@@ -879,6 +879,7 @@ function Start-ActionWork {
             return
         }
         $r = $State.Result
+        if (@($r.Steps).Count -eq 0 -and @($script:ActionPending.Detail).Count -gt 0) { $r.Steps = [string[]]@($script:ActionPending.Detail) }
         Write-ActionResult -Result $r
         Update-StatusBarSummary
         $icon = $(if ($r.Succeeded) { 'Info' } else { 'Error' })
