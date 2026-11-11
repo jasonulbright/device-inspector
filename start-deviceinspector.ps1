@@ -815,6 +815,7 @@ function Invoke-DeviceAction {
         Start-ActionWork -Title $title -Arguments $arguments
     }
     catch {
+        Stop-BackgroundWork
         $script:IsBusy = $false
         $progressOverlay.Visibility = [System.Windows.Visibility]::Collapsed
         Update-ControlState
