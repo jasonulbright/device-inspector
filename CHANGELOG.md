@@ -2,7 +2,7 @@
 
 All notable changes to Device Inspector are documented in this file.
 
-## [Unreleased]
+## [2026.11.11.0008] - 2026-11-11
 
 ## 1 Device actions that run in the background
 
