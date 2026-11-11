@@ -945,6 +945,8 @@ Describe 'Remove from collection' {
             Mock Add-CMDeviceCollectionDirectMembershipRule { }
             Mock Invoke-CMCollectionUpdate { }
             Mock Invoke-CMClientAction { }
+            Mock Get-CMCollectionMember { }
+            Mock Start-Sleep { }
         }
     }
 
@@ -1022,6 +1024,65 @@ Describe 'Remove from collection' {
             $arrCommand = @($objFunction.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() })
             @($arrCommand | Where-Object { $arrWrite -contains $_ }) | Should -BeNullOrEmpty -Because $objFunction.Name
         }
+    }
+
+    It 'adds a direct rule, and refuses an add when a direct rule exists' {
+        $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Add
+        $objResult.Succeeded | Should -BeFalse
+        $objResult.Summary | Should -Match 'already has a direct rule'
+        Should -Invoke -ModuleName DeviceInspectorCommon Add-CMDeviceCollectionDirectMembershipRule -Times 0 -Exactly
+        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollectionDirectMembershipRule { }
+        Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { [pscustomobject]@{ ResourceID = 16777221; IsDirect = $true } }
+        $objAdded = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Add
+        $objAdded.Succeeded | Should -BeTrue
+        $objAdded.Action | Should -Be 'Add to collection'
+        Should -Invoke -ModuleName DeviceInspectorCommon Add-CMDeviceCollectionDirectMembershipRule -Times 1 -Exactly -ParameterFilter { $CollectionId -eq 'XYZ0001F' -and $ResourceId -eq '16777221' }
+        ($objAdded.Steps -join "`n") | Should -Match 'The site shows the new membership after'
+    }
+
+    It 'waits up to 60 seconds for the new membership and says when it does not show' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { [pscustomobject]@{ ResourceID = 16777221; IsDirect = $true } }
+        InModuleScope DeviceInspectorCommon {
+            $script:intSleep = 0
+            Mock Start-Sleep { $script:intSleep++ }
+        }
+        $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+        $objResult.Succeeded | Should -BeTrue
+        ($objResult.Steps -join "`n") | Should -Match 'did not show the new membership within 60 seconds'
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMClientAction -Times 1 -Exactly
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 12 -Exactly
+    }
+
+    It 'refuses a missing collection, a failed rule read and a new resource ID, and disconnects each time' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { }
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Match 'no device collection XYZ0001F'
+        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot' } }
+        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollectionDirectMembershipRule { throw 'provider error' }
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Match 'Cannot run the action on site XYZ: provider error'
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove -ExpectedResourceId 16777999).Summary | Should -Match 'has resource ID 16777221, not 16777999'
+        Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 3 -Exactly
+        Should -Invoke -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule -Times 0 -Exactly
+    }
+
+    It 'gives the reason why an action cannot start, for <Case>' -ForEach @(
+        @{ Case = 'switch off'; Enabled = $false; Busy = $false; Kind = 'Site'; Inspection = $null; Expected = 'Turn on Enable actions first.' }
+        @{ Case = 'busy'; Enabled = $true; Busy = $true; Kind = 'Site'; Inspection = $null; Expected = 'Wait for the running task to end.' }
+        @{ Case = 'no inspection'; Enabled = $true; Busy = $false; Kind = 'Site'; Inspection = $null; Expected = 'Inspect a device that the site knows first.' }
+        @{ Case = 'site not found'; Enabled = $true; Busy = $false; Kind = 'Site'; Inspection = [pscustomobject]@{ SiteServer = 's'; Site = [pscustomobject]@{ Found = $false }; Device = $null }; Expected = 'Inspect a device that the site knows first.' }
+        @{ Case = 'no site server'; Enabled = $true; Busy = $false; Kind = 'Site'; Inspection = [pscustomobject]@{ SiteServer = $null; Site = $null; Device = [pscustomobject]@{} }; Expected = 'Inspect a device that the site knows first.' }
+        @{ Case = 'site action ready on a site-only inspection'; Enabled = $true; Busy = $false; Kind = 'Site'; Inspection = [pscustomobject]@{ SiteServer = 's'; Site = [pscustomobject]@{ Found = $true }; Device = $null }; Expected = '' }
+        @{ Case = 'device action on a site-only inspection'; Enabled = $true; Busy = $false; Kind = 'Device'; Inspection = [pscustomobject]@{ SiteServer = 's'; Site = [pscustomobject]@{ Found = $true }; Device = $null }; Expected = 'Inspect a device that answers first.' }
+        @{ Case = 'device action ready'; Enabled = $true; Busy = $false; Kind = 'Device'; Inspection = [pscustomobject]@{ SiteServer = $null; Site = $null; Device = [pscustomobject]@{} }; Expected = '' }
+    ) {
+        Get-DeviceInspectorActionBlock -Inspection $Inspection -ActionsEnabled $Enabled -Busy $Busy -Kind $Kind | Should -Be $Expected
+    }
+
+    It 'shows Unknown for a membership without a value, and gives a removed row its own reason' {
+        $arrRow = @(ConvertTo-DeviceInspectionCollectionRow -Inspection ([pscustomobject]@{ Site = [pscustomobject]@{ Collections = @([pscustomobject]@{ CollectionId = 'XYZ00020'; Name = 'X'; IsDirect = $null }) } }))
+        $arrRow[0].Membership | Should -Be 'Unknown'
+        $arrRow[0].IsRemoved | Should -BeFalse
+        $script:strStart | Should -Match 'The direct rule was removed\. Inspect the device again\.'
+        $script:strStart | Should -Match 'ExpectedResourceId = \[int\]\$script:Inspection\.Site\.ResourceId'
     }
 
     It 'marks direct and built-in memberships in the collection rows' {

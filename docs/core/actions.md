@@ -94,6 +94,7 @@ The Collections panel has **Remove from collection...** in its right-click menu.
 The entry is off, with the reason as its tooltip:
 
 - for a membership through a query, include or other rule: those rules belong to the collection, not to the device;
+- after a removal, until the next inspection;
 - for a built-in collection (ID that starts with `SMS`): it has no direct membership rules.
 
 1. Turn on **Enable actions**.
@@ -102,7 +103,7 @@ The entry is off, with the reason as its tooltip:
 4. Select **Dry run**. The log shows the resource ID and the collection.
 5. Repeat, and select **Run**.
 
-The tool opens the site drive and checks the device record (exactly one), the collection and the direct rule. It runs `Remove-CMDeviceCollectionDirectMembershipRule -CollectionId <ID> -ResourceId <ID> -Force`, then `Invoke-CMCollectionUpdate` for the collection, then `Invoke-CMClientAction -ActionType ClientNotificationRequestMachinePolicyNow` for the device (the parameter `-NotificationType` is deprecated). When the membership update or the notification fails, the rule stays removed and the log says so. If another rule also adds the device, the device stays a member. Deployments to the collection stop applying to the device. Inspect the device again after the membership update.
+The tool opens the site drive and checks the device record (exactly one), the collection and the direct rule. It refuses the change when the device record now has another resource ID than the inspection. It runs `Remove-CMDeviceCollectionDirectMembershipRule -CollectionId <ID> -ResourceId <ID> -Force`, then `Invoke-CMCollectionUpdate` for the collection. It waits up to 60 seconds until `Get-CMCollectionMember` shows the new membership, because the client notification has an effect only after that, and then runs `Invoke-CMClientAction -ActionType ClientNotificationRequestMachinePolicyNow` for the device (the parameter `-NotificationType` is deprecated). When the membership update or the notification fails, the rule stays removed and the log says so. If another rule also adds the device, the device stays a member. Deployments to the collection stop applying to the device. Inspect the device again after the membership update.
 
 ### Repair a corrupt inventory
 

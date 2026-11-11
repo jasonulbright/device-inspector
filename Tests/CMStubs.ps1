@@ -26,6 +26,7 @@ $script:hashtableStub = [ordered]@{
     'Add-CMDeviceCollectionDirectMembershipRule' = @('CollectionId', 'ResourceId')
     'Remove-CMDeviceCollectionDirectMembershipRule' = @('CollectionId', 'ResourceId', 'Force')
     'Invoke-CMCollectionUpdate' = @('CollectionId')
+    'Get-CMCollectionMember' = @('CollectionId', 'ResourceId')
     'Invoke-CMClientAction' = @('DeviceName', 'ActionType')
 }
 foreach ($strStubName in $script:hashtableStub.Keys) {

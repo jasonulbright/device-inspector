@@ -158,8 +158,8 @@ Describe 'Get-SiteFact' {
                         [pscustomobject]@{ DisplayName = ''; Version = '1'; Publisher = 'MS' }
                     }
                     '*SMS_FullCollectionMembership*' {
-                        [pscustomobject]@{ CollectionID = 'SMS00001' }
-                        [pscustomobject]@{ CollectionID = 'XYZ0001F' }
+                        [pscustomobject]@{ CollectionID = 'SMS00001'; IsDirect = $false }
+                        [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true }
                         [pscustomobject]@{ CollectionID = "bad'id" }
                     }
                     '*SMS_UpdateComplianceStatus*' {
@@ -229,6 +229,19 @@ Describe 'Get-SiteFact' {
             Mock Invoke-SiteQuery { if ($Query -like '*WORKSTATION_STATUS*') { [pscustomobject]@{ LastHardwareScan = '20261110192232.000000+***' } } }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             (Get-SiteFact -ComputerName 'WS01' -Problems $listProblem).HardwareScanClientTime | Should -Be '2026-11-10T19:22:32'
+        }
+    }
+
+    It 'reads IsDirect of each membership as true, false or unknown' {
+        InModuleScope DeviceInspectorCommon {
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            @($objSite.Collections | Where-Object CollectionId -eq 'XYZ0001F')[0].IsDirect | Should -BeTrue
+            @($objSite.Collections | Where-Object CollectionId -eq 'SMS00001')[0].IsDirect | Should -BeFalse
+            Should -Invoke Invoke-SiteQuery -ParameterFilter { $Query -eq 'SELECT CollectionID, IsDirect FROM SMS_FullCollectionMembership WHERE ResourceID = 16777221' }
+            Mock Invoke-SiteQuery { if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $null } } }
+            $objUnknown = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $null -eq @($objUnknown.Collections)[0].IsDirect | Should -BeTrue
         }
     }
 
@@ -819,7 +832,7 @@ Describe 'Module surface' {
                 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow',
                 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionHtml', 'ConvertTo-DeviceInspectionJson',
                 'ConvertTo-DeviceInspectionReport', 'ConvertTo-DeviceInspectionUpdateRow', 'Get-DeviceInspection',
-                'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory',
+                'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock',
                 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
             ) | Sort-Object)
     }

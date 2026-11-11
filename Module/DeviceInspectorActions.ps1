@@ -999,6 +999,10 @@ function Invoke-DeviceInspectorCollectionChange {
     # .PARAMETER Operation
     # Add or Remove.
     #
+    # .PARAMETER ExpectedResourceId
+    # Optional. The resource ID of the inspection. The function refuses the change
+    # when the device record of the site now has another ID.
+    #
     # .PARAMETER DryRun
     # Check and list the steps only.
     #
@@ -1047,6 +1051,10 @@ function Invoke-DeviceInspectorCollectionChange {
         [string]$Operation,
 
         [Parameter(Mandatory = $false)]
+        [ValidateRange(0, 2147483647)]
+        [int]$ExpectedResourceId = 0,
+
+        [Parameter(Mandatory = $false)]
         [switch]$DryRun,
 
         [Parameter(Mandatory = $false)]
@@ -1082,6 +1090,9 @@ function Invoke-DeviceInspectorCollectionChange {
             }
             $strResourceId = [string]$arrDevice[0].ResourceID
             $listStep.Add(('Device {0}, resource ID {1}.' -f $strShortName, $strResourceId))
+            if ($ExpectedResourceId -gt 0 -and $strResourceId -ne [string]$ExpectedResourceId) {
+                return (& $scriptBlockEnd $false ('The device record of the site has resource ID {0}, not {1} as in the inspection. Inspect the device again.' -f $strResourceId, $ExpectedResourceId))
+            }
             $objCollection = Get-CMDeviceCollection -Id $CollectionId -ErrorAction Stop
             if ($null -eq $objCollection) {
                 return (& $scriptBlockEnd $false ('The site has no device collection {0}.' -f $CollectionId))
@@ -1114,11 +1125,39 @@ function Invoke-DeviceInspectorCollectionChange {
                 $listStep.Add(('{0} failed: {1}' -f $strAction, $_.Exception.Message))
                 return (& $scriptBlockEnd $false ('The site did not change the rule. {0}' -f $_.Exception.Message))
             }
+            $boolUpdateStarted = $false
             try {
                 Invoke-CMCollectionUpdate -CollectionId $CollectionId -ErrorAction Stop
+                $boolUpdateStarted = $true
                 $listStep.Add(('Started a membership update of {0}.' -f $CollectionId))
             } catch {
                 $listStep.Add(('The membership update did not start: {0}. The site updates the collection on its schedule.' -f $_.Exception.Message))
+            }
+            # The client notification has an effect only after the site shows the new
+            # membership, so the function waits for it, up to 60 seconds.
+            if ($boolUpdateStarted) {
+                $boolSeen = $false
+                $intTry = 0
+                do {
+                    $intTry++
+                    Start-Sleep -Seconds 5
+                    try {
+                        $arrMember = @(Get-CMCollectionMember -CollectionId $CollectionId -ResourceId ([int]$strResourceId) -ErrorAction Stop)
+                        $boolDirectNow = @($arrMember | Where-Object { $true -eq $_.IsDirect }).Count -gt 0
+                        if ($Operation -eq 'Remove') {
+                            $boolSeen = -not $boolDirectNow
+                        } else {
+                            $boolSeen = $boolDirectNow
+                        }
+                    } catch {
+                        Write-Debug -Message $_.Exception.Message
+                    }
+                } until ($boolSeen -or $intTry -ge 12)
+                if ($boolSeen) {
+                    $listStep.Add(('The site shows the new membership after {0} seconds.' -f ($intTry * 5)))
+                } else {
+                    $listStep.Add('The site did not show the new membership within 60 seconds. The client gets it at a later policy cycle.')
+                }
             }
             try {
                 Invoke-CMClientAction -DeviceName $strShortName -ActionType 'ClientNotificationRequestMachinePolicyNow' -ErrorAction Stop
