@@ -1456,7 +1456,8 @@ function Test-DeviceInspectionInventory {
         if ($null -ne $objReadComplete -and -not [bool]$objReadComplete.Value) {
             return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() 'The site application inventory was not read completely. See the Problems panel.')
         }
-        if (@($objDevice.PSObject.Properties['Problems'] | ForEach-Object { $_.Value } | Where-Object { ([string]$_) -like 'Installed applications:*' }).Count -gt 0) {
+        $objDeviceProblems = $objDevice.PSObject.Properties['Problems']
+        if ($null -ne $objDeviceProblems -and @($objDeviceProblems.Value | Where-Object { ([string]$_) -like 'Installed applications:*' }).Count -gt 0) {
             return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() 'The installed applications of the device were not read. See the Problems panel.')
         }
         $objClassRows = $objSite.PSObject.Properties['ApplicationRowsByClass']
