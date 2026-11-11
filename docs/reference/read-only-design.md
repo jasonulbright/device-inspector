@@ -50,7 +50,8 @@ The actions are the only code that changes the device or the site. They live in 
 - The **Enable actions** switch is off at each start and is not saved. The window checks it before it shows the confirmation.
 - Each action asks for a confirmation that names the action and shows the number of devices and their names.
 - Each action has a dry run. The dry run runs the same code on the device, reads the state, lists the steps and skips every call that changes state. A test runs each device script with the dry run and fails if it calls a method.
-- Each run and each dry run goes to the action log. See [Actions](../core/actions.md).
+- Each run and each dry run goes to the action log with an action ID. See [Actions](../core/actions.md).
+- An action on a device runs in its own background task, and a device runs one action at a time. This code stays in the actions file and in the window script. The window script calls no command that changes state.
 - Calls that change state (`Invoke-CimMethod`, `Start-Process`) appear only in the device scripts of the actions file. `Start-Process` appears only in the application action script block, which runs the installer. A test checks this.
 
 The right-click menus of the Applications, Updates and Collections grids hold the action entries: the Updates menu installs pending updates, the Applications menu uninstalls and repairs applications, and the Collections menu removes and adds a direct membership rule (see [Actions](../core/actions.md)). The collection browser reads the device collections with one `Get-CMDeviceCollection` call.

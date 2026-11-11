@@ -2,6 +2,24 @@
 
 All notable changes to Device Inspector are documented in this file.
 
+## [Unreleased]
+
+## 1 Device actions that run in the background
+
+### Added
+
+- Run an action on a device in its own background task. The window stays free: inspect other devices, search the device list and start actions on other devices while an action runs.
+- Allow one running action for each device. The tool refuses a second action on a device that has a running action, with the reason as tooltip or message.
+- Give each run and each dry run an action ID, and write it on the `STARTED` line and on the result line of the action log.
+- Show the running actions in a list under the Inspect bar, with the device, the action, the mode, the start time and the ID.
+- Show the result of a run in a window that does not take the focus. Refresh the view only when it shows the device of the run.
+- Ask for a confirmation when the window closes while actions run. Write a `CLOSED` line with the ID for each open run.
+
+### Changed
+
+- Write the action ID as the second field of each action log line, after the time.
+- Keep the changes of the site (add to and remove from a collection) on the exclusive path with the progress panel.
+
 ## [2026.11.10.0007] - 2026-11-10
 
 ## 1 Applications panel that shows the uninstall keys of the device live

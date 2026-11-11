@@ -567,7 +567,8 @@ function New-DeviceInspectorActionRecord {
     #
     # .DESCRIPTION
     # The window writes a start record to the action log before a run, so a run
-    # that stops part way still leaves a line. Outcome is OK, FAILED or STARTED.
+    # that stops part way still leaves a line. Outcome is OK, FAILED, STARTED or
+    # CLOSED. The ID ties the start line and the result line of one run together.
     #
     # .PARAMETER Action
     # The name of the action.
@@ -581,8 +582,13 @@ function New-DeviceInspectorActionRecord {
     # .PARAMETER Succeeded
     # $true when the action did what it had to do.
     #
+    # .PARAMETER ActionId
+    # Optional. The ID of the run, from New-DeviceInspectorActionId. An action function
+    # does not know the ID. The window adds it to the result with Add-DeviceInspectorActionId.
+    #
     # .PARAMETER Outcome
-    # Optional. STARTED for a start record. When omitted, Succeeded gives OK or FAILED.
+    # Optional. STARTED for a start record. CLOSED for a run that was still open when the
+    # window closed. When omitted, Succeeded gives OK or FAILED.
     #
     # .PARAMETER Summary
     # One sentence about the outcome.
@@ -599,13 +605,13 @@ function New-DeviceInspectorActionRecord {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] Properties: Action, ComputerName, DryRun, Mode, StartedAt,
+    # [pscustomobject] Properties: ActionId, Action, ComputerName, DryRun, Mode, StartedAt,
     # Account, Succeeded, Outcome, Summary, Steps.
     #
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261110.1
+    # Version: 1.1.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -622,7 +628,10 @@ function New-DeviceInspectorActionRecord {
         [bool]$Succeeded,
 
         [Parameter(Mandatory = $false)]
-        [ValidateSet('OK', 'FAILED', 'STARTED')]
+        [string]$ActionId = '',
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('OK', 'FAILED', 'STARTED', 'CLOSED')]
         [string]$Outcome,
 
         [Parameter(Mandatory = $true)]
@@ -650,6 +659,7 @@ function New-DeviceInspectorActionRecord {
             $strAccount = '{0}\{1}' -f [System.Environment]::UserDomainName, [System.Environment]::UserName
         }
         [pscustomobject]@{
+            ActionId     = $ActionId
             Action       = $Action
             ComputerName = $ComputerName
             DryRun       = $DryRun
@@ -1383,10 +1393,11 @@ function ConvertTo-DeviceInspectorActionText {
     # Formats an action result as text lines.
     #
     # .DESCRIPTION
-    # The first line holds the time, the account, the device, the action, the mode,
-    # the outcome and the summary. One indented line follows for each step. Line
-    # breaks and control characters in a field become one space, so text from the
-    # device cannot add a line to the action log.
+    # The first line holds the time, the action ID, the account, the device, the action,
+    # the mode, the outcome and the summary. A result without an ID shows a hyphen in
+    # the ID field. One indented line follows for each step. Line breaks and control
+    # characters in a field become one space, so text from the device cannot add a
+    # line to the action log.
     #
     # .PARAMETER Result
     # The object that an action function returns.
@@ -1394,7 +1405,7 @@ function ConvertTo-DeviceInspectorActionText {
     # .EXAMPLE
     # ConvertTo-DeviceInspectorActionText -Result $objResult
     #
-    # # <UTC time> | <domain\account> | WS01 | Client policy update | DRY RUN | OK | Dry run: ...
+    # # <UTC time> | <ID> | <domain\account> | WS01 | Client policy update | DRY RUN | OK | Dry run: ...
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
@@ -1405,7 +1416,7 @@ function ConvertTo-DeviceInspectorActionText {
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261110.0
+    # Version: 1.1.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
     param (
@@ -1421,7 +1432,11 @@ function ConvertTo-DeviceInspectorActionText {
         } elseif ($Result.Succeeded) {
             $strOutcome = 'OK'
         }
-        $arrField = @($Result.StartedAt, $Result.Account, $Result.ComputerName, $Result.Action, $Result.Mode, $strOutcome, $Result.Summary) | ForEach-Object { & $scriptBlockLine $_ }
+        $strActionId = '-'
+        if ($null -ne $Result.PSObject.Properties['ActionId'] -and -not [string]::IsNullOrEmpty([string]$Result.ActionId)) {
+            $strActionId = [string]$Result.ActionId
+        }
+        $arrField = @($Result.StartedAt, $strActionId, $Result.Account, $Result.ComputerName, $Result.Action, $Result.Mode, $strOutcome, $Result.Summary) | ForEach-Object { & $scriptBlockLine $_ }
         $arrField -join ' | '
         foreach ($strStep in @($Result.Steps)) {
             '    {0}' -f (& $scriptBlockLine $strStep)
@@ -1477,6 +1492,418 @@ function Write-DeviceInspectorActionLog {
         $objEncoding = New-Object -TypeName 'System.Text.UTF8Encoding' -ArgumentList $false
         [System.IO.File]::AppendAllText($strFullPath, $strText, $objEncoding)
         $strFullPath
+    }
+}
+
+function Write-DeviceInspectorCloseLog {
+    # .SYNOPSIS
+    # Writes one action log line for each run that was still open when the window closed.
+    #
+    # .DESCRIPTION
+    # A run on a device goes on when the window closes, but the window cannot write the
+    # result line of the run. The close line has the outcome CLOSED and the ID of the run,
+    # so the start line of the run and the close line belong together. The function returns
+    # the number of lines written.
+    #
+    # .PARAMETER Path
+    # The action log file.
+    #
+    # .PARAMETER Run
+    # The runs that are still open. Each run comes from New-DeviceInspectorActionRun.
+    #
+    # .EXAMPLE
+    # $intWritten = Write-DeviceInspectorCloseLog -Path 'C:\Tools\Logs\DeviceInspector-actions.log' -Run $arrOpenRun
+    #
+    # # Returns 1 for one open run.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [int] The number of lines written.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([int])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [object[]]$Run
+    )
+
+    process {
+        $intWritten = 0
+        foreach ($objRun in @($Run)) {
+            if ($null -eq $objRun) {
+                continue
+            }
+            $strSummary = 'The window closed while this run was open. The run on the device continues. The tool does not write its result.'
+            $objRecord = New-DeviceInspectorActionRecord -Action ([string]$objRun.Action) -ComputerName ([string]$objRun.ComputerName) -DryRun ([bool]$objRun.DryRun) -Succeeded $false -Outcome 'CLOSED' -ActionId ([string]$objRun.ActionId) -Summary $strSummary -Steps @(('The run started at {0}.' -f [string]$objRun.StartedAt))
+            $null = Write-DeviceInspectorActionLog -Path $Path -Result $objRecord
+            $intWritten++
+        }
+        $intWritten
+    }
+}
+
+function Add-DeviceInspectorActionId {
+    # .SYNOPSIS
+    # Sets the action ID on the result that an action function returned.
+    #
+    # .DESCRIPTION
+    # An action function does not know the ID of its run. The window calls this function
+    # when the run ends, so the result line carries the same ID as the start line.
+    #
+    # .PARAMETER Result
+    # The object that an action function returned.
+    #
+    # .PARAMETER ActionId
+    # The ID of the run.
+    #
+    # .EXAMPLE
+    # $objResult = Add-DeviceInspectorActionId -Result $objResult -ActionId 'a1b2c3d4'
+    #
+    # # $objResult.ActionId = 'a1b2c3d4'
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] The same result object, with the property ActionId.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Result,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ActionId
+    )
+
+    process {
+        Add-Member -InputObject $Result -NotePropertyName 'ActionId' -NotePropertyValue $ActionId -Force
+        $Result
+    }
+}
+
+function New-DeviceInspectorActionId {
+    # .SYNOPSIS
+    # Returns a short unique ID for one action run.
+    #
+    # .DESCRIPTION
+    # The ID has eight lower-case hexadecimal characters, taken from a new GUID. The window
+    # makes one ID for each run and each dry run. The start line, the result line and the
+    # close line of the action log carry it, and the list of running actions shows it.
+    #
+    # .EXAMPLE
+    # $strId = New-DeviceInspectorActionId
+    #
+    # # $strId = 'a1b2c3d4'
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] The ID.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param ()
+
+    process {
+        [System.Guid]::NewGuid().ToString('N').Substring(0, 8)
+    }
+}
+
+function New-DeviceInspectorActionRun {
+    # .SYNOPSIS
+    # Builds the object that describes one action run.
+    #
+    # .DESCRIPTION
+    # The window keeps one such object for each running action. The list of running
+    # actions shows it, and the one-action-for-each-device check reads it.
+    #
+    # .PARAMETER ActionId
+    # The ID of the run, from New-DeviceInspectorActionId.
+    #
+    # .PARAMETER Action
+    # The name of the action.
+    #
+    # .PARAMETER ComputerName
+    # The device name.
+    #
+    # .PARAMETER DryRun
+    # $true for a dry run.
+    #
+    # .EXAMPLE
+    # $objRun = New-DeviceInspectorActionRun -ActionId 'a1b2c3d4' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false
+    #
+    # # $objRun.Mode = 'RUN'
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties: ActionId, Action, ComputerName, DryRun, Mode, StartedAt (local time), StartedAtUtc.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ActionId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Action,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$DryRun
+    )
+
+    process {
+        $strMode = 'RUN'
+        if ($DryRun) {
+            $strMode = 'DRY RUN'
+        }
+        $dateStart = [datetime]::Now
+        [pscustomobject]@{
+            ActionId     = $ActionId
+            Action       = $Action
+            ComputerName = $ComputerName
+            DryRun       = $DryRun
+            Mode         = $strMode
+            StartedAt    = $dateStart.ToString('HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
+            StartedAtUtc = $dateStart.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', [System.Globalization.CultureInfo]::InvariantCulture)
+        }
+    }
+}
+
+function Get-DeviceInspectorRunningAction {
+    # .SYNOPSIS
+    # Returns the running action of a device, or nothing.
+    #
+    # .DESCRIPTION
+    # A device has at most one running action. The function compares the device name without
+    # regard to case.
+    #
+    # .PARAMETER Run
+    # The running actions. Each one comes from New-DeviceInspectorActionRun.
+    #
+    # .PARAMETER ComputerName
+    # The device name.
+    #
+    # .EXAMPLE
+    # $objRun = Get-DeviceInspectorRunningAction -Run $arrRun -ComputerName 'ws01'
+    #
+    # # Returns the run on WS01, or $null.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] The run, or nothing.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [object[]]$Run,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$ComputerName
+    )
+
+    process {
+        if ([string]::IsNullOrEmpty($ComputerName)) {
+            return
+        }
+        foreach ($objRun in @($Run)) {
+            if ($null -ne $objRun -and [string]::Equals([string]$objRun.ComputerName, $ComputerName, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $objRun
+                return
+            }
+        }
+    }
+}
+
+function Get-DeviceInspectorRunBlock {
+    # .SYNOPSIS
+    # Returns the reason why a device cannot start an action because it has a running action, or an empty string.
+    #
+    # .DESCRIPTION
+    # A device has at most one running action at a time. The reason names the running action,
+    # its ID and its start time. A running action of another device does not block.
+    #
+    # .PARAMETER Run
+    # The running actions. Each one comes from New-DeviceInspectorActionRun.
+    #
+    # .PARAMETER ComputerName
+    # The device that the action targets.
+    #
+    # .EXAMPLE
+    # Get-DeviceInspectorRunBlock -Run $arrRun -ComputerName 'WS01'
+    #
+    # # Returns 'Client policy update (ID a1b2c3d4) is running on WS01 since 10:15:02. ...'
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] The reason, or an empty string.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [object[]]$Run,
+
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$ComputerName
+    )
+
+    process {
+        $objRunning = Get-DeviceInspectorRunningAction -Run @($Run) -ComputerName $ComputerName
+        if ($null -eq $objRunning) {
+            return ''
+        }
+        '{0} (ID {1}) is running on {2} since {3}. A device runs one action at a time. Wait until it ends.' -f $objRunning.Action, $objRunning.ActionId, $objRunning.ComputerName, $objRunning.StartedAt
+    }
+}
+
+function Register-DeviceInspectorActionRun {
+    # .SYNOPSIS
+    # Adds a run to the list of running actions, or refuses when the device has a running action.
+    #
+    # .DESCRIPTION
+    # A device has at most one running action at a time. The function throws when the list
+    # holds a run of the same device. The device names are compared without regard to case.
+    #
+    # .PARAMETER Runs
+    # The list of running actions.
+    #
+    # .PARAMETER Run
+    # The run to add, from New-DeviceInspectorActionRun.
+    #
+    # .EXAMPLE
+    # Register-DeviceInspectorActionRun -Runs $listRun -Run $objRun
+    #
+    # # Adds the run, or throws.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # None.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([void])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IList]$Runs,
+
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Run
+    )
+
+    process {
+        $objRunning = Get-DeviceInspectorRunningAction -Run @($Runs) -ComputerName ([string]$Run.ComputerName)
+        if ($null -ne $objRunning) {
+            throw ('{0} (ID {1}) is running on {2}. A device runs one action at a time.' -f $objRunning.Action, $objRunning.ActionId, $objRunning.ComputerName)
+        }
+        [void]$Runs.Add($Run)
+    }
+}
+
+function Unregister-DeviceInspectorActionRun {
+    # .SYNOPSIS
+    # Removes a run from the list of running actions.
+    #
+    # .DESCRIPTION
+    # The window calls it when a run ends. The function returns the run that it removed,
+    # or nothing when the list holds no run with that ID.
+    #
+    # .PARAMETER Runs
+    # The list of running actions.
+    #
+    # .PARAMETER ActionId
+    # The ID of the run to remove.
+    #
+    # .EXAMPLE
+    # $objRun = Unregister-DeviceInspectorActionRun -Runs $listRun -ActionId 'a1b2c3d4'
+    #
+    # # Returns the removed run.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] The removed run, or nothing.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IList]$Runs,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ActionId
+    )
+
+    process {
+        for ($intIndex = 0; $intIndex -lt $Runs.Count; $intIndex++) {
+            if ([string]$Runs[$intIndex].ActionId -eq $ActionId) {
+                $objRun = $Runs[$intIndex]
+                $Runs.RemoveAt($intIndex)
+                $objRun
+                return
+            }
+        }
     }
 }
 

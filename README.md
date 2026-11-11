@@ -22,7 +22,7 @@ The user guide is in [docs/index.md](docs/index.md). It has one page for each pa
 - Keeps going when one part fails. A part that fails (a device that is off, a device the site does not know) is listed under Problems. The other parts still run.
 - Exports the inspection as JSON or as a self-contained HTML report.
 - Read only. The tool reads the site with ConfigurationManager cmdlets (and `SELECT` queries through `Invoke-CMWmiQuery` where no cmdlet exists) and reads the device with one remote script block. The inspection never changes the site or the device. A test checks the inspection code and the window script for state-changing commands.
-- Actions behind a switch. **Enable actions** is off at each start. Each action asks for a confirmation that shows the device count, offers a dry run, and writes to `Logs\DeviceInspector-actions.log`. See [docs/core/actions.md](docs/core/actions.md).
+- Actions behind a switch. **Enable actions** is off at each start. Each action asks for a confirmation that shows the device count, offers a dry run, and writes to `Logs\DeviceInspector-actions.log` with an action ID. An action on a device runs in the background, so you can work on other devices; a device runs one action at a time. See [docs/core/actions.md](docs/core/actions.md).
 - Dark and light themes with a runtime toggle, like the other tools of the AppPackager Suite.
 
 ## Requirements

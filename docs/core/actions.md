@@ -10,8 +10,39 @@ Each action follows the same steps:
 2. You select the action button.
 3. A dialog names the action. A banner at the top shows the number of devices that the action targets, and their names.
 4. You select **Run**, **Dry run** or **Cancel**. **Cancel** is the default button, so Enter and Esc change nothing.
-5. The action runs in the background. **Dry run** reads the current state and lists the steps, and changes nothing.
-6. Before a run, the tool writes a `STARTED` line to the action log. If it cannot write the line, the run does not start. The result goes to the window log, to the tool log and to the action log. A message shows the result.
+5. The action gets an action ID: eight characters, for example `a1b2c3d4`. A dry run gets an ID too.
+6. The action runs in the background. **Dry run** reads the current state and lists the steps, and changes nothing.
+7. Before a run, the tool writes a `STARTED` line with the ID to the action log. If it cannot write the line, the run does not start. When the run ends, the result line with the same ID goes to the action log, and the result goes to the window log and to the tool log. A result window shows the result. See [Running actions](#running-actions).
+
+## Running actions
+
+An action on a device runs in its own background task. The window stays free while it runs:
+
+- You can inspect other devices and search the device list.
+- You can start actions on other devices. Each device has its own task.
+- A list **RUNNING ACTIONS** appears under the Inspect bar while at least one action runs. Each row shows the device, the action, the mode, the start time and the ID. A row goes away when its run ends. The status bar shows how many actions run.
+
+A device runs one action at a time. A run, and a dry run, counts as an action. The device name is compared without regard to case. When the device of the inspection on screen has a running action:
+
+- the action buttons are off, and their tooltip names the running action, its ID and its start time;
+- the right-click menu entries of the actions are off, with the same reason as the tooltip;
+- an action that you start in another way is refused with the same reason.
+
+You can start the next action on the device after the first one ends.
+
+When a run ends, a result window opens. It does not take the focus, so your typing and clicks stay in the main window. Select **OK** to close it. The tool refreshes the view of the result only when the inspection on screen is of the same device. After a **Full hardware inventory**, for example, the inventory check changes only for the device on screen. When the device is not on screen, the window log says to inspect it again.
+
+The inspection, the device list search and the changes of the site (**Add to collection...** and **Remove from collection...**) keep their own way: they hold the window until they end, and the progress panel shows them. A change of the site runs on the computer of the tool, in the Configuration Manager console module, so it cannot go on without the window. The tool refuses a change of the site while the device has a running action. These changes have an ID in the action log too.
+
+### Close the window while actions run
+
+When you close the window while actions run on devices, the tool asks for a confirmation. The text names each running action and its ID. If you select **Yes**:
+
+- The runs on the devices continue. The tool does not stop them.
+- The tool does not write the result lines of these runs.
+- The tool writes one line with the outcome `CLOSED` and the ID of the run for each action that was open. The line of a real run goes with the `STARTED` line of the same ID.
+
+Inspect the device later to see its state.
 
 ## When to use it
 
@@ -164,10 +195,21 @@ The repair runs the same device steps as **Full hardware inventory**, under the 
 
 ## The action log
 
-The action log is `Logs\DeviceInspector-actions.log` in the script folder. The tool appends to it and never deletes it. It keeps every run and every dry run of every session. Each entry has one line with the UTC time, the account, the device, the action, the mode (`RUN` or `DRY RUN`), the outcome (`STARTED`, `OK` or `FAILED`) and a summary, then one indented line for each step. A line break in a field from the device becomes a space.
+The action log is `Logs\DeviceInspector-actions.log` in the script folder. The tool appends to it and never deletes it. It keeps every run and every dry run of every session. Each entry has one line with the UTC time, the action ID, the account, the device, the action, the mode (`RUN` or `DRY RUN`), the outcome and a summary, then one indented line for each step. A line break in a field from the device becomes a space.
+
+The outcomes are:
+
+| Outcome | Meaning |
+|---|---|
+| `STARTED` | A real run started. The tool writes the line before the run. A dry run has no `STARTED` line. |
+| `OK` | The run ended and did what it had to do. |
+| `FAILED` | The run ended and did not do what it had to do. The summary names the reason, and the exit code when the installer gave one. |
+| `CLOSED` | The window closed while the run was open. The run on the device continues. The tool does not write its result. |
+
+The ID joins the lines of one run: the `STARTED` line and the `OK` or `FAILED` line have the same ID. A dry run has one line with an ID. A line from an older version of the tool has no ID field, and one from a result without an ID shows a hyphen.
 
 ```text
-2026-11-10T20:00:00Z | CONTOSO\admin1 | CLIENT01 | Client policy update | DRY RUN | OK | Dry run: the client answers. Nothing changed.
+2026-11-10T20:00:00Z | a1b2c3d4 | CONTOSO\admin1 | CLIENT01 | Client policy update | DRY RUN | OK | Dry run: the client answers. Nothing changed.
     Client version 5.00.9146.1009 answers.
     Dry run: would trigger Machine policy retrieval (Machine Policy Assignments Request) {00000000-0000-0000-0000-000000000021}.
     Dry run: would trigger Machine policy evaluation (Machine Policy Evaluation) {00000000-0000-0000-0000-000000000022}.
@@ -176,6 +218,8 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 ## Limits
 
 - An action works on the device of the last inspection. Inspect again after you change the device name.
+- A device runs one action at a time. Actions on other devices can run at the same time.
+- A change of the site holds the window until it ends.
 - A request to the client starts work on the client. The result of that work shows in a later inspection.
 
 ## Troubleshooting
@@ -185,6 +229,8 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 | Cannot run the action on <device>: ... | WinRM to the device failed. On a run, a step can have run before the failure. | Check that the device is on and that your account is a local administrator on it. Inspect the device to see its state. |
 | <step> failed. The earlier steps, if any, ran. | A method call on the client failed. | Read the step lines in the log. Read `PolicyAgent.log` on the device. |
 | The action log cannot be written, so the run does not start. | The `Logs` folder is not writable. | Make the folder of the script writable. |
+| <action> (ID <id>) is running on <device> since <time>. A device runs one action at a time. Wait until it ends. | The device has a running action. | Wait until the row of the device leaves the list **RUNNING ACTIONS**, or act on another device. |
+| A line with the outcome `CLOSED` and no result line for the ID. | You closed the window while the run was open. | Inspect the device to see its state. |
 | The Configuration Manager client does not answer: ... | The client is not installed or its WMI namespace is broken. | Install or repair the client. |
 | ... failed with return value <n>. | The client refused the request. | Read `PolicyAgent.log` on the device. |
 | The hardware inventory status cannot be read: ... | WMI refused the read of `root\ccm\invagt`. | Check the rights on `root\ccm\invagt`. Repair the client. |

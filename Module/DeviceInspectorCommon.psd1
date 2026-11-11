@@ -40,6 +40,14 @@
         'ConvertTo-DeviceInspectorActionText'
         'Write-DeviceInspectorActionLog'
         'New-DeviceInspectorActionRecord'
+        'New-DeviceInspectorActionId'
+        'New-DeviceInspectorActionRun'
+        'Get-DeviceInspectorRunningAction'
+        'Get-DeviceInspectorRunBlock'
+        'Register-DeviceInspectorActionRun'
+        'Unregister-DeviceInspectorActionRun'
+        'Add-DeviceInspectorActionId'
+        'Write-DeviceInspectorCloseLog'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()
