@@ -939,7 +939,7 @@ Describe 'Remove from collection' {
             Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
             Mock Disconnect-InspectorSite { }
             Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 16777221; Name = 'WS01' } }
-            Mock Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot' } }
+            Mock Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot'; LimitToCollectionID = '' } }
             Mock Get-CMDeviceCollectionDirectMembershipRule { [pscustomobject]@{ ResourceID = 16777221; RuleName = 'WS01' } }
             Mock Remove-CMDeviceCollectionDirectMembershipRule { }
             Mock Add-CMDeviceCollectionDirectMembershipRule { }
