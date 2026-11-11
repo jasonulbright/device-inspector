@@ -1049,10 +1049,10 @@ Describe 'Remove from collection' {
         $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
         $objResult.Succeeded | Should -BeTrue
         ($objResult.Steps -join "`n") | Should -Match 'did not show the new membership within 60 seconds'
-        Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { throw 'query failed' }
-        ((Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Steps -join "`n") | Should -Match 'Last read error: query failed'
         Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMClientAction -Times 1 -Exactly
         Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 12 -Exactly
+        Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { throw 'query failed' }
+        ((Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Steps -join "`n") | Should -Match 'Last read error: query failed'
     }
 
     It 'refuses a missing collection, a failed rule read and a new resource ID, and disconnects each time' {
