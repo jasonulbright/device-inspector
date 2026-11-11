@@ -278,3 +278,152 @@ Describe 'Full output log file' {
         $script:strStart | Should -Match '(?s)\$btnOpenLog\.Add_Click\(\{.*?Invoke-Item -LiteralPath \$script:ToolLogPath -ErrorAction Stop'
     }
 }
+
+Describe 'Full hardware inventory' {
+    BeforeAll {
+        $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+    }
+
+    It 'passes DryRun <DryRun> to the device script' -ForEach @(@{ DryRun = $true }, @{ DryRun = $false }) {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+        $objResult = Invoke-DeviceInspectorFullInventory -ComputerName 'WS01' -DryRun:$DryRun
+        $objResult.Action | Should -Be 'Full hardware inventory'
+        $objResult.DryRun | Should -Be $DryRun
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript -Times 1 -Exactly -ParameterFilter { $ArgumentList[0] -eq $DryRun }
+    }
+
+    It 'shows the status record and changes nothing in a dry run' {
+        InModuleScope DeviceInspectorCommon {
+            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{
+                InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = [datetime]'2026-11-10T10:00:00Z'
+                LastReportDate = [datetime]'2026-11-10T10:01:00Z'; LastMajorReportVersion = [uint32]4; LastMinorReportVersion = [uint32]2
+            }
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { $objStatus } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Remove-CimInstance { }
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockFullInventory $true
+            $objRaw.Succeeded | Should -BeTrue
+            ($objRaw.Steps -join "`n") | Should -Match 'report version 4\.2'
+            ($objRaw.Steps -join "`n") | Should -Match 'Dry run: would delete the InventoryActionStatus record'
+            ($objRaw.Steps -join "`n") | Should -Match 'Dry run: would trigger Hardware Inventory \{00000000-0000-0000-0000-000000000001\}'
+            Should -Invoke Remove-CimInstance -Times 0 -Exactly
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+            Should -Invoke Get-CimInstance -Times 1 -Exactly -ParameterFilter { $Namespace -eq 'root\ccm\invagt' -and $Filter -eq "InventoryActionID = '{00000000-0000-0000-0000-000000000001}'" }
+        }
+    }
+
+    It 'deletes the status record first, then triggers hardware inventory' {
+        InModuleScope DeviceInspectorCommon {
+            $script:listCall = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = [datetime]'2026-11-10T10:00:00Z'; LastReportDate = [datetime]'2026-11-10T10:01:00Z'; LastMajorReportVersion = [uint32]1; LastMinorReportVersion = [uint32]0 }
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { $objStatus } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Remove-CimInstance { $script:listCall.Add('remove') }
+            Mock Invoke-CimMethod { $script:listCall.Add($Arguments.sScheduleID); [pscustomobject]@{ ReturnValue = $null } }
+            $objRaw = & $script:scriptBlockFullInventory $false
+            $objRaw.Succeeded | Should -BeTrue
+            @($script:listCall) | Should -Be @('remove', '{00000000-0000-0000-0000-000000000001}')
+        }
+    }
+
+    It 'only triggers hardware inventory when no status record exists' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Remove-CimInstance { }
+            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 0 } }
+            $objRaw = & $script:scriptBlockFullInventory $false
+            $objRaw.Succeeded | Should -BeTrue
+            ($objRaw.Steps -join "`n") | Should -Match 'No hardware inventory status record exists'
+            Should -Invoke Remove-CimInstance -Times 0 -Exactly
+            Should -Invoke Invoke-CimMethod -Times 1 -Exactly
+        }
+    }
+
+    It 'does not trigger when the delete fails' {
+        InModuleScope DeviceInspectorCommon {
+            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = [datetime]'2026-11-10T10:00:00Z'; LastReportDate = [datetime]'2026-11-10T10:01:00Z'; LastMajorReportVersion = [uint32]1; LastMinorReportVersion = [uint32]0 }
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { $objStatus } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Remove-CimInstance { throw 'Access denied' }
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockFullInventory $false
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'cannot be deleted\. The schedule was not triggered'
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'says that the record is deleted when the trigger fails' {
+        InModuleScope DeviceInspectorCommon {
+            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = [datetime]'2026-11-10T10:00:00Z'; LastReportDate = [datetime]'2026-11-10T10:01:00Z'; LastMajorReportVersion = [uint32]1; LastMinorReportVersion = [uint32]0 }
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { $objStatus } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Remove-CimInstance { }
+            Mock Invoke-CimMethod { throw 'Generic failure' }
+            $objRaw = & $script:scriptBlockFullInventory $false
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'The status record is deleted, but the cycle did not start'
+        }
+    }
+
+    It 'reports a refused trigger after the delete' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 2 } }
+            $objRaw = & $script:scriptBlockFullInventory $false
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'return value 2'
+        }
+    }
+
+    It 'stops before any change when <Case>' -ForEach @(
+        @{ Case = 'the client read throws'; Client = { throw 'Invalid namespace' }; Status = { }; Expected = 'does not answer' }
+        @{ Case = 'the client is missing'; Client = { }; Status = { }; Expected = 'not installed' }
+        @{ Case = 'the status read throws'; Client = { [pscustomobject]@{ ClientVersion = '5.00' } }; Status = { throw 'Access denied' }; Expected = 'status cannot be read' }
+    ) {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Client = $Client; Status = $Status; Expected = $Expected } {
+            param($Client, $Status, $Expected)
+            Mock Get-CimInstance $Client -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance $Status -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            Mock Remove-CimInstance { }
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockFullInventory $false
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match $Expected
+            Should -Invoke Remove-CimInstance -Times 0 -Exactly
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'lists only the trigger in a dry run with no record, and accepts a record without dates' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            $objRaw = & $script:scriptBlockFullInventory $true
+            ($objRaw.Steps -join "`n") | Should -Not -Match 'would delete'
+            ($objRaw.Steps -join "`n") | Should -Match 'would trigger'
+            $objNull = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastMajorReportVersion = [uint32]0; LastMinorReportVersion = [uint32]0 }
+            Mock Get-CimInstance { $objNull } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+            (& $script:scriptBlockFullInventory $true).Succeeded | Should -BeTrue
+        }
+    }
+
+    It 'requires the DryRun argument in every device script' {
+        InModuleScope DeviceInspectorCommon {
+            foreach ($scriptBlockDevice in @($script:scriptBlockPolicyUpdate, $script:scriptBlockFullInventory)) {
+                $objParameter = $scriptBlockDevice.Ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'DryRun' }
+                ($objParameter.Attributes | Where-Object { $_.TypeName.Name -eq 'Parameter' }).Extent.Text | Should -Match 'Mandatory = \$true'
+            }
+        }
+    }
+
+    It 'has a Device panel button that runs the action through the gate' {
+        $script:strXaml | Should -Match 'x:Name="btnFullInventory"'
+        $script:strStart | Should -Match "(?s)\`$btnFullInventory\.Add_Click\(\{\s*Invoke-DeviceAction -Name 'Full hardware inventory' -Function 'Invoke-DeviceInspectorFullInventory'"
+        $script:strStart | Should -Match '\$btnFullInventory\.IsEnabled = Test-DeviceActionReady'
+    }
+}

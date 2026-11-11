@@ -10,7 +10,7 @@
 # Runs on the device. Requests machine policy, then evaluates it. A ReturnValue other
 # than 0 stops the run, because the evaluation of old policy has no use.
 $script:scriptBlockPolicyUpdate = {
-    param ([bool]$DryRun)
+    param ([Parameter(Mandatory = $true)][bool]$DryRun)
 
     $ErrorActionPreference = 'Stop'
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
@@ -54,6 +54,84 @@ $script:scriptBlockPolicyUpdate = {
         $strSummary = 'Dry run: the client answers. Nothing changed.'
     }
     [pscustomobject]@{ Succeeded = $true; Summary = $strSummary; Steps = @($listStep) }
+}
+
+# Runs on the device. Deletes the status record of the hardware inventory action, then
+# starts a hardware inventory cycle. Without the record, the client sends a full report
+# instead of a delta, so the site replaces all hardware inventory of the device.
+$script:scriptBlockFullInventory = {
+    param ([Parameter(Mandatory = $true)][bool]$DryRun)
+
+    $ErrorActionPreference = 'Stop'
+    $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $strActionId = '{00000000-0000-0000-0000-000000000001}'
+    $strFormat = 'yyyy-MM-ddTHH:mm:ssZ'
+    $objCulture = [System.Globalization.CultureInfo]::InvariantCulture
+    try {
+        $objClient = Get-CimInstance -Namespace 'root\ccm' -ClassName 'SMS_Client'
+    } catch {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The Configuration Manager client does not answer: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+    }
+    if ($null -eq $objClient) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client is not installed on the device.'; Steps = @($listStep) }
+    }
+    $listStep.Add(('Client version {0} answers.' -f [string]$objClient.ClientVersion))
+    try {
+        $arrStatus = @(Get-CimInstance -Namespace 'root\ccm\invagt' -ClassName 'InventoryActionStatus' -Filter ("InventoryActionID = '{0}'" -f $strActionId))
+    } catch {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The hardware inventory status cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+    }
+    foreach ($objStatus in $arrStatus) {
+        try {
+            $strCycle = ''
+            $strReport = ''
+            if ($null -ne $objStatus.LastCycleStartedDate) {
+                $strCycle = ([datetime]$objStatus.LastCycleStartedDate).ToUniversalTime().ToString($strFormat, $objCulture)
+            }
+            if ($null -ne $objStatus.LastReportDate) {
+                $strReport = ([datetime]$objStatus.LastReportDate).ToUniversalTime().ToString($strFormat, $objCulture)
+            }
+            $listStep.Add(('Hardware inventory status: last cycle {0}, last report {1}, report version {2}.{3}.' -f $strCycle, $strReport, $objStatus.LastMajorReportVersion, $objStatus.LastMinorReportVersion))
+        } catch {
+            $listStep.Add('Hardware inventory status: a record exists. Its values cannot be read.')
+        }
+    }
+    if ($arrStatus.Count -eq 0) {
+        $listStep.Add('No hardware inventory status record exists. The next cycle sends a full report.')
+    }
+    if ($DryRun) {
+        foreach ($objStatus in $arrStatus) {
+            $listStep.Add(('Dry run: would delete the InventoryActionStatus record {0} in root\ccm\invagt.' -f $strActionId))
+        }
+        $listStep.Add(('Dry run: would trigger Hardware Inventory {0}.' -f $strActionId))
+        return [pscustomobject]@{ Succeeded = $true; Summary = 'Dry run: the client answers. Nothing changed.'; Steps = @($listStep) }
+    }
+    foreach ($objStatus in $arrStatus) {
+        try {
+            Remove-CimInstance -InputObject $objStatus
+        } catch {
+            $listStep.Add(('Delete of the status record failed: {0}' -f $_.Exception.Message))
+            return [pscustomobject]@{ Succeeded = $false; Summary = 'The hardware inventory status record cannot be deleted. The schedule was not triggered.'; Steps = @($listStep) }
+        }
+        $listStep.Add(('Deleted the InventoryActionStatus record {0}.' -f $strActionId))
+    }
+    try {
+        $objReturn = Invoke-CimMethod -Namespace 'root\ccm' -ClassName 'SMS_Client' -MethodName 'TriggerSchedule' -Arguments @{ sScheduleID = $strActionId }
+        $objReturnValue = $null
+        if ($null -ne $objReturn -and $null -ne $objReturn.PSObject.Properties['ReturnValue']) {
+            $objReturnValue = $objReturn.ReturnValue
+        }
+        $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
+    } catch {
+        $listStep.Add(('Hardware Inventory trigger failed: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The status record is deleted, but the cycle did not start. The next scheduled cycle sends a full report.'; Steps = @($listStep) }
+    }
+    if ($boolRefused) {
+        $listStep.Add(('Hardware Inventory trigger failed: TriggerSchedule returned {0}.' -f $objReturnValue))
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The cycle did not start (return value {0}). The next scheduled cycle sends a full report.' -f $objReturnValue); Steps = @($listStep) }
+    }
+    $listStep.Add(('Triggered Hardware Inventory {0}.' -f $strActionId))
+    [pscustomobject]@{ Succeeded = $true; Summary = 'The client started a hardware inventory cycle with no status record, so it sends a full report. InventoryAgent.log on the device shows the report.'; Steps = @($listStep) }
 }
 
 #endregion Remote script blocks
@@ -387,6 +465,70 @@ function Invoke-DeviceInspectorPolicyUpdate {
             Action       = 'Client policy update'
             ComputerName = $ComputerName
             ScriptBlock  = $script:scriptBlockPolicyUpdate
+            DryRun       = $DryRun
+        }
+        if ($PSBoundParameters.ContainsKey('Credential')) {
+            $hashtableAction['Credential'] = $Credential
+        }
+        Invoke-ActionOnDevice @hashtableAction
+    }
+}
+
+function Invoke-DeviceInspectorFullInventory {
+    # .SYNOPSIS
+    # Makes the Configuration Manager client on a device send a full hardware inventory.
+    #
+    # .DESCRIPTION
+    # Runs on the device over WinRM. It deletes the InventoryActionStatus record of
+    # hardware inventory in root\ccm\invagt, then triggers the Hardware Inventory
+    # schedule with SMS_Client.TriggerSchedule. With DryRun it reads the record,
+    # lists the steps, and changes nothing.
+    #
+    # .PARAMETER ComputerName
+    # The device name.
+    #
+    # .PARAMETER DryRun
+    # Read the record and list the steps only.
+    #
+    # .PARAMETER Credential
+    # An optional credential for the WinRM connection.
+    #
+    # .EXAMPLE
+    # Invoke-DeviceInspectorFullInventory -ComputerName 'WS01' -DryRun
+    #
+    # # Shows the status record and the two steps. Nothing changes.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] See New-DeviceInspectorActionRecord.
+    #
+    # .NOTES
+    # Non-throwing contract: a failure gives Succeeded $false and a Summary.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9_.-]{1,255}\z')]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$DryRun,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    process {
+        $hashtableAction = @{
+            Action       = 'Full hardware inventory'
+            ComputerName = $ComputerName
+            ScriptBlock  = $script:scriptBlockFullInventory
             DryRun       = $DryRun
         }
         if ($PSBoundParameters.ContainsKey('Credential')) {

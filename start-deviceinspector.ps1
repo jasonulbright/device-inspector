@@ -136,6 +136,7 @@ $viewProblems    = $window.FindName('viewProblems')
 
 $txtSummary      = $window.FindName('txtSummary')
 $btnPolicyUpdate = $window.FindName('btnPolicyUpdate')
+$btnFullInventory = $window.FindName('btnFullInventory')
 $gridFacts       = $window.FindName('gridFacts')
 $txtAppFilter    = $window.FindName('txtAppFilter')
 $cboAppStatus    = $window.FindName('cboAppStatus')
@@ -257,6 +258,7 @@ function Update-ControlState {
     $btnExportHtml.IsEnabled = $has
     $toggleActions.IsEnabled = $idle
     $btnPolicyUpdate.IsEnabled = Test-DeviceActionReady
+    $btnFullInventory.IsEnabled = Test-DeviceActionReady
 }
 
 # === View switching ===
@@ -859,6 +861,11 @@ function Start-ActionWork {
 $btnPolicyUpdate.Add_Click({
     Invoke-DeviceAction -Name 'Client policy update' -Function 'Invoke-DeviceInspectorPolicyUpdate' `
         -Message 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it (Machine Policy Retrieval and Evaluation Cycle).'
+})
+
+$btnFullInventory.Add_Click({
+    Invoke-DeviceAction -Name 'Full hardware inventory' -Function 'Invoke-DeviceInspectorFullInventory' `
+        -Message 'The tool deletes the hardware inventory status record on the device (InventoryActionStatus, root\ccm\invagt), then starts a hardware inventory cycle. The client then sends a full report, and the site replaces all hardware inventory of the device.'
 })
 
 # === Log file ===
