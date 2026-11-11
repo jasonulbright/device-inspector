@@ -2,6 +2,24 @@
 
 All notable changes to Device Inspector are documented in this file.
 
+## [Unreleased]
+
+## 1 Applications panel that shows the uninstall keys of the device live
+
+### Changed
+
+- Show one row for each uninstall registry key of the device, with its type and view.
+- Uninstall and repair an application from its uninstall key, not from the client policy.
+- Run MSI products with msiexec, and EXE entries with their quiet uninstall string.
+- Turn Uninstall and Repair off, with the reason as tooltip, when the key does not allow them.
+- Filter the Applications panel by type: All, MSI or EXE.
+- Show the version, publisher, install date, type and key name in the HTML report.
+
+### Removed
+
+- Remove the Status column, its filter values and the Inventory version column.
+- Remove the rows of Configuration Manager applications from the Applications panel.
+
 ## [2026.11.10.0006] - 2026-11-10
 
 ## 9 actions that change a device or the site, each with a dry run and an action log

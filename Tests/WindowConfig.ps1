@@ -33,8 +33,8 @@ $script:SampleRows = @{
         [PSCustomObject]@{ Group = 'Site record'; Name = 'Resource ID'; Value = '16777221' }
     )
     gridApps        = @(
-        [PSCustomObject]@{ Name = 'Sample application'; DeviceVersion = '2.0'; InventoryVersion = '1.0'; Publisher = 'Sample publisher'; Status = 'Version differs' }
-        [PSCustomObject]@{ Name = 'Second application'; DeviceVersion = '3.1'; InventoryVersion = '3.1'; Publisher = 'Sample publisher'; Status = 'Match' }
+        [PSCustomObject]@{ Name = 'Sample application'; Version = '2.0'; Publisher = 'Sample publisher'; InstallDate = '20261101'; Type = 'MSI'; View = '64-bit' }
+        [PSCustomObject]@{ Name = 'Second application'; Version = '3.1'; Publisher = 'Sample publisher'; InstallDate = ''; Type = 'EXE'; View = '32-bit' }
     )
     gridUpdates     = @(
         [PSCustomObject]@{ Source = 'Site'; Article = 'KB5001'; Severity = 'Critical'; State = 'Required'; Deadline = ''; Title = 'Cumulative update' }

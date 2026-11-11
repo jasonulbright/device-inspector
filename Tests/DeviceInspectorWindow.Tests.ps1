@@ -40,9 +40,10 @@ BeforeAll {
                 OperatingSystem       = [pscustomobject]@{ Caption = 'Windows 11'; Version = '10.0.26200'; BuildNumber = '26200'; Architecture = '64-bit'; LastBootUp = '2026-11-05T02:50:41Z' }
                 Client                = [pscustomobject]@{ ServiceState = 'Running'; ServiceStartMode = 'Auto'; Version = '5.00.9146.1009'; AssignedSiteCode = 'ABC'; CurrentManagementPoint = 'sms01.example.com'; LastHardwareInventoryCycle = '2026-11-03T00:50:53Z'; LastDiscoveryDataCycle = '2026-11-05T04:02:36Z' }
                 InstalledApplications = @(
-                    [pscustomobject]@{ Name = '7-zip'; Version = '26.03'; Publisher = 'Igor Pavlov' }
-                    [pscustomobject]@{ Name = 'Edge'; Version = '2.0'; Publisher = 'Microsoft' }
-                    [pscustomobject]@{ Name = 'Device Only App'; Version = '3.0'; Publisher = 'Vendor' }
+                    [pscustomobject]@{ Name = '7-zip'; Version = '26.03'; Publisher = 'Igor Pavlov'; InstallDate = '20261101'; KeyName = '{23170F69-40C1-2702-2600-000001000000}'; View = '64-bit'; UninstallString = 'MsiExec.exe /I{23170F69-40C1-2702-2600-000001000000}'; QuietUninstallString = ''; SystemComponent = 0; WindowsInstaller = 1 }
+                    [pscustomobject]@{ Name = 'Edge'; Version = '2.0'; Publisher = 'Microsoft'; InstallDate = ''; KeyName = 'Edge'; View = '32-bit'; UninstallString = '"C:\Program Files\Edge\setup.exe" --uninstall'; QuietUninstallString = '"C:\Program Files\Edge\setup.exe" --uninstall --force'; SystemComponent = 0; WindowsInstaller = 0 }
+                    [pscustomobject]@{ Name = 'Device Only App'; Version = '3.0'; Publisher = 'Vendor'; InstallDate = ''; KeyName = 'DeviceOnlyApp'; View = '64-bit'; UninstallString = 'C:\Vendor\unins000.exe'; QuietUninstallString = ''; SystemComponent = 0; WindowsInstaller = 0 }
+                    [pscustomobject]@{ Name = 'Hidden Component'; Version = '1.0'; Publisher = 'Vendor'; InstallDate = ''; KeyName = '{11111111-2222-3333-4444-555555555555}'; View = '64-bit'; UninstallString = 'MsiExec.exe /X{11111111-2222-3333-4444-555555555555}'; QuietUninstallString = ''; SystemComponent = 1; WindowsInstaller = 1 }
                 )
                 ClientApplications    = @()
                 PendingUpdates        = @([pscustomobject]@{ Name = 'Cumulative update'; ArticleId = '5001'; EvaluationState = 1; State = 'Available'; Deadline = '2026-11-09T00:00:00Z' })
@@ -114,13 +115,16 @@ Describe 'Panel rows' {
         @($arrRow | Where-Object { $_.Group -eq 'Site record' })[0].Value | Should -Be 'The site has no record of this device.'
     }
 
-    It 'merges the two application lists by name and sets a status for each' {
+    It 'makes one application row for each uninstall key of the device, with no status and no inventory version' {
         $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $script:objInspection)
         $arrRow.Count | Should -Be 4
-        @($arrRow | Where-Object { $_.Name -eq '7-zip' -or $_.Name -eq '7-Zip' })[0].Status | Should -Be 'Match'
-        @($arrRow | Where-Object { $_.Name -eq 'Edge' })[0].Status | Should -Be 'Version differs'
-        @($arrRow | Where-Object { $_.Name -eq 'Device Only App' })[0].Status | Should -Be 'Device only'
-        @($arrRow | Where-Object { $_.Name -eq 'Inventory Only App' })[0].Status | Should -Be 'Inventory only'
+        $arrRow[0].PSObject.Properties.Name | Should -Be @('Name', 'Version', 'Publisher', 'InstallDate', 'Type', 'View', 'KeyName', 'CanUninstall', 'CanRepair', 'Reason', 'UninstallReason', 'RepairReason', 'UninstallCommand', 'RepairCommand')
+        @($arrRow | Where-Object { $_.Name -eq 'Inventory Only App' }).Count | Should -Be 0
+        $objZip = @($arrRow | Where-Object { $_.Name -eq '7-zip' })[0]
+        $objZip.Type | Should -Be 'MSI'
+        $objZip.View | Should -Be '64-bit'
+        $objZip.KeyName | Should -Be '{23170F69-40C1-2702-2600-000001000000}'
+        $objZip.InstallDate | Should -Be '20261101'
     }
 
     It 'lists the site required updates and the device pending updates' {
@@ -326,7 +330,7 @@ Describe 'Window files' {
         $strManifestVersion = (Import-PowerShellDataFile -LiteralPath $script:strManifestPath).ModuleVersion
         (Get-Content -LiteralPath $script:strStartPath -Raw) | Should -Match ('(?m)^\s*Version\s*:\s*{0}\s*$' -f [regex]::Escape($strManifestVersion))
         (Get-Content -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'Invoke-DeviceInspector.ps1') -Raw) | Should -Match ('(?m)^#\s*Version:\s*{0}\s*$' -f [regex]::Escape($strManifestVersion))
-        $strTopHeading = (Select-String -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'CHANGELOG.md') -Pattern '^## \[([^\]]+)\]' | Select-Object -First 1).Matches[0].Groups[1].Value
+        $strTopHeading = (Select-String -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'CHANGELOG.md') -Pattern '^## \[([^\]]+)\]' | Where-Object { $_.Matches[0].Groups[1].Value -ne 'Unreleased' } | Select-Object -First 1).Matches[0].Groups[1].Value
         $strTopHeading | Should -Be $strManifestVersion
     }
 }

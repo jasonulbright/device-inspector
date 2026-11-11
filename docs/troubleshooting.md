@@ -60,9 +60,9 @@ None. Some fixes need rights on the site or on the device.
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| Every application is **Inventory only**. | The device part failed or **Site only** was on. | Read the **Problems** panel. |
-| Every application is **Device only**. | The site was not queried, the site read failed, or the site has no inventory for the device. | Check the site server and the **Problems** panel first. Then enable the classes `Add Remove Programs` and `Add Remove Programs (64)` in the client settings. |
-| A new install shows as **Device only**. | The hardware inventory did not run yet. | Wait for the next hardware inventory. |
+| The Applications list is empty. | The device part failed or **Site only** was on. | Read the **Problems** panel. Clear **Site only** and inspect again. |
+| **Uninstall...** or **Repair...** is off for an application. | The entry is a system component, or an EXE entry without a quiet uninstall string. Repair is off for every EXE entry. | Hover over the entry. The tooltip gives the reason. See [Applications](core/applications.md#when-uninstall-and-repair-are-on). |
+| A new install is not in the Applications list. | The list shows the state at the time of the inspection. | Inspect the device again. |
 
 ## Window
 

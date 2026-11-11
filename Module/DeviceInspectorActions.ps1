@@ -225,115 +225,267 @@ $script:scriptBlockUpdateInstall = {
     [pscustomobject]@{ Succeeded = $true; Summary = ('The client accepted the install of {0} updates. It downloads and installs them now. A restart can follow, as the deployment sets.' -f $arrTarget.Count); Steps = @($listStep) }
 }
 
-# Runs on the device. Several revisions of one application ID can be in the client
-# policy; the highest revision is the one that the method acts on.
+# Runs on the device. Uninstalls or repairs one entry of the uninstall registry keys
+# (HKLM, 64-bit or 32-bit view). The window sends the view and the key name only,
+# never a command line. This block reads the key again on the device, checks the
+# rules again, and builds the command line itself.
+#   MSI (key name is a product code in braces, and the uninstall string starts with
+#   msiexec or WindowsInstaller is 1): Uninstall and Repair run msiexec with the
+#   product code. Repair uses /i with REINSTALL=ALL and REINSTALLMODE=omus, because
+#   /f ignores properties on the command line.
+#   EXE: Uninstall runs the QuietUninstallString as written. The tool adds no
+#   switches. There is no Repair, because the key holds no repair command.
+# The inner script blocks hold the rules and take no outside state, so the tests
+# can run them alone.
 $script:scriptBlockApplicationAction = {
     param (
         [Parameter(Mandatory = $true)][bool]$DryRun,
-        [Parameter(Mandatory = $true)][string]$ApplicationId,
-        [Parameter(Mandatory = $true)][ValidateSet('Uninstall', 'Repair')][string]$Operation
+        [Parameter(Mandatory = $true)][ValidateSet('Uninstall', 'Repair')][string]$Operation,
+        [Parameter(Mandatory = $true)][ValidateSet('64-bit', '32-bit')][string]$View,
+        [Parameter(Mandatory = $true)][string]$KeyName
     )
 
     $ErrorActionPreference = 'Stop'
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $intTimeoutMilliseconds = 600000
+
+    # MSI when the key name is a product code in braces and the uninstall string starts
+    # with msiexec (optionally quoted, with or without a path), or WindowsInstaller is 1.
+    $scriptBlockIsMsi = {
+        param([string]$strKeyName, [string]$strUninstallString, [int]$intWindowsInstaller)
+        $boolGuid = $strKeyName -match '^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}\z'
+        $boolMsiexec = $strUninstallString -match '^\s*"?(?:[^"]*[\\/])?msiexec(?:\.exe)?"?(?:\s|\z)'
+        return [bool]($boolGuid -and ($boolMsiexec -or $intWindowsInstaller -eq 1))
+    }
+
+    # Splits a command line into a file path and the arguments. A quoted path ends at
+    # the closing quote. Without quotes the path is the text up to and including the
+    # first .exe that ends a word. Returns $null when no path is found, and when the path
+    # is relative with a separator (for example .\x.exe), because the session folder
+    # of WinRM would decide where it points. A full path (drive or UNC) and a bare file
+    # name are the only forms that the tool accepts.
+    $scriptBlockSplitCommand = {
+        param([string]$strCommand)
+        $strText = $strCommand.Trim()
+        if ($strText.Length -eq 0) {
+            return $null
+        }
+        $strPath = ''
+        $strRest = ''
+        if ($strText.StartsWith('"')) {
+            $intEnd = $strText.IndexOf('"', 1)
+            if ($intEnd -lt 2) {
+                return $null
+            }
+            $strPath = $strText.Substring(1, $intEnd - 1)
+            $strRest = $strText.Substring($intEnd + 1).Trim()
+        } else {
+            $objMatch = [regex]::Match($strText, '^(?<path>.+?\.exe)(?=\s|\z)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if (-not $objMatch.Success) {
+                return $null
+            }
+            $strPath = $objMatch.Groups['path'].Value
+            $strRest = $strText.Substring($strPath.Length).Trim()
+        }
+        $boolFull = $strPath -match '^(?:[A-Za-z]:[\\/]|\\\\[^\\/])'
+        $boolBare = $strPath.IndexOfAny([char[]]@('\', '/')) -lt 0
+        if (-not ($boolFull -or $boolBare)) {
+            return $null
+        }
+        return [pscustomobject]@{ FilePath = $strPath; Arguments = $strRest }
+    }
+
+    # Maps the exit code of the installer. 0 is success. 3010 and 1641 are success with
+    # a restart needed. 1605 on Uninstall is success only when the key is gone. 1618
+    # means that another installation is in progress. Any other code is a failure.
+    $scriptBlockMapExitCode = {
+        param([string]$strOperation, [int]$intCode, [bool]$boolKeyGone, [bool]$boolKeyKnown = $true)
+        $boolSucceeded = $false
+        $boolRestart = $false
+        $strText = ''
+        if ($intCode -eq 0) {
+            $boolSucceeded = $true
+            $strText = 'The installer finished with exit code 0.'
+            if ($strOperation -eq 'Uninstall' -and -not $boolKeyKnown) {
+                $strText = '{0} The tool could not read the uninstall key after the run.' -f $strText
+            } elseif ($strOperation -eq 'Uninstall' -and -not $boolKeyGone) {
+                $strText = '{0} The uninstall key is still there. The installer can remove it later. Inspect the device again.' -f $strText
+            }
+        } elseif ($intCode -eq 3010 -or $intCode -eq 1641) {
+            $boolSucceeded = $true
+            $boolRestart = $true
+            $strText = ('The installer finished with exit code {0}. A restart of the device is needed to finish. The tool never restarts the device.' -f $intCode)
+            if ($strOperation -eq 'Uninstall' -and -not $boolKeyKnown) {
+                $strText = '{0} The tool could not read the uninstall key after the run.' -f $strText
+            } elseif ($strOperation -eq 'Uninstall' -and -not $boolKeyGone) {
+                $strText = '{0} The uninstall key is still there. The installer can remove it later. Inspect the device again.' -f $strText
+            }
+        } elseif ($intCode -eq 1605 -and $strOperation -eq 'Uninstall') {
+            if (-not $boolKeyKnown) {
+                $strText = 'The installer returned 1605 (the product is not installed), but the tool could not read the uninstall key after the run. The result is not known.'
+            } elseif ($boolKeyGone) {
+                $boolSucceeded = $true
+                $strText = 'The installer returned 1605 (the product is not installed), and the uninstall key is gone. The product is already removed.'
+            } else {
+                $strText = 'The installer returned 1605 (the product is not installed), but the uninstall key is still there. The entry is stale.'
+            }
+        } elseif ($intCode -eq 1618) {
+            $strText = 'The installer returned 1618: another installation is in progress. Try again later.'
+        } else {
+            $strText = ('The installer failed with exit code {0}.' -f $intCode)
+        }
+        return [pscustomobject]@{ Succeeded = $boolSucceeded; RestartNeeded = $boolRestart; Text = $strText }
+    }
+
+    # Reads one uninstall key by view and key name. Returns $null when the key is not there.
+    $scriptBlockReadKey = {
+        param([string]$strView, [string]$strName)
+        $strParent = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+        if ($strView -eq '32-bit') {
+            $strParent = 'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+        }
+        $objBase = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
+        try {
+            $objKey = $objBase.OpenSubKey(('{0}\{1}' -f $strParent, $strName), $false)
+            if ($null -eq $objKey) {
+                return $null
+            }
+            try {
+                $scriptBlockValue = {
+                    param($objOpenKey, [string]$strValueName)
+                    $objValue = $objOpenKey.GetValue($strValueName, $null)
+                    if ($null -eq $objValue) {
+                        return ''
+                    }
+                    return [string]$objValue
+                }
+                $intSystemComponent = 0
+                $intWindowsInstaller = 0
+                [void][int]::TryParse((& $scriptBlockValue $objKey 'SystemComponent'), [ref]$intSystemComponent)
+                [void][int]::TryParse((& $scriptBlockValue $objKey 'WindowsInstaller'), [ref]$intWindowsInstaller)
+                return [pscustomobject]@{
+                    DisplayName          = (& $scriptBlockValue $objKey 'DisplayName')
+                    UninstallString      = (& $scriptBlockValue $objKey 'UninstallString')
+                    QuietUninstallString = (& $scriptBlockValue $objKey 'QuietUninstallString')
+                    SystemComponent      = $intSystemComponent
+                    WindowsInstaller     = $intWindowsInstaller
+                }
+            } finally {
+                $objKey.Dispose()
+            }
+        } finally {
+            $objBase.Dispose()
+        }
+    }
+
+    if ($KeyName -notmatch '^[^\\/:*?"<>|\x00-\x1F]{1,255}\z') {
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The key name has characters that the tool does not accept.'; Steps = @($listStep) }
+    }
     try {
-        $objClient = Get-CimInstance -Namespace 'root\ccm' -ClassName 'SMS_Client'
+        $objEntry = & $scriptBlockReadKey $View $KeyName
     } catch {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The Configuration Manager client does not answer: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The uninstall key cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
     }
-    if ($null -eq $objClient) {
-        return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client is not installed on the device.'; Steps = @($listStep) }
+    if ($null -eq $objEntry) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The uninstall key {0} ({1} view) is not on the device now. Inspect the device again.' -f $KeyName, $View); Steps = @($listStep) }
     }
-    $listStep.Add(('Client version {0} answers.' -f [string]$objClient.ClientVersion))
-    try {
-        $arrMatch = @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_Application' | Where-Object { [string]$_.Id -eq $ApplicationId })
-    } catch {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The applications of the client policy cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+    $strDisplay = $objEntry.DisplayName
+    if ([string]::IsNullOrWhiteSpace($strDisplay)) {
+        $strDisplay = $KeyName
     }
-    if ($arrMatch.Count -eq 0) {
-        return [pscustomobject]@{ Succeeded = $false; Summary = 'The client policy has no application with this ID now. Inspect the device again.'; Steps = @($listStep) }
+    $boolMsi = & $scriptBlockIsMsi $KeyName $objEntry.UninstallString $objEntry.WindowsInstaller
+    $strType = 'EXE'
+    if ($boolMsi) {
+        $strType = 'MSI'
     }
-    $scriptBlockRevision = {
-        param($objValue)
-        $intRevision = [uint64]0
-        if ([uint64]::TryParse([string]$objValue, [ref]$intRevision)) {
-            return $intRevision
+    $listStep.Add(('Key {0} ({1} view): {2}, type {3}.' -f $KeyName, $View, $strDisplay.Trim(), $strType))
+    if ($objEntry.SystemComponent -eq 1) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('{0} is a system component, part of another product. The tool does not {1} it.' -f $strDisplay.Trim(), $Operation.ToLowerInvariant()); Steps = @($listStep) }
+    }
+
+    $strFilePath = ''
+    $strArguments = ''
+    $strCommandText = ''
+    if ($boolMsi) {
+        $strFilePath = 'msiexec.exe'
+        if ($Operation -eq 'Uninstall') {
+            $strArguments = '/x {0} /qn /norestart REBOOT=ReallySuppress' -f $KeyName
+        } else {
+            $strArguments = '/i {0} REINSTALL=ALL REINSTALLMODE=omus /qn /norestart REBOOT=ReallySuppress' -f $KeyName
         }
-        return [uint64]0
-    }
-    $objApplication = @($arrMatch | Sort-Object -Property { & $scriptBlockRevision $_.Revision } -Descending)[0]
-    if ($arrMatch.Count -gt 1) {
-        $listStep.Add(('The client holds {0} revisions. Picked the highest, revision {1}.' -f $arrMatch.Count, [string]$objApplication.Revision))
-    }
-    if (-not [bool]$objApplication.IsMachineTarget) {
-        return [pscustomobject]@{ Succeeded = $false; Summary = 'The application is deployed to a user. The tool acts only on applications deployed to the device.'; Steps = @($listStep) }
-    }
-    $arrAllowed = @($objApplication.AllowedActions | ForEach-Object { [string]$_ })
-    $listStep.Add(('{0}, revision {1}, install state {2}, allowed actions: {3}.' -f [string]$objApplication.Name, [string]$objApplication.Revision, [string]$objApplication.InstallState, ($arrAllowed -join ', ')))
-    $boolAllowed = $arrAllowed -contains $Operation
-    if ($Operation -eq 'Uninstall' -and -not $boolAllowed) {
-        $boolAllowed = ([string]$objApplication.InstallState) -eq 'Installed' -and -not [bool]$objApplication.IsPreflightOnly
-    }
-    if (-not $boolAllowed) {
-        $strWhy = 'The application is not installed, or the deployment is a simulation.'
-        if ($Operation -eq 'Repair') {
-            $strWhy = 'The deployment type needs a repair command.'
-        }
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client does not allow {0} for this application now. {1}' -f $Operation, $strWhy); Steps = @($listStep) }
-    }
-    if (-not ($arrAllowed -contains $Operation)) {
-        $listStep.Add(('The allowed actions of the client do not list {0}. The application is installed, so the tool sends the request.' -f $Operation))
-    }
-    if ($DryRun) {
-        $listStep.Add(('Dry run: would call CCM_Application.{0} for {1}, revision {2}.' -f $Operation, [string]$objApplication.Name, [string]$objApplication.Revision))
-        return [pscustomobject]@{ Succeeded = $true; Summary = 'Dry run: the client answers. Nothing changed.'; Steps = @($listStep) }
-    }
-    $hashtableArgument = @{
-        Id                = [string]$objApplication.Id
-        Revision          = [string]$objApplication.Revision
-        IsMachineTarget   = [bool]$objApplication.IsMachineTarget
-        EnforcePreference = [uint32]0
-        Priority          = 'High'
-        IsRebootIfNeeded  = $false
-    }
-    try {
-        $objReturn = Invoke-CimMethod -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_Application' -MethodName $Operation -Arguments $hashtableArgument
-        $objReturnValue = $null
-        $strJobId = ''
-        if ($null -ne $objReturn -and $null -ne $objReturn.PSObject.Properties['ReturnValue']) {
-            $objReturnValue = $objReturn.ReturnValue
-        }
-        if ($null -ne $objReturn -and $null -ne $objReturn.PSObject.Properties['JobId']) {
-            $strJobId = [string]$objReturn.JobId
-        }
-        $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
-    } catch {
-        $listStep.Add(('{0} failed: {1}' -f $Operation, $_.Exception.Message))
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client did not accept the {0} request.' -f $Operation); Steps = @($listStep) }
-    }
-    if ($boolRefused) {
-        $listStep.Add(('{0} returned {1}.' -f $Operation, $objReturnValue))
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client refused the {0} request (return value {1}).' -f $Operation, $objReturnValue); Steps = @($listStep) }
-    }
-    if ($null -eq $objReturnValue) {
-        $listStep.Add(('{0} gave no return value. The request is not confirmed.' -f $Operation))
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client gave no return value for the {0} request. Inspect the device again to see the state.' -f $Operation); Steps = @($listStep) }
-    }
-    if ([string]::IsNullOrEmpty($strJobId)) {
-        $listStep.Add(('{0} accepted.' -f $Operation))
+        $strCommandText = '{0} {1}' -f $strFilePath, $strArguments
     } else {
-        $listStep.Add(('{0} accepted. Job {1}.' -f $Operation, $strJobId))
-    }
-    Start-Sleep -Seconds 10
-    try {
-        $objAfter = @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_Application' | Where-Object { [string]$_.Id -eq $ApplicationId -and [string]$_.Revision -eq [string]$objApplication.Revision })[0]
-        if ($null -ne $objAfter) {
-            $listStep.Add(('After the request: install state {0}, evaluation state {1}.' -f [string]$objAfter.InstallState, [int]$objAfter.EvaluationState))
+        if ($Operation -eq 'Repair') {
+            return [pscustomobject]@{ Succeeded = $false; Summary = 'There is no documented repair command for this installer. The tool repairs MSI products only.'; Steps = @($listStep) }
         }
-    } catch {
-        $listStep.Add(('The state after the request cannot be read: {0}' -f $_.Exception.Message))
+        if ([string]::IsNullOrWhiteSpace($objEntry.QuietUninstallString)) {
+            return [pscustomobject]@{ Succeeded = $false; Summary = 'The entry has no quiet uninstall string. The tool does not guess silent switches.'; Steps = @($listStep) }
+        }
+        $strQuiet = [System.Environment]::ExpandEnvironmentVariables($objEntry.QuietUninstallString.Trim())
+        $objSplit = & $scriptBlockSplitCommand $strQuiet
+        if ($null -eq $objSplit) {
+            return [pscustomobject]@{ Succeeded = $false; Summary = 'The quiet uninstall string has no file path that ends in .exe, or the path is relative. The tool does not guess the command.'; Steps = @($listStep) }
+        }
+        $strFilePath = $objSplit.FilePath
+        $strArguments = $objSplit.Arguments
+        if ($strFilePath.IndexOfAny([char[]]@('\', '/')) -lt 0) {
+            # A bare file name is looked up in System32 only, never in the session folder.
+            $strFilePath = Join-Path -Path ([System.Environment]::SystemDirectory) -ChildPath $strFilePath
+        }
+        if (-not (Test-Path -LiteralPath $strFilePath -PathType Leaf)) {
+            return [pscustomobject]@{ Succeeded = $false; Summary = ('The uninstall program {0} is not on the device. The tool does not run the command.' -f $strFilePath); Steps = @($listStep) }
+        }
+        $strCommandText = $strQuiet
     }
-    [pscustomobject]@{ Succeeded = $true; Summary = ('The client accepted the {0} of {1}. AppEnforce.log on the device shows the run.' -f $Operation, [string]$objApplication.Name); Steps = @($listStep) }
+
+    if ($DryRun) {
+        $listStep.Add(('Dry run: would run: {0}' -f $strCommandText))
+        return [pscustomobject]@{ Succeeded = $true; Summary = 'Dry run: the key is on the device and the command is ready. Nothing changed.'; Steps = @($listStep) }
+    }
+
+    $listStep.Add(('Running: {0}' -f $strCommandText))
+    try {
+        $hashtableStart = @{
+            FilePath    = $strFilePath
+            PassThru    = $true
+            WindowStyle = 'Hidden'
+        }
+        if (-not [string]::IsNullOrEmpty($strArguments)) {
+            $hashtableStart['ArgumentList'] = $strArguments
+        }
+        $objProcess = Start-Process @hashtableStart
+        # Reading the handle keeps the exit code readable after the process ends.
+        $null = $objProcess.Handle
+        $boolExited = $objProcess.WaitForExit($intTimeoutMilliseconds)
+    } catch {
+        $listStep.Add(('The command did not start: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The {0} did not start: {1}' -f $Operation.ToLowerInvariant(), $_.Exception.Message); Steps = @($listStep) }
+    }
+    if (-not $boolExited) {
+        $listStep.Add(('The installer (process {0}) still runs after 10 minutes.' -f $objProcess.Id))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The installer is still running after 10 minutes. The outcome is not known. Inspect the device again later.'; Steps = @($listStep) }
+    }
+    $intExitCode = [int]$objProcess.ExitCode
+    $listStep.Add(('The installer ended with exit code {0}.' -f $intExitCode))
+
+    $boolKeyGone = $false
+    $boolKeyKnown = $true
+    if ($Operation -eq 'Uninstall') {
+        try {
+            $boolKeyGone = ($null -eq (& $scriptBlockReadKey $View $KeyName))
+            if ($boolKeyGone) {
+                $listStep.Add(('Check after the uninstall: the key {0} is gone.' -f $KeyName))
+            } else {
+                $listStep.Add(('Check after the uninstall: the key {0} is still there.' -f $KeyName))
+            }
+        } catch {
+            $boolKeyKnown = $false
+            $listStep.Add(('Check after the uninstall: the tool could not read the uninstall key: {0}' -f $_.Exception.Message))
+        }
+    }
+    $objMap = & $scriptBlockMapExitCode $Operation $intExitCode $boolKeyGone $boolKeyKnown
+    $strSummary = ('{0} of {1}: {2}' -f $Operation, $strDisplay.Trim(), $objMap.Text)
+    [pscustomobject]@{ Succeeded = $objMap.Succeeded; Summary = $strSummary; Steps = @($listStep) }
 }
 
 #endregion Remote script blocks
@@ -893,33 +1045,58 @@ function Invoke-DeviceInspectorUpdateInstall {
 
 function Invoke-DeviceInspectorApplicationAction {
     # .SYNOPSIS
-    # Uninstalls or repairs one Configuration Manager application on a device.
+    # Uninstalls or repairs one entry of the uninstall registry keys on a device.
     #
     # .DESCRIPTION
-    # Runs on the device over WinRM. It finds the application in CCM_Application by
-    # its ID, checks that the client allows the operation, and calls the Uninstall
-    # or the Repair method with the immediate enforce preference. With DryRun it
-    # reads the application and lists the step, and changes nothing.
+    # Runs on the device over WinRM. The caller names the entry by registry view and
+    # key name only. The device reads that key again, checks the rules again, and
+    # builds the command line itself. A caller cannot send a command line.
+    #
+    # MSI entry (key name is a product code in braces, and the uninstall string
+    # starts with msiexec or WindowsInstaller is 1): Uninstall runs
+    # msiexec.exe /x {GUID} /qn /norestart REBOOT=ReallySuppress. Repair runs
+    # msiexec.exe /i {GUID} REINSTALL=ALL REINSTALLMODE=omus /qn /norestart
+    # REBOOT=ReallySuppress.
+    #
+    # EXE entry: Uninstall runs the QuietUninstallString as written, and adds no
+    # switches. An EXE entry has no Repair, and an entry without a quiet uninstall
+    # string has no Uninstall. The tool does not guess silent switches. A system
+    # component (SystemComponent 1) has neither.
+    #
+    # The run waits up to 10 minutes for the installer. Exit codes: 0 is success.
+    # 3010 and 1641 are success, and the summary says that the device needs a
+    # restart. The tool never restarts the device. 1605 on Uninstall is success only
+    # when the key is gone after the run. 1618 is a failure: another installation is
+    # in progress. Any other code is a failure with the code in the summary. After
+    # Uninstall the device checks that the key is gone and adds a step line.
+    #
+    # With DryRun it reads the key, checks the rules, lists the exact command, and
+    # changes nothing.
     #
     # .PARAMETER ComputerName
     # The device name.
     #
-    # .PARAMETER ApplicationId
-    # The Id of the application in CCM_Application.
-    #
     # .PARAMETER Operation
     # Uninstall or Repair.
     #
+    # .PARAMETER View
+    # The registry view of the entry: 64-bit (HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall)
+    # or 32-bit (HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall).
+    #
+    # .PARAMETER KeyName
+    # The name of the subkey under Uninstall. For an MSI product it is the product code
+    # in braces. The name cannot hold a backslash, a slash or other path characters.
+    #
     # .PARAMETER DryRun
-    # Read the application and list the step only.
+    # Read the key and list the command only.
     #
     # .PARAMETER Credential
     # An optional credential for the WinRM connection.
     #
     # .EXAMPLE
-    # Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -ApplicationId 'ScopeId_1/Application_2' -Operation Uninstall -DryRun
+    # Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Uninstall -View '64-bit' -KeyName '{AC76BA86-7AD7-1033-7B44-AC0F074E4100}' -DryRun
     #
-    # # Shows the application and its allowed actions. Nothing changes.
+    # # Lists the msiexec command that the run would use. Nothing changes.
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
@@ -931,9 +1108,12 @@ function Invoke-DeviceInspectorApplicationAction {
     # Non-throwing contract: a failure on the device gives Succeeded $false and a
     # Summary. A parameter outside its pattern throws before the function runs.
     #
+    # Version 2 replaced the ApplicationId parameter (Configuration Manager
+    # application policy) with View and KeyName (breaking change).
+    #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261111.0
+    # Version: 2.0.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -942,12 +1122,16 @@ function Invoke-DeviceInspectorApplicationAction {
         [string]$ComputerName,
 
         [Parameter(Mandatory = $true)]
-        [ValidatePattern('^[A-Za-z0-9_{}/.-]{1,300}\z')]
-        [string]$ApplicationId,
-
-        [Parameter(Mandatory = $true)]
         [ValidateSet('Uninstall', 'Repair')]
         [string]$Operation,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('64-bit', '32-bit')]
+        [string]$View,
+
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[^\\/:*?"<>|\x00-\x1F]{1,255}\z')]
+        [string]$KeyName,
 
         [Parameter(Mandatory = $false)]
         [switch]$DryRun,
@@ -961,7 +1145,7 @@ function Invoke-DeviceInspectorApplicationAction {
             Action       = ('{0} application' -f $Operation)
             ComputerName = $ComputerName
             ScriptBlock  = $script:scriptBlockApplicationAction
-            ArgumentList = @($ApplicationId, $Operation)
+            ArgumentList = @($Operation, $View, $KeyName)
             DryRun       = $DryRun
         }
         if ($PSBoundParameters.ContainsKey('Credential')) {

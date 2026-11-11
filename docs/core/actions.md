@@ -70,22 +70,34 @@ The tool calls `CCM_SoftwareUpdatesManager.InstallUpdates` on the device with th
 
 ### Uninstall or repair an application
 
-The Applications panel has **Uninstall...** and **Repair...** in its right-click menu. They act on one selected row that carries a Configuration Manager application:
+The Applications panel has **Uninstall...** and **Repair...** in its right-click menu. They act on one selected row. The row is one uninstall registry key of the device. The window sends the registry view (`64-bit` or `32-bit`) and the key name to the device. It never sends a command line. The device reads the key again, checks the rules again and builds the command line itself.
 
-- A row with the status **Client application**: an application that the client lists as installed.
-- A row of an uninstall entry with the same name as such an application.
+| Entry | Uninstall | Repair |
+|---|---|---|
+| MSI (the key name is a product code in braces, and the uninstall string starts with `msiexec` or the key has `WindowsInstaller` 1) | `msiexec.exe /x {ProductCode} /qn /norestart REBOOT=ReallySuppress` | `msiexec.exe /i {ProductCode} REINSTALL=ALL REINSTALLMODE=omus /qn /norestart REBOOT=ReallySuppress` |
+| EXE with a quiet uninstall string | The `QuietUninstallString` of the key, as written. The tool adds no switches. | Off. There is no documented repair command for this installer. |
+| EXE without a quiet uninstall string | Off. The tool does not guess silent switches. | Off. |
+| System component (`SystemComponent` 1) | Off. It is part of another product. | Off. |
 
-The name of the uninstall entry and the name of the application often differ (on the lab, `7-Zip 26.03 (x64 edition)` and `7-Zip (x64 edition) - 26.03`), so the application usually has its own row.
-
-**Uninstall** is on when the client allows it: the application is installed and the deployment is not a simulation, or its allowed actions list Uninstall. On the lab, the allowed actions listed only Install after the install, so the tool also sends Uninstall for an installed application, and the dialog and the log say so. **Repair** is on when the allowed actions list Repair. The deployment type needs a repair command for that. Both are off for an application deployed to a user: the tool reads the device with the signed-in account, not in the context of that user.
+Repair uses `/i` with `REINSTALL=ALL` and `REINSTALLMODE=omus`, not `/f`, because `/f` ignores properties on the command line. For an EXE entry, the device splits the quiet uninstall string into a file path and arguments: a quoted path, or the text up to and including the first `.exe`. It accepts a full path or a bare file name, and looks up a bare name in System32 only. It refuses to run when the file does not exist, when the string has no `.exe` path, or when the path is relative (for example `.\x.exe`).
 
 1. Turn on **Enable actions**.
 2. Inspect the device.
 3. On the Applications panel, right-click the row, then select **Uninstall...** or **Repair...**.
-4. Select **Dry run**. The log shows the application, its revision, its install state and its allowed actions.
+4. The dialog shows the exact command. Select **Dry run**. The log shows the key, its type and the command that the run would use. Nothing changes.
 5. Repeat, and select **Run**.
 
-The tool calls the `Uninstall` or `Repair` method of `CCM_Application` on the device with the immediate enforce preference. When the client holds several revisions, the tool picks the highest. The `STARTED` line of the action log names the application, its ID and its revision. After a run, both entries are off for that row until the next inspection. When the client gives no return value, the result is `FAILED` with the text that the request is not confirmed. The log shows the job ID and the state ten seconds later. `AppEnforce.log` on the device shows the run. A required deployment of the application can install it again at the next evaluation.
+The device waits up to 10 minutes for the installer. If the installer is still running then, the result says that the outcome is not known. The exit codes map as follows:
+
+| Exit code | Result |
+|---|---|
+| 0 | Success. |
+| 3010, 1641 | Success. The summary says that the device needs a restart. The tool never restarts the device. |
+| 1605 on Uninstall | Success only when the uninstall key is gone after the run. The product is not installed, so the entry is stale. |
+| 1618 | Failure. Another installation is in progress. Try again later. |
+| Any other code | Failure. The summary names the code. |
+
+After an Uninstall, the device checks that the key is gone and adds a step line with the result. The `STARTED` line of the action log names the application, its type, its view and its key name. After a successful Uninstall, both entries are off for that row until the next inspection. A required deployment of the application in Configuration Manager can install it again at the next evaluation.
 
 ### Remove the device from a collection
 
@@ -177,10 +189,15 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 | ... failed with return value <n>. | The client refused the request. | Read `PolicyAgent.log` on the device. |
 | The hardware inventory status cannot be read: ... | WMI refused the read of `root\ccm\invagt`. | Check the rights on `root\ccm\invagt`. Repair the client. |
 | The hardware inventory status record cannot be deleted. The schedule was not triggered. | WMI refused the delete. | Check the rights on `root\ccm\invagt`. Read `InventoryAgent.log`. |
-| The client does not allow Repair for this application now. ... | The deployment type has no repair command, or the application is not installed. | Add a repair command to the deployment type. |
-| The client does not allow Uninstall for this application now. ... | The application is not installed, or the deployment is a simulation. | Inspect the device again. |
-| The application is deployed to a user. ... | A user-targeted deployment. | Use the deployment in the Configuration Manager console. |
-| The client policy has no application with this ID now. | The deployment was removed after the inspection. | Inspect the device again. |
+| The uninstall key <key> (<view> view) is not on the device now. | Something removed the key after the inspection. | Inspect the device again. |
+| <name> is a system component, part of another product. ... | `SystemComponent` is 1 in the key. | Uninstall the product that owns it. |
+| There is no documented repair command for this installer. ... | Repair works for MSI entries only. | Repair the application with its own installer. |
+| The entry has no quiet uninstall string. The tool does not guess silent switches. | The key has no `QuietUninstallString`. | Uninstall the application with its own installer. |
+| The quiet uninstall string has no file path that ends in .exe. ... | The string does not start with an `.exe` path. | Uninstall the application with its own installer. |
+| The uninstall program <path> is not on the device. ... | The file of the quiet uninstall string is gone. | Inspect the device again. |
+| The installer is still running after 10 minutes. The outcome is not known. | The installer is slow or waits for input. | Inspect the device again later. |
+| The installer returned 1618: another installation is in progress. | Windows Installer runs another install. | Try again later. |
+| The installer failed with exit code <n>. | The installer reported an error. | Read the log of the installer on the device. |
 | The device has no direct rule in <ID>. ... | The membership comes from a query, include or other rule. | Change the rule of the collection in the Configuration Manager console. |
 | <ID> is a built-in collection. ... | Built-in collections have no direct rules. | None. |
 | The site has <n> device records named <name>. ... | The change needs exactly one device record. | Remove the duplicate record in the console. |
@@ -200,8 +217,13 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 - [InventoryActionStatus Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/client-classes/inventoryactionstatus-client-wmi-class): Lists the properties of the status record.
 - [InstallUpdates Method in Class CCM_SoftwareUpdatesManager](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/installupdates-method-in-class-ccm_softwareupdatesmanager): Describes the install request.
 - [CCM_SoftwareUpdate Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/ccm_softwareupdate-client-wmi-class): Lists ComplianceState and EvaluationState.
-- [Uninstall Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/uninstall-method-in-class-ccm_application): Describes the uninstall request.
-- [Repair Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/repair-method-in-class-ccm_application): Describes the repair request.
+- [Command-Line Options](https://learn.microsoft.com/windows/win32/msi/command-line-options): Describes `/x` and `/i` with a product code. It says that `/f` ignores properties on the command line.
+- [Standard Installer Command-Line Options](https://learn.microsoft.com/windows/win32/msi/standard-installer-command-line-options): Describes `/quiet` and `/norestart`.
+- [Reboot property](https://learn.microsoft.com/windows/win32/msi/reboot): Describes `ReallySuppress`.
+- [REINSTALL property](https://learn.microsoft.com/windows/win32/msi/reinstall) and [REINSTALLMODE property](https://learn.microsoft.com/windows/win32/msi/reinstallmode): Describe a repair with `REINSTALL=ALL` and `omus`.
+- [Windows Installer error codes](https://learn.microsoft.com/windows/win32/msi/error-codes): Lists the exit codes 0, 1605, 1618, 1641 and 3010.
+- [Uninstall registry key](https://learn.microsoft.com/windows/win32/msi/uninstall-registry-key): Describes the key that is named by the product code.
+- [Create application scripts for VM Applications](https://learn.microsoft.com/azure/virtual-machines/vm-applications-create-app-scripts): Shows the use of `QuietUninstallString` and of `msiexec /x {GUID} /qn /norestart`.
 - [Add-CMDeviceCollectionDirectMembershipRule](https://learn.microsoft.com/powershell/module/configurationmanager/add-cmdevicecollectiondirectmembershiprule): Describes the new direct rule.
 - [Get-CMDeviceCollection](https://learn.microsoft.com/powershell/module/configurationmanager/get-cmdevicecollection): Describes the collection list of the browser.
 - [Remove-CMDeviceCollectionDirectMembershipRule](https://learn.microsoft.com/powershell/module/configurationmanager/remove-cmdevicecollectiondirectmembershiprule): Describes the removal of a direct rule.

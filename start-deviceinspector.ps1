@@ -148,7 +148,7 @@ $btnFullInventory = $window.FindName('btnFullInventory')
 $btnRepairInventory = $window.FindName('btnRepairInventory')
 $gridFacts       = $window.FindName('gridFacts')
 $txtAppFilter    = $window.FindName('txtAppFilter')
-$cboAppStatus    = $window.FindName('cboAppStatus')
+$cboAppType      = $window.FindName('cboAppType')
 $gridApps        = $window.FindName('gridApps')
 $menuUninstallApp = @($gridApps.ContextMenu.Items | Where-Object { $_.Name -eq 'menuUninstallApp' })[0]
 $menuRepairApp    = @($gridApps.ContextMenu.Items | Where-Object { $_.Name -eq 'menuRepairApp' })[0]
@@ -312,7 +312,7 @@ function Update-ControlState {
 $script:ViewMeta = @{
     'Device list'  = @{ Title = 'Device list';  Subtitle = 'Devices of the site that match a name pattern or a collection. Select one and inspect it.' }
     'Device'       = @{ Title = 'Device';       Subtitle = 'Operating system, client health and site record of the device.' }
-    'Applications' = @{ Title = 'Applications'; Subtitle = 'Applications installed on the device compared with the site hardware inventory.' }
+    'Applications' = @{ Title = 'Applications'; Subtitle = 'Applications that the device lists in its uninstall registry keys now. Right-click a row to uninstall or repair.' }
     'Updates'      = @{ Title = 'Updates';      Subtitle = 'Updates that the site lists as required for the device, and updates pending on the device.' }
     'Collections'  = @{ Title = 'Collections';  Subtitle = 'Collections that hold the device and the deployments that target them.' }
     'Problems'     = @{ Title = 'Problems';     Subtitle = 'Parts of the inspection that failed. The other parts still ran.' }
@@ -356,20 +356,20 @@ function Update-StatusBarSummary {
 }
 
 # === Applications filter ===
-function Get-AppStatusFilter {
-    if ($cboAppStatus.SelectedItem) { return [string]$cboAppStatus.SelectedItem.Content }
+function Get-AppTypeFilter {
+    if ($cboAppType.SelectedItem) { return [string]$cboAppType.SelectedItem.Content }
     return 'All'
 }
 function Update-AppFilter {
     $needle = ([string]$txtAppFilter.Text).Trim().ToLowerInvariant()
-    $status = Get-AppStatusFilter
+    $type = Get-AppTypeFilter
     $rows = @($script:AppRows)
     if ($needle) { $rows = @($rows | Where-Object { ([string]$_.Name).ToLowerInvariant().Contains($needle) }) }
-    if ($status -ne 'All') { $rows = @($rows | Where-Object { $_.Status -eq $status }) }
+    if ($type -ne 'All') { $rows = @($rows | Where-Object { $_.Type -eq $type }) }
     $gridApps.ItemsSource = $rows
 }
 $txtAppFilter.Add_TextChanged({ Update-AppFilter })
-$cboAppStatus.Add_SelectionChanged({ Update-AppFilter })
+$cboAppType.Add_SelectionChanged({ Update-AppFilter })
 
 # === Show an inspection ===
 function Show-Inspection {
@@ -1011,32 +1011,48 @@ $gridApps.ContextMenu.Add_Opened({
     $gate = Get-ActionGateText
     $rows = @($gridApps.SelectedItems)
     $row = $(if ($rows.Count -eq 1) { $rows[0] } else { $null })
-    foreach ($pair in @(@{ Item = $menuUninstallApp; Op = 'Uninstall'; Flag = 'CanUninstall' }, @{ Item = $menuRepairApp; Op = 'Repair'; Flag = 'CanRepair' })) {
+    foreach ($pair in @(@{ Item = $menuUninstallApp; Op = 'Uninstall'; Flag = 'CanUninstall'; Why = 'UninstallReason'; Command = 'UninstallCommand' }, @{ Item = $menuRepairApp; Op = 'Repair'; Flag = 'CanRepair'; Why = 'RepairReason'; Command = 'RepairCommand' })) {
         if ($gate) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason $gate; continue }
         if (-not $row) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason 'Select one row.'; continue }
-        if ([string]::IsNullOrEmpty([string]$row.ClientApplicationId)) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason 'This entry is not a Configuration Manager application on the device. Uninstall and Repair work on rows with the status Client application, or on entries with the same name.'; continue }
-        if (-not [bool]$row.ClientMachineTarget) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason 'The application is deployed to a user. The tool acts only on applications deployed to the device.'; continue }
         if (-not [bool]$row.($pair.Flag)) {
-            $why = $(if ($pair.Op -eq 'Repair') { 'The client does not allow Repair for this application. The deployment type needs a repair command.' } else { 'The client does not allow Uninstall for this application now.' })
+            $why = [string]$row.($pair.Why)
+            if ([string]::IsNullOrEmpty($why)) { $why = ('{0} is not available for this entry.' -f $pair.Op) }
             Set-MenuItemState -Item $pair.Item -Enabled $false -Reason $why
             continue
         }
-        Set-MenuItemState -Item $pair.Item -Enabled $true -Reason ('{0} {1} with the Configuration Manager client.' -f $pair.Op, $row.ClientApplication)
+        Set-MenuItemState -Item $pair.Item -Enabled $true -Reason ('{0} {1} on the device with: {2}' -f $pair.Op, $row.Name, $row.($pair.Command))
     }
 })
 
 function Invoke-ApplicationOperation {
     param([Parameter(Mandatory)][ValidateSet('Uninstall', 'Repair')][string]$Operation)
     $rows = @($gridApps.SelectedItems)
-    if ($rows.Count -ne 1 -or [string]::IsNullOrEmpty([string]$rows[0].ClientApplicationId)) { Add-LogLine ('{0}: select one row with a Configuration Manager application.' -f $Operation); return }
+    if ($rows.Count -ne 1) { Add-LogLine ('{0}: select one row.' -f $Operation); return }
     $row = $rows[0]
-    $text = $(if ($Operation -eq 'Uninstall') { 'The Configuration Manager client on the device uninstalls {0} (revision {1}) now, with the uninstall command of its deployment type. Allowed actions of the client: {2}.' } else { 'The Configuration Manager client on the device repairs {0} (revision {1}) now, with the repair command of its deployment type. Allowed actions of the client: {2}.' })
+    $flagName = ('Can{0}' -f $Operation)
+    if (-not [bool]$row.$flagName) { Add-LogLine ('{0}: {1}' -f $Operation, $row.Reason); return }
+    # The command is built here for display only. The device reads the key again and builds the real command.
+    $commandName = ('{0}Command' -f $Operation)
+    $command = [string]$row.$commandName
+    $verb = $(if ($Operation -eq 'Uninstall') { 'uninstalls' } else { 'repairs' })
+    $nl = [Environment]::NewLine
+    $text = ('The device {0} {1} {2} ({3}, {4} view, key {5}) now. It reads the registry key again, then runs this command and waits up to 10 minutes for it:{6}{6}{7}{6}{6}The tool adds no switches. If the installer needs a restart, the tool does not restart the device.' -f $verb, $row.Name, $row.Version, $row.Type, $row.View, $row.KeyName, $nl, $command)
     $script:ApplicationRowDone = $row
     Invoke-DeviceAction -Name ('{0} application' -f $Operation) -Function 'Invoke-DeviceInspectorApplicationAction' `
-        -Parameters @{ ApplicationId = [string]$row.ClientApplicationId; Operation = $Operation } `
-        -Message ($text -f $row.ClientApplication, $row.ClientRevision, $(if ($row.ClientAllowedActions) { $row.ClientAllowedActions } else { 'none' })) `
-        -Detail @(('Application: {0}, ID {1}, revision {2}.' -f $row.ClientApplication, $row.ClientApplicationId, $row.ClientRevision)) `
-        -AfterRun { param($r) if ($script:ApplicationRowDone) { $script:ApplicationRowDone.CanUninstall = $false; $script:ApplicationRowDone.CanRepair = $false; Update-AppFilter }; Add-LogLine ('{0}: inspect {1} again to see the new state.' -f $r.Action, $r.ComputerName) }
+        -Parameters @{ Operation = $Operation; View = [string]$row.View; KeyName = [string]$row.KeyName } `
+        -Message $text `
+        -Detail @(('Application: {0} {1}, {2}, {3} view, key {4}.' -f $row.Name, $row.Version, $row.Type, $row.View, $row.KeyName), ('Command shown to the person: {0}' -f $command)) `
+        -AfterRun {
+            param($r)
+            # After a real Uninstall the row stays in the list until the next inspection. Its actions turn off.
+            if ($script:ApplicationRowDone -and $r.Action -like 'Uninstall*') {
+                $done = 'The entry was uninstalled in this session. Inspect the device again to refresh the list.'
+                $script:ApplicationRowDone.CanUninstall = $false; $script:ApplicationRowDone.CanRepair = $false
+                $script:ApplicationRowDone.UninstallReason = $done; $script:ApplicationRowDone.RepairReason = $done; $script:ApplicationRowDone.Reason = $done
+                Update-AppFilter
+            }
+            Add-LogLine ('{0}: inspect {1} again to see the new state.' -f $r.Action, $r.ComputerName)
+        }
 }
 $menuUninstallApp.Add_Click({ Invoke-ApplicationOperation -Operation 'Uninstall' })
 $menuRepairApp.Add_Click({ Invoke-ApplicationOperation -Operation 'Repair' })

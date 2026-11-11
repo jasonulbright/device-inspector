@@ -38,8 +38,13 @@ This page lists the Microsoft Learn pages for each feature of Device Inspector. 
 - [InventoryActionStatus Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/client-classes/inventoryactionstatus-client-wmi-class): Lists the properties of the status record.
 - [InstallUpdates Method in Class CCM_SoftwareUpdatesManager](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/installupdates-method-in-class-ccm_softwareupdatesmanager): Describes the install request.
 - [CCM_SoftwareUpdate Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/ccm_softwareupdate-client-wmi-class): Lists ComplianceState and EvaluationState.
-- [Uninstall Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/uninstall-method-in-class-ccm_application): Describes the uninstall request.
-- [Repair Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/repair-method-in-class-ccm_application): Describes the repair request.
+- [Command-Line Options](https://learn.microsoft.com/windows/win32/msi/command-line-options): Describes `/x` and `/i` with a product code. It says that `/f` ignores properties on the command line.
+- [Standard Installer Command-Line Options](https://learn.microsoft.com/windows/win32/msi/standard-installer-command-line-options): Describes `/quiet` and `/norestart`.
+- [Reboot property](https://learn.microsoft.com/windows/win32/msi/reboot): Describes `ReallySuppress`.
+- [REINSTALL property](https://learn.microsoft.com/windows/win32/msi/reinstall) and [REINSTALLMODE property](https://learn.microsoft.com/windows/win32/msi/reinstallmode): Describe a repair with `REINSTALL=ALL` and `omus`.
+- [Windows Installer error codes](https://learn.microsoft.com/windows/win32/msi/error-codes): Lists the exit codes 0, 1605, 1618, 1641 and 3010.
+- [Uninstall registry key](https://learn.microsoft.com/windows/win32/msi/uninstall-registry-key): Describes the key that is named by the product code.
+- [Create application scripts for VM Applications](https://learn.microsoft.com/azure/virtual-machines/vm-applications-create-app-scripts): Shows the use of `QuietUninstallString` and of `msiexec /x {GUID} /qn /norestart`.
 - [Add-CMDeviceCollectionDirectMembershipRule](https://learn.microsoft.com/powershell/module/configurationmanager/add-cmdevicecollectiondirectmembershiprule): Describes the new direct rule.
 - [Get-CMDeviceCollection](https://learn.microsoft.com/powershell/module/configurationmanager/get-cmdevicecollection): Describes the collection list of the browser.
 - [Remove-CMDeviceCollectionDirectMembershipRule](https://learn.microsoft.com/powershell/module/configurationmanager/remove-cmdevicecollectiondirectmembershiprule): Describes the removal of a direct rule.

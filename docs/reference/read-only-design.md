@@ -27,7 +27,7 @@ None.
 | Site | `Get-CMDeviceCollection` | Collection names. One call, then a filter. |
 | Site | `Get-CMDeployment` | Deployments targeted at those collections. One call, then a filter. |
 | Site | `Invoke-CMWmiQuery` on `SMS_UpdateComplianceStatus` (status 2), then `Get-CMSoftwareUpdate -Fast -IncludeUpgrade` | Updates that the site lists as required for the device. Expired updates are left out. |
-| The device | `Invoke-Command` with one script block | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last hardware inventory cycle, last discovery data cycle). Installed applications from the uninstall registry keys. Client application policy (`CCM_Application`). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
+| The device | `Invoke-Command` with one script block | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last hardware inventory cycle, last discovery data cycle). Installed applications from the uninstall registry keys (one entry for each key, with the view, the key name and the uninstall strings). Client application policy (`CCM_Application`, for the text report and the JSON export only). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
 
 `Invoke-CMWmiQuery` is a ConfigurationManager cmdlet. The tool uses it only for the four reads that no cmdlet returns: the installed applications of hardware inventory, the collection memberships of the device, the required updates of the device and the hardware scan time of the device (for the inventory check). See [Data sources](data-sources.md).
 
@@ -51,7 +51,7 @@ The actions are the only code that changes the device or the site. They live in 
 - Each action asks for a confirmation that names the action and shows the number of devices and their names.
 - Each action has a dry run. The dry run runs the same code on the device, reads the state, lists the steps and skips every call that changes state. A test runs each device script with the dry run and fails if it calls a method.
 - Each run and each dry run goes to the action log. See [Actions](../core/actions.md).
-- Calls that change state (`Invoke-CimMethod`) appear only in the device scripts of the actions file. A test checks this.
+- Calls that change state (`Invoke-CimMethod`, `Start-Process`) appear only in the device scripts of the actions file. `Start-Process` appears only in the application action script block, which runs the installer. A test checks this.
 
 The right-click menus of the Applications, Updates and Collections grids hold the action entries: the Updates menu installs pending updates, the Applications menu uninstalls and repairs applications, and the Collections menu removes and adds a direct membership rule (see [Actions](../core/actions.md)). The collection browser reads the device collections with one `Get-CMDeviceCollection` call.
 
@@ -64,7 +64,8 @@ The site actions use the ConfigurationManager cmdlets with the site drive, as th
 - A deployment deadline is shown as the local time that the site stores, with no zone.
 - The tool shows deployments that target a collection of the device. It does not show the per-device result of each deployment.
 - The site inventory list depends on the hardware inventory classes `Add Remove Programs` and `Add Remove Programs (64)`. The classes must be enabled in the client settings.
-- The device list reads the machine-wide uninstall keys only. Per-user installs are not listed. System components are listed, as in the site inventory.
+- The device list reads the machine-wide uninstall keys only. Per-user installs are not listed. System components are listed, and their actions are off.
+- The Applications panel is a live view of the uninstall keys. It does not compare them with the site inventory. Uninstall and Repair run on the device from the uninstall key (see [Actions](../core/actions.md#uninstall-or-repair-an-application)). They are write actions behind **Enable actions**, not part of the inspection.
 - The inventory check compares dates and application names only. An application removed after the last hardware inventory cycle makes the state **Corrupt** until the next cycle.
 - A device name that has several resource records in the site uses the first record and adds a problem line.
 - The updates that the site lists as required come from the update compliance status of the site. They can lag the state on the device.
