@@ -18,7 +18,8 @@ function ConvertTo-InspectionTimestamp {
     # ConvertTo-Json formats [datetime] values differently in the two versions.
     # A value with Kind Unspecified is read as UTC. The ConfigurationManager cmdlets
     # return the inventory dates of the site this way. The last hardware scan of
-    # Get-CMDevice can lag a processed report, so the inventory check does not use it.
+    # Get-CMDevice can lag a processed report. The Last hardware inventory fact shows
+    # it only when SMS_G_System_WORKSTATION_STATUS has no row.
     #
     # .PARAMETER Value
     # A [datetime] value, or $null.
@@ -748,7 +749,7 @@ function Get-SiteFact {
     # part (inventory, collections, deployments) is added to the Problems list and the
     # other parts continue. A failure of the device lookup throws.
     #
-    # Cmdlets: Get-CMDevice (device record and last hardware scan),
+    # Cmdlets: Get-CMDevice (device record; its last hardware scan is the fallback),
     # Get-CMDeviceCollection (collection names), Get-CMDeployment (deployments),
     # Get-CMSoftwareUpdate (update details). Four reads have no cmdlet
     # and use Invoke-CMWmiQuery: the installed applications from hardware inventory,
@@ -781,7 +782,7 @@ function Get-SiteFact {
     #
     # Positional parameters: none.
     #
-    # Version: 2.0.20261111.0
+    # Version: 2.1.20261111.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -808,6 +809,7 @@ function Get-SiteFact {
                 LastLogonUserName     = $null
                 LastHardwareInventory = $null
                 HardwareScanClientTime = $null
+                LastHardwareInventorySource = 'None'
                 ApplicationReadComplete = $false
                 ApplicationRowsByClass = $null
                 InstalledApplications = @()
@@ -841,6 +843,15 @@ function Get-SiteFact {
         } catch {
             Write-Debug -Message $_.Exception.Message
             $Problems.Add(('Site hardware scan time: {0}' -f $_.Exception.Message))
+        }
+
+        # One read serves the fact and the inventory check. With no row, the fact falls
+        # back to the Get-CMDevice value.
+        $strLastHardwareInventorySource = 'None'
+        if (-not [string]::IsNullOrEmpty($strHardwareScanClientTime)) {
+            $strLastHardwareInventorySource = 'SMS_G_System_WORKSTATION_STATUS'
+        } elseif (-not [string]::IsNullOrEmpty($strLastHardwareInventory)) {
+            $strLastHardwareInventorySource = 'Get-CMDevice'
         }
 
         $listApplication = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
@@ -970,6 +981,7 @@ function Get-SiteFact {
             LastLogonUserName     = [string]$objResource.LastLogonUser
             LastHardwareInventory = $strLastHardwareInventory
             HardwareScanClientTime = $strHardwareScanClientTime
+            LastHardwareInventorySource = $strLastHardwareInventorySource
             ApplicationReadComplete = $boolApplicationReadComplete
             ApplicationRowsByClass = [pscustomobject]$hashtableClassRows
             InstalledApplications = @($listApplication | Sort-Object -Property Name, Version -Unique)
@@ -1015,7 +1027,7 @@ function Get-DeviceFact {
     #
     # Positional parameters: none.
     #
-    # Version: 1.1.20261110.0
+    # Version: 1.2.20261111.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1804,7 +1816,7 @@ function ConvertTo-DeviceInspectionReport {
             $listLine.Add(('  Client version:            {0}' -f $objSite.ClientVersion))
             $listLine.Add(('  Active:                    {0}' -f $objSite.Active))
             $listLine.Add(('  Operating system:          {0}' -f $objSite.OperatingSystem))
-            $listLine.Add(('  Last hardware inventory:   {0}' -f $objSite.LastHardwareInventory))
+            $listLine.Add(('  Last hardware inventory:   {0}' -f (Get-SiteHardwareInventoryFact -Site $objSite).Value))
             $arrCollection = @($objSite.Collections | ForEach-Object { '  {0}  {1}' -f $_.CollectionId, $_.Name })
             $arrDeployment = @($objSite.Deployments | ForEach-Object { '  {0} | {1} | {2} | via {3}' -f $_.Name, $_.Type, $_.Intent, $_.CollectionName })
             $arrSiteApplication = @($objSite.InstalledApplications | ForEach-Object { '  {0} {1}' -f $_.Name, $_.Version })
@@ -1934,6 +1946,72 @@ function Test-DeviceInspectorInput {
     }
 }
 
+function Get-SiteHardwareInventoryFact {
+    # .SYNOPSIS
+    # Chooses the text of the Last hardware inventory fact of the site record.
+    #
+    # .DESCRIPTION
+    # The panel, the text report and the HTML export use this one function. The JSON
+    # export holds the same choice in LastHardwareInventorySource.
+    #
+    # When the site has a row in SMS_G_System_WORKSTATION_STATUS, the fact is that scan
+    # time. The site stores it as the local clock time of the client, with no zone, so
+    # the tool does not convert it. The label says so.
+    #
+    # When the class has no row (or the read failed), the fact is the Get-CMDevice
+    # value in UTC. The label says that this value can lag a processed report.
+    #
+    # .PARAMETER Site
+    # The Site object that Get-SiteFact returns, with Found set to $true.
+    #
+    # .EXAMPLE
+    # $objFact = Get-SiteHardwareInventoryFact -Site $objSite
+    #
+    # # $objFact.Value = '2026-11-10T19:22:32 (device local time)'
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties Value (text, empty when the site has no date) and
+    # Source ('SMS_G_System_WORKSTATION_STATUS', 'Get-CMDevice' or 'None').
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Site
+    )
+
+    process {
+        $strClientTime = $null
+        $objClientTimeProperty = $Site.PSObject.Properties['HardwareScanClientTime']
+        if ($null -ne $objClientTimeProperty) {
+            $strClientTime = [string]$objClientTimeProperty.Value
+        }
+        if (-not [string]::IsNullOrEmpty($strClientTime)) {
+            return [pscustomobject]@{
+                Value  = '{0} (device local time)' -f $strClientTime
+                Source = 'SMS_G_System_WORKSTATION_STATUS'
+            }
+        }
+        $strCmdletTime = [string]$Site.LastHardwareInventory
+        if (-not [string]::IsNullOrEmpty($strCmdletTime)) {
+            return [pscustomobject]@{
+                Value  = '{0} (UTC, from Get-CMDevice; can lag a processed report)' -f $strCmdletTime
+                Source = 'Get-CMDevice'
+            }
+        }
+        [pscustomobject]@{ Value = ''; Source = 'None' }
+    }
+}
+
 function ConvertTo-DeviceInspectionFactRow {
     # .SYNOPSIS
     # Turns the facts of an inspection into rows of group, name and value.
@@ -1955,7 +2033,7 @@ function ConvertTo-DeviceInspectionFactRow {
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.1.20261111.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1997,7 +2075,7 @@ function ConvertTo-DeviceInspectionFactRow {
                 & $scriptBlockRow 'Site record' 'Active' $Inspection.Site.Active
                 & $scriptBlockRow 'Site record' 'Operating system' $Inspection.Site.OperatingSystem
                 & $scriptBlockRow 'Site record' 'Last logon user' $Inspection.Site.LastLogonUserName
-                & $scriptBlockRow 'Site record' 'Last hardware inventory (UTC)' $Inspection.Site.LastHardwareInventory
+                & $scriptBlockRow 'Site record' 'Last hardware inventory' (Get-SiteHardwareInventoryFact -Site $Inspection.Site).Value
             } else {
                 & $scriptBlockRow 'Site record' 'Status' 'The site has no record of this device.'
             }

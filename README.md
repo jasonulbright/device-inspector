@@ -52,7 +52,7 @@ Leave the site server empty to read only the device. Select **Site only** to rea
 
 ## Panels
 
-- **Device** -- a summary line, then the facts: operating system, client health (service state, client version, assigned site code, management point, last hardware inventory and discovery cycles) and the site record (resource ID, client installed, client version, active, operating system, last logon user, last hardware inventory date).
+- **Device** -- a summary line, then the facts: operating system, client health (service state, client version, assigned site code, management point, last hardware inventory and discovery cycles) and the site record (resource ID, client installed, client version, active, operating system, last logon user, last hardware inventory time).
 - **Applications** -- the device list and the site inventory list, merged by name. A filter box and a status filter narrow the rows.
 - **Updates** -- updates that the site lists as required for the device (expired updates are left out; superseded updates are marked) and updates pending on the device with their evaluation state and deadline.
 - **Collections** -- the collection memberships, and the deployments that target those collections.

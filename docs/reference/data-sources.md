@@ -33,7 +33,7 @@ Compared on 2026-11-06 on the lab site for the workstation and the site server. 
 | Active | `Get-CMDevice` `IsActive` | `SMS_R_System.Active` | Match | |
 | Operating system | `Get-CMDevice` `DeviceOS` | `SMS_R_System.OperatingSystemNameandVersion` | Match | The site text is generic ("Microsoft Windows NT Workstation 10.0"). The device block reads the real caption live. |
 | Last logon user | `Get-CMDevice` `LastLogonUser` | `SMS_R_System.LastLogonUserName` | Match | |
-| Last hardware inventory | `Get-CMDevice` `LastHardwareScan` | `SMS_G_System_WORKSTATION_STATUS.LastHardwareScan` | **Differs** | See below. The cmdlet value is right. |
+| Last hardware inventory | `Invoke-CMWmiQuery` on `SMS_G_System_WORKSTATION_STATUS` (`LastHardwareScan`), as the local clock time of the device. Fallback with no row: `Get-CMDevice` `LastHardwareScan`. | `SMS_G_System_WORKSTATION_STATUS.LastHardwareScan` | **Differs** | See below. |
 | Installed applications | `Invoke-CMWmiQuery` on `SMS_G_System_ADD_REMOVE_PROGRAMS` and `_64` | same classes | Match (18 rows on the workstation, 74 on the site server) | No cmdlet returns the hardware inventory classes of one device. |
 | Collection memberships (IDs) | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | same class | Match (11 on the workstation, 5 on the site server) | A cmdlet route exists: `Get-CMCollectionMember -ResourceId` for each device collection. It returned the same sets. It made one call for each of the 26 device collections and took about 4 s, against about 0.3 s for the one query. The tool keeps the query. |
 | Collection names | `Get-CMDeviceCollection` (one call, then a filter) | `SMS_Collection` | Match | |
@@ -42,12 +42,18 @@ Compared on 2026-11-06 on the lab site for the workstation and the site server. 
 
 ### Last hardware inventory differs
 
-| Device | Device, live (inventory cycle start) | New: `Get-CMDevice` | Old: `SMS_G_System_WORKSTATION_STATUS` |
+The table is dated 2026-11-06.
+
+| Device | Device, live (inventory cycle start) | Cmdlet: `Get-CMDevice` | Class: `SMS_G_System_WORKSTATION_STATUS` (CIM read) |
 |---|---|---|---|
 | Workstation | 2026-11-05T17:40:51Z | 2026-11-05T17:41:51Z | 2026-11-05T13:41:51Z |
 | Site server | 2026-11-02T12:11:51Z | 2026-11-02T12:12:40Z | 2026-11-02T08:12:40Z |
 
-The site finishes about one minute after the client starts, so the cmdlet value fits the device. The old class value is 4 hours early. Both values come with no zone. The cmdlet value is UTC. The tool reads a site date with no zone as UTC. The old CIM read gave the wrong time. This is a fix, not a new difference.
+On 2026-11-06 the cmdlet value fit the device and the class value read through CIM was 4 hours early. Both values come with no zone. The CIM read gave the wrong time.
+
+On 2026-11-10 the `Get-CMDevice` value of the workstation kept the date of an older report (2026-11-05) for hours after the site loaded a new full report. The class value, read with `Invoke-CMWmiQuery`, held the new scan time as the local clock time of the device. Microsoft Learn does not document why the `Get-CMDevice` value lags. The cause is not known.
+
+The tool now shows the class value as the **Last hardware inventory** fact, with the label "(device local time)". It does not convert the value. If the class has no row for the device, the tool shows the `Get-CMDevice` value in UTC and says that it can lag. The inventory check uses the same read.
 
 ### Deployment deadline differs in text
 

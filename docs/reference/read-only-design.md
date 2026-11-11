@@ -19,9 +19,9 @@ None.
 | Source | Command | Facts |
 |---|---|---|
 | Site | `Get-CMSite` | No fact. The tool runs it once, when it opens the site drive, to check that the site answers. |
-| Site | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | Device record (resource ID, client installed, client version, active, operating system, last logon user). Last hardware inventory date. |
+| Site | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | Device record (resource ID, client installed, client version, active, operating system, last logon user). Its last hardware scan is the fallback for the Last hardware inventory fact. |
 | Site | `Get-CMDevice -Name <pattern> -Fast`, `Get-CMCollectionMember -CollectionId <ID>` | The Device list panel: the devices that match a name pattern or a collection. |
-| Site | `Invoke-CMWmiQuery` on `SMS_G_System_WORKSTATION_STATUS` | The hardware scan time, as the local clock time of the client, for the inventory check. |
+| Site | `Invoke-CMWmiQuery` on `SMS_G_System_WORKSTATION_STATUS` | The hardware scan time, as the local clock time of the client. One read serves the Last hardware inventory fact and the inventory check. |
 | Site | `Invoke-CMWmiQuery` on `SMS_G_System_ADD_REMOVE_PROGRAMS` and `SMS_G_System_ADD_REMOVE_PROGRAMS_64` | Installed applications from hardware inventory (32-bit and 64-bit). |
 | Site | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | Collection memberships (collection IDs, and `IsDirect` for the membership rule). |
 | Site | `Get-CMDeviceCollection` | Collection names. One call, then a filter. |
@@ -29,7 +29,7 @@ None.
 | Site | `Invoke-CMWmiQuery` on `SMS_UpdateComplianceStatus` (status 2), then `Get-CMSoftwareUpdate -Fast -IncludeUpgrade` | Updates that the site lists as required for the device. Expired updates are left out. |
 | The device | `Invoke-Command` with one script block | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last hardware inventory cycle, last discovery data cycle). Installed applications from the uninstall registry keys (one entry for each key, with the view, the key name and the uninstall strings). Client application policy (`CCM_Application`, for the text report and the JSON export only). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
 
-`Invoke-CMWmiQuery` is a ConfigurationManager cmdlet. The tool uses it only for the four reads that no cmdlet returns: the installed applications of hardware inventory, the collection memberships of the device, the required updates of the device and the hardware scan time of the device (for the inventory check). See [Data sources](data-sources.md).
+`Invoke-CMWmiQuery` is a ConfigurationManager cmdlet. The tool uses it only for the four reads that no cmdlet returns: the installed applications of hardware inventory, the collection memberships of the device, the required updates of the device and the hardware scan time of the device (for the Last hardware inventory fact and the inventory check). See [Data sources](data-sources.md).
 
 Two "last hardware inventory" values exist on purpose. The site value is the scan date that the site stored. The device value is the start time of the last hardware inventory cycle on the client. They can differ.
 
@@ -61,7 +61,7 @@ The site actions use the ConfigurationManager cmdlets with the site drive, as th
 ## Known limits
 
 - The tool needs the Configuration Manager console on the computer that runs it.
-- The site value of the last hardware inventory comes from `Get-CMDevice`. Older versions read a class that was 4 hours early on the lab.
+- The site value of the last hardware inventory comes from `SMS_G_System_WORKSTATION_STATUS`, as the local clock time of the device with no zone conversion. Version 2026.11.06.0001 read the same class through CIM and showed it 4 hours early. The tool now reads it with `Invoke-CMWmiQuery` and does not convert it. With no row in the class, the tool shows the `Get-CMDevice` value and says that it can lag.
 - A deployment deadline is shown as the local time that the site stores, with no zone.
 - The tool shows deployments that target a collection of the device. It does not show the per-device result of each deployment.
 - The site inventory list depends on the hardware inventory classes `Add Remove Programs` and `Add Remove Programs (64)`. The classes must be enabled in the client settings.
