@@ -951,7 +951,7 @@ Describe 'Last hardware inventory fact' {
         $objRow.Value | Should -Be '2026-11-10T19:22:32 (device local time)'
         ConvertTo-DeviceInspectionReport -Inspection $objInspection | Should -BeLike '*Last hardware inventory:   2026-11-10T19:22:32 (device local time)*'
         ConvertTo-DeviceInspectionHtml -Inspection $objInspection | Should -BeLike '*2026-11-10T19:22:32 (device local time)*'
-        ConvertTo-DeviceInspectionJson -Inspection $objInspection | Should -BeLike '*"LastHardwareInventorySource": "SMS_G_System_WORKSTATION_STATUS"*'
+        ConvertTo-DeviceInspectionJson -Inspection $objInspection | Should -Match '"LastHardwareInventorySource":\s+"SMS_G_System_WORKSTATION_STATUS"'
     }
 
     It 'shows the Get-CMDevice value and says it can lag when the class has no row' {
