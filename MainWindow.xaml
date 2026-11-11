@@ -323,6 +323,9 @@
                         <Button x:Name="btnPolicyUpdate" Content="Client policy update..."
                                 Style="{StaticResource SquareInlineButtonStyle}" MinWidth="170"
                                 ToolTip="Request and evaluate machine policy on the device. Needs Enable actions."/>
+                        <Button x:Name="btnFullInventory" Content="Full hardware inventory..."
+                                Style="{StaticResource SquareInlineButtonStyle}" MinWidth="190"
+                                ToolTip="Delete the hardware inventory status on the device and start a hardware inventory, so the site gets a full report. Needs Enable actions."/>
                     </WrapPanel>
                     <DataGrid x:Name="gridFacts" Grid.Row="2"
                               Style="{StaticResource ViewDataGrid}"
