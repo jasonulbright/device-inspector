@@ -1137,6 +1137,7 @@ function Invoke-DeviceInspectorCollectionChange {
             # membership, so the function waits for it, up to 60 seconds.
             if ($boolUpdateStarted) {
                 $boolSeen = $false
+                $strReadError = ''
                 $intTry = 0
                 do {
                     $intTry++
@@ -1150,13 +1151,17 @@ function Invoke-DeviceInspectorCollectionChange {
                             $boolSeen = $boolDirectNow
                         }
                     } catch {
-                        Write-Debug -Message $_.Exception.Message
+                        $strReadError = $_.Exception.Message
                     }
                 } until ($boolSeen -or $intTry -ge 12)
                 if ($boolSeen) {
                     $listStep.Add(('The site shows the new membership after {0} seconds.' -f ($intTry * 5)))
                 } else {
-                    $listStep.Add('The site did not show the new membership within 60 seconds. The client gets it at a later policy cycle.')
+                    $strNotShown = 'The site did not show the new membership within 60 seconds. The client gets it at a later policy cycle.'
+                    if (-not [string]::IsNullOrEmpty($strReadError)) {
+                        $strNotShown = '{0} Last read error: {1}' -f $strNotShown, $strReadError
+                    }
+                    $listStep.Add($strNotShown)
                 }
             }
             try {

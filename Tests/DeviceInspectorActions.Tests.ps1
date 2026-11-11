@@ -201,7 +201,7 @@ Describe 'Action gate in the window' {
         $intDialog = $script:strStart.IndexOf('$choice = Show-ActionConfirmDialog')
         $intGate | Should -BeGreaterThan 0
         $intGate | Should -BeLessThan $intDialog
-        $script:strStart | Should -Match "(?s)function Test-DeviceActionReady \{.*?\`$script:ActionsEnabled -and"
+        $script:strStart | Should -Match 'function Test-DeviceActionReady \{[^}]*-ActionsEnabled \$script:ActionsEnabled[^}]*-Kind Device'
     }
 
     It 'writes every run and every dry run to the action log' {
@@ -1049,6 +1049,8 @@ Describe 'Remove from collection' {
         $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
         $objResult.Succeeded | Should -BeTrue
         ($objResult.Steps -join "`n") | Should -Match 'did not show the new membership within 60 seconds'
+        Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { throw 'query failed' }
+        ((Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Steps -join "`n") | Should -Match 'Last read error: query failed'
         Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMClientAction -Times 1 -Exactly
         Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 12 -Exactly
     }
@@ -1102,6 +1104,7 @@ Describe 'Remove from collection' {
         $script:strXaml | Should -Match 'Header="Membership"'
         $script:strStart | Should -Match "Only a direct rule can be removed here"
         $script:strStart | Should -Match "(?s)\`$menuRemoveCollection\.Add_Click\(\{.*?Invoke-DeviceAction -SiteAction -Name 'Remove from collection' -Function 'Invoke-DeviceInspectorCollectionChange'"
-        $script:strStart | Should -Match "(?s)function Test-SiteActionReady \{.*?Site\.Found"
+        $script:strStart | Should -Match 'function Test-SiteActionReady \{[^}]*Get-DeviceInspectorActionBlock[^}]*-Kind Site'
+        $script:strStart | Should -Match 'function Test-DeviceActionReady \{[^}]*Get-DeviceInspectorActionBlock[^}]*-Kind Device'
     }
 }

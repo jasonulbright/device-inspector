@@ -254,8 +254,7 @@ function Test-SiteActionReady {
 }
 
 function Test-DeviceActionReady {
-    # A device action needs the switch, an idle window and an inspection that reached the device.
-    return [bool]($script:ActionsEnabled -and -not $script:IsBusy -and $script:Inspection -and $null -ne $script:Inspection.Device)
+    return [string]::IsNullOrEmpty((Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Device))
 }
 
 # After a full inventory or a repair the check is out of date until the next inspection.
