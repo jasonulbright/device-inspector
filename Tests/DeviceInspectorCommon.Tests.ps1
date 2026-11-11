@@ -665,6 +665,22 @@ Describe 'Get-DeviceFact' {
         }
     }
 
+    It 'keeps UpdateId and ComplianceState of pending updates, and gives -1 when the device sent no state' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-Command {
+                [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @(); PendingUpdates = @(
+                        [pscustomobject]@{ Name = 'A'; ArticleId = '5001'; UpdateId = 'Site_X/SUM_1'; ComplianceState = 0; EvaluationState = 0; Deadline = $null }
+                        [pscustomobject]@{ Name = 'B'; ArticleId = '5002'; EvaluationState = 1; Deadline = $null }
+                    ) }
+            }
+            $arrUpdate = @((Get-DeviceFact -ComputerName 'WS01').PendingUpdates)
+            $arrUpdate[0].UpdateId | Should -Be 'Site_X/SUM_1'
+            $arrUpdate[0].ComplianceState | Should -Be 0
+            $arrUpdate[1].UpdateId | Should -Be ''
+            $arrUpdate[1].ComplianceState | Should -Be -1
+        }
+    }
+
     It 'runs a remote block that parses and holds no write verbs' {
         InModuleScope DeviceInspectorCommon {
             $script:scriptBlockSeen = $null

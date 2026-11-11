@@ -135,7 +135,8 @@ $script:scriptBlockFullInventory = {
 }
 
 # Runs on the device. Installs the updates of the client policy that the client
-# reports as missing (ComplianceState 0). An empty UpdateId list means all of them.
+# reports as missing (ComplianceState 0) and that have no install job in progress
+# (EvaluationState None, Available or Error). An empty UpdateId list means all of them.
 # The new evaluation state of each update is read back after the request, because
 # InstallUpdates returns when the client accepts the job, not when it ends.
 $script:scriptBlockUpdateInstall = {
@@ -170,9 +171,13 @@ $script:scriptBlockUpdateInstall = {
         return [pscustomobject]@{ Succeeded = $false; Summary = ('The updates of the client policy cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
     }
     $arrRequired = @($arrAll | Where-Object { [int]$_.ComplianceState -eq 0 })
-    $arrTarget = $arrRequired
+    $arrCandidate = $arrRequired
     if (@($UpdateId).Count -gt 0) {
-        $arrTarget = @($arrRequired | Where-Object { @($UpdateId) -contains [string]$_.UpdateID })
+        $arrCandidate = @($arrRequired | Where-Object { @($UpdateId) -contains [string]$_.UpdateID })
+    }
+    $arrTarget = @($arrCandidate | Where-Object { @(0, 1, 13) -contains [int]$_.EvaluationState })
+    foreach ($objBusy in @($arrCandidate | Where-Object { @(0, 1, 13) -notcontains [int]$_.EvaluationState })) {
+        $listStep.Add(('Skipped KB{0}: an install job is in progress or complete, state {1}.' -f [string]$objBusy.ArticleID, (& $scriptBlockState $objBusy.EvaluationState)))
     }
     $listStep.Add(('Updates in the client policy: {0}. Missing on the device (ComplianceState 0): {1}. To install: {2}.' -f $arrAll.Count, $arrRequired.Count, $arrTarget.Count))
     foreach ($objUpdate in $arrTarget) {
@@ -199,6 +204,9 @@ $script:scriptBlockUpdateInstall = {
     if ($boolRefused) {
         $listStep.Add(('InstallUpdates returned {0}.' -f $objReturnValue))
         return [pscustomobject]@{ Succeeded = $false; Summary = ('The client refused the install request (return value {0}).' -f $objReturnValue); Steps = @($listStep) }
+    }
+    if ($null -eq $objReturnValue) {
+        $listStep.Add('InstallUpdates gave no return value. The state read below shows the outcome.')
     }
     $listStep.Add(('InstallUpdates accepted {0} updates.' -f $arrTarget.Count))
     Start-Sleep -Seconds 5
@@ -695,7 +703,11 @@ function Invoke-DeviceInspectorUpdateInstall {
     #
     # .PARAMETER UpdateId
     # Optional. The UpdateID values of the updates to install. Omit it for all
-    # updates that are missing on the device.
+    # updates that are missing on the device. The window always passes the IDs of
+    # the rows that the person confirmed.
+    #
+    # .PARAMETER Scope
+    # Selected or All. Sets only the action name in the log.
     #
     # .PARAMETER DryRun
     # List the updates only.
@@ -715,11 +727,13 @@ function Invoke-DeviceInspectorUpdateInstall {
     # [pscustomobject] See New-DeviceInspectorActionRecord.
     #
     # .NOTES
-    # Non-throwing contract: a failure gives Succeeded $false and a Summary.
+    # Non-throwing contract: a failure on the device gives Succeeded $false and a
+    # Summary. A ComputerName or an UpdateId outside its pattern throws before the
+    # function runs.
     #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.0.20261111.1
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -733,6 +747,10 @@ function Invoke-DeviceInspectorUpdateInstall {
         [string[]]$UpdateId = @(),
 
         [Parameter(Mandatory = $false)]
+        [ValidateSet('Selected', 'All')]
+        [string]$Scope,
+
+        [Parameter(Mandatory = $false)]
         [switch]$DryRun,
 
         [Parameter(Mandatory = $false)]
@@ -741,7 +759,7 @@ function Invoke-DeviceInspectorUpdateInstall {
 
     process {
         $strAction = 'Install all pending updates'
-        if (@($UpdateId).Count -gt 0) {
+        if ($Scope -eq 'Selected' -or ([string]::IsNullOrEmpty($Scope) -and @($UpdateId).Count -gt 0)) {
             $strAction = 'Install selected pending updates'
         }
         $hashtableAction = @{

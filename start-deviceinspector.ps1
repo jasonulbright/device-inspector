@@ -913,10 +913,26 @@ function Set-MenuItemState {
     $Item.ToolTip = $Reason
 }
 
+# A right-click selects the row under the pointer when that row is not selected,
+# so a menu entry acts on the row that the person points at.
+function Select-RowUnderPointer {
+    param([Parameter(Mandatory)]$Grid, [Parameter(Mandatory)]$EventArgs)
+    $node = $EventArgs.OriginalSource
+    while ($node -and -not ($node -is [System.Windows.Controls.DataGridRow])) {
+        if ($node -is [System.Windows.Media.Visual] -or $node -is [System.Windows.Media.Media3D.Visual3D]) { $node = [System.Windows.Media.VisualTreeHelper]::GetParent($node) }
+        else { $node = [System.Windows.LogicalTreeHelper]::GetParent($node) }
+    }
+    if ($node -and -not $node.IsSelected) {
+        $Grid.SelectedItems.Clear()
+        $node.IsSelected = $true
+    }
+}
+$gridUpdates.Add_PreviewMouseRightButtonDown({ param($s, $e) Select-RowUnderPointer -Grid $gridUpdates -EventArgs $e })
+
 $gridUpdates.ContextMenu.Add_Opened({
     $all = Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)
     $selected = Get-InstallableUpdateRow -Rows @($gridUpdates.SelectedItems)
-    $gate = $(if (-not $script:ActionsEnabled) { 'Turn on Enable actions first.' } elseif (-not (Test-DeviceActionReady)) { 'Inspect a device that answers first.' } else { '' })
+    $gate = $(if (-not $script:ActionsEnabled) { 'Turn on Enable actions first.' } elseif ($script:IsBusy) { 'Wait for the running task to end.' } elseif (-not (Test-DeviceActionReady)) { 'Inspect a device that answers first.' } else { '' })
     if ($gate) {
         Set-MenuItemState -Item $menuInstallSelected -Enabled $false -Reason $gate
         Set-MenuItemState -Item $menuInstallAll -Enabled $false -Reason $gate
@@ -932,8 +948,9 @@ function Invoke-UpdateInstall {
     param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Rows, [Parameter(Mandatory)][bool]$All)
     if ($Rows.Count -eq 0) { Add-LogLine 'Install updates: no row with a missing update.'; return }
     $list = ($Rows | ForEach-Object { '{0} {1}' -f $_.Article, $_.Title }) -join [Environment]::NewLine
-    $parameters = @{}
-    if (-not $All) { $parameters['UpdateId'] = [string[]]@($Rows | ForEach-Object { [string]$_.UpdateId }) }
+    # The IDs of the confirmed rows go to the device also for "all", so an update that
+    # arrived after the inspection is not installed without a confirmation.
+    $parameters = @{ UpdateId = [string[]]@($Rows | ForEach-Object { [string]$_.UpdateId }); Scope = $(if ($All) { 'All' } else { 'Selected' }) }
     $name = $(if ($All) { 'Install all pending updates' } else { 'Install selected pending updates' })
     Invoke-DeviceAction -Name $name -Function 'Invoke-DeviceInspectorUpdateInstall' -Parameters $parameters `
         -Message ('The client on the device downloads and installs these {0} updates now (CCM_SoftwareUpdatesManager.InstallUpdates). The device can restart, as the deployment sets.{1}{1}{2}' -f $Rows.Count, [Environment]::NewLine, $list) `

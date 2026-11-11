@@ -56,7 +56,9 @@ The Updates panel has two entries in its right-click menu:
 - **Install selected pending updates...** installs the selected rows.
 - **Install all pending updates...** installs all rows that can be installed.
 
-A row can be installed when its source is `Device` and the client lists the update as missing on the device (`ComplianceState` 0). A row with the source `Site` is the view of the site and cannot be installed from here. An entry that is off shows the reason as its tooltip.
+A row can be installed when its source is `Device` and the client lists the update as missing on the device (`ComplianceState` 0). A row with the source `Site` is the view of the site and cannot be installed from here. An entry that is off shows the reason as its tooltip. A right-click selects the row under the pointer when that row is not selected.
+
+Both entries send the IDs of the rows in the confirmation, so an update that arrives after the inspection is not installed without a confirmation. The device skips an update that has an install job in progress or complete (state other than None, Available or Error) and says so in the log.
 
 1. Turn on **Enable actions**.
 2. Inspect the device.

@@ -666,6 +666,45 @@ Describe 'Install pending updates' {
         }
     }
 
+    It 'skips an update with an install job in progress and says so' {
+        InModuleScope DeviceInspectorCommon {
+            $script:arrTestUpdate = @(New-CimInstance -ClassName 'CCM_SoftwareUpdate' -Namespace 'root/ccm/ClientSDK' -ClientOnly -Property @{
+                    UpdateID = 'Site_X/SUM_9'; ArticleID = '5009'; Name = 'Update KB5009'; ComplianceState = [uint32]0; EvaluationState = [uint32]5; PercentComplete = [uint32]10 })
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockUpdateInstall $false @()
+            $objRaw.Succeeded | Should -BeFalse
+            ($objRaw.Steps -join "`n") | Should -Match 'Skipped KB5009: an install job is in progress or complete, state Downloading \(5\)'
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'binds the ID list to the device script for <Case> IDs, as Invoke-ActionOnDevice builds it' -ForEach @(
+        @{ Case = 'zero'; Ids = @(); Expected = 2 }, @{ Case = 'one'; Ids = @('Site_X/SUM_1'); Expected = 1 }, @{ Case = 'many'; Ids = @('Site_X/SUM_1', 'Site_X/SUM_2'); Expected = 2 }
+    ) {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Ids = $Ids; Expected = $Expected } {
+            param($Ids, $Expected)
+            $script:intSent = -1
+            Mock Invoke-CimMethod { $script:intSent = @($Arguments.CCMUpdates).Count; [pscustomobject]@{ ReturnValue = 0 } }
+            $arrArgument = @(, $false) + @(@(, [string[]]@($Ids)))
+            $objRaw = & $script:scriptBlockUpdateInstall @arrArgument
+            $objRaw.Succeeded | Should -BeTrue
+            $script:intSent | Should -Be $Expected
+        }
+    }
+
+    It 'notes a missing return value of the install request' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { }
+            ((& $script:scriptBlockUpdateInstall $false @()).Steps -join "`n") | Should -Match 'gave no return value'
+        }
+    }
+
+    It 'sends the confirmed IDs also for all, and selects the row under the pointer' {
+        $script:strStart | Should -Match "(?s)function Invoke-UpdateInstall \{.*?UpdateId = \[string\[\]\]@\(\`$Rows \| ForEach-Object"
+        $script:strStart | Should -Match '\$gridUpdates\.Add_PreviewMouseRightButtonDown\(\{ param\(\$s, \$e\) Select-RowUnderPointer -Grid \$gridUpdates'
+        $script:strStart | Should -Match "Wait for the running task to end"
+    }
+
     It 'marks only device rows that the client lists as missing as installable' {
         $objInspection = [pscustomobject]@{
             Site = $null
