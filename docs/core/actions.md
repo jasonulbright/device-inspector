@@ -102,7 +102,7 @@ The entry is off, with the reason as its tooltip:
 4. Select **Dry run**. The log shows the resource ID and the collection.
 5. Repeat, and select **Run**.
 
-The tool opens the site drive and checks the device record (exactly one), the collection and the direct rule. It runs `Remove-CMDeviceCollectionDirectMembershipRule -CollectionId <ID> -ResourceId <ID> -Force`, then `Invoke-CMCollectionUpdate` for the collection, then `Invoke-CMClientAction -NotificationType RequestMachinePolicyNow` for the device. When the membership update or the notification fails, the rule stays removed and the log says so. If another rule also adds the device, the device stays a member. Deployments to the collection stop applying to the device. Inspect the device again after the membership update.
+The tool opens the site drive and checks the device record (exactly one), the collection and the direct rule. It runs `Remove-CMDeviceCollectionDirectMembershipRule -CollectionId <ID> -ResourceId <ID> -Force`, then `Invoke-CMCollectionUpdate` for the collection, then `Invoke-CMClientAction -ActionType ClientNotificationRequestMachinePolicyNow` for the device (the parameter `-NotificationType` is deprecated). When the membership update or the notification fails, the rule stays removed and the log says so. If another rule also adds the device, the device stays a member. Deployments to the collection stop applying to the device. Inspect the device again after the membership update.
 
 ### Repair a corrupt inventory
 

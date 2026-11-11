@@ -965,7 +965,7 @@ Describe 'Remove from collection' {
         $objResult.Succeeded | Should -BeTrue
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule -Times 1 -Exactly -ParameterFilter { $CollectionId -eq 'XYZ0001F' -and $ResourceId -eq '16777221' -and $Force }
         Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMCollectionUpdate -Times 1 -Exactly -ParameterFilter { $CollectionId -eq 'XYZ0001F' }
-        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMClientAction -Times 1 -Exactly -ParameterFilter { $DeviceName -eq 'WS01' -and $NotificationType -eq 'RequestMachinePolicyNow' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMClientAction -Times 1 -Exactly -ParameterFilter { $DeviceName -eq 'WS01' -and $ActionType -eq 'ClientNotificationRequestMachinePolicyNow' }
     }
 
     It 'refuses a removal when the device has no direct rule' {

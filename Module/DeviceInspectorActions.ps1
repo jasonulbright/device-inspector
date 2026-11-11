@@ -1121,7 +1121,7 @@ function Invoke-DeviceInspectorCollectionChange {
                 $listStep.Add(('The membership update did not start: {0}. The site updates the collection on its schedule.' -f $_.Exception.Message))
             }
             try {
-                Invoke-CMClientAction -DeviceName $strShortName -NotificationType 'RequestMachinePolicyNow' -ErrorAction Stop
+                Invoke-CMClientAction -DeviceName $strShortName -ActionType 'ClientNotificationRequestMachinePolicyNow' -ErrorAction Stop
                 $listStep.Add('Sent the client notification Request machine policy now.')
             } catch {
                 $listStep.Add(('The client notification failed: {0}. The client gets the change at its next policy cycle.' -f $_.Exception.Message))
