@@ -1617,7 +1617,10 @@ function Get-DeviceInspectorApplicationLabel {
     # .DESCRIPTION
     # Many display names already hold the version, for example "Microsoft Visual C++ 2022 X86
     # Minimum Runtime - 14.51.36247". The function adds the version only when the name does
-    # not hold it yet. An empty version adds nothing.
+    # not hold it yet. The version must stand as a whole token in the name: a digit, a letter
+    # or a dot must not touch it on either side. A version with trailing .0 parts counts as
+    # equal to the shorter version ("14.51.36247.0" and "14.51.36247"). An empty version adds
+    # nothing.
     #
     # .PARAMETER Name
     # The display name of the application.
@@ -1639,7 +1642,7 @@ function Get-DeviceInspectorApplicationLabel {
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.0.20261111.1
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
     param (
@@ -1657,10 +1660,160 @@ function Get-DeviceInspectorApplicationLabel {
     process {
         $strName = ([string]$Name).Trim()
         $strVersion = ([string]$Version).Trim()
-        if ($strVersion.Length -eq 0 -or $strName.IndexOf($strVersion, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        if ($strVersion.Length -eq 0) {
             return $strName
         }
+        $listCandidate = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $listCandidate.Add($strVersion)
+        $strShort = [regex]::Replace($strVersion, '(\.0+)+$', '')
+        if ($strShort.Length -gt 0 -and $strShort -ne $strVersion) {
+            $listCandidate.Add($strShort)
+        }
+        foreach ($strCandidate in $listCandidate) {
+            $strPattern = '(?<![\w.])' + [regex]::Escape($strCandidate) + '(?![\w.])'
+            if ([regex]::IsMatch($strName, $strPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+                return $strName
+            }
+        }
         '{0} {1}' -f $strName, $strVersion
+    }
+}
+
+function Test-DeviceInspectorProcessOwner {
+    # .SYNOPSIS
+    # Returns $true when the process was started to run this one script.
+    #
+    # .DESCRIPTION
+    # The tool may end the process by an explicit exit only when the process belongs to the tool.
+    # That is the case when the command line of the process names the script with the -File
+    # parameter, as the suite launcher and "powershell -File" do. A script that a person runs
+    # inside a console (call operator or dot source) does not own the console process.
+    #
+    # .PARAMETER ScriptPath
+    # The full path of the script.
+    #
+    # .PARAMETER CommandLineArgs
+    # The command line of the process, as [Environment]::GetCommandLineArgs() returns it.
+    #
+    # .PARAMETER BaseDirectory
+    # The directory against which a relative script path on the command line is resolved. The
+    # default is the current directory.
+    #
+    # .EXAMPLE
+    # Test-DeviceInspectorProcessOwner -ScriptPath 'C:\Tools\a.ps1' -CommandLineArgs @('powershell.exe', '-STA', '-File', 'C:\Tools\a.ps1')
+    #
+    # # Returns $true.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [bool] $true when the process runs this script by -File.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.1
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$ScriptPath,
+
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [string[]]$CommandLineArgs,
+
+        [Parameter(Mandatory = $false)]
+        [string]$BaseDirectory = (Get-Location).ProviderPath
+    )
+
+    process {
+        if ([string]::IsNullOrWhiteSpace($ScriptPath)) {
+            return $false
+        }
+        $arrArg = @($CommandLineArgs | Where-Object { $null -ne $_ })
+        try {
+            $strWanted = [System.IO.Path]::GetFullPath($ScriptPath)
+        }
+        catch {
+            return $false
+        }
+        for ($intIndex = 0; $intIndex -lt $arrArg.Count; $intIndex++) {
+            $strArg = [string]$arrArg[$intIndex]
+            $strValue = $null
+            if ($strArg -match '^[-/]f(i(l(e)?)?)?:(?<value>.+)$') {
+                $strValue = $Matches['value']
+            }
+            elseif ($strArg -match '^[-/]f(i(l(e)?)?)?$' -and ($intIndex + 1) -lt $arrArg.Count) {
+                $strValue = [string]$arrArg[$intIndex + 1]
+            }
+            if ($null -eq $strValue) {
+                continue
+            }
+            $strValue = $strValue.Trim('"')
+            try {
+                if ([System.IO.Path]::IsPathRooted($strValue)) {
+                    $strFound = [System.IO.Path]::GetFullPath($strValue)
+                }
+                else {
+                    $strFound = [System.IO.Path]::GetFullPath((Join-Path -Path $BaseDirectory -ChildPath $strValue))
+                }
+            }
+            catch {
+                return $false
+            }
+            # The first -File parameter is the script of the process. A later one is an argument of the script.
+            return [string]::Equals($strFound, $strWanted, [System.StringComparison]::OrdinalIgnoreCase)
+        }
+        $false
+    }
+}
+
+function Test-DeviceInspectorExitNeeded {
+    # .SYNOPSIS
+    # Decides whether the tool ends the process by an explicit exit after the window closed.
+    #
+    # .DESCRIPTION
+    # A run that was open when the window closed holds a remoting call, and the normal end of
+    # Windows PowerShell waits for that call. The explicit exit is needed only then, and only
+    # when the process belongs to the tool. In any other case the script returns as normal.
+    #
+    # .PARAMETER OpenRunClosed
+    # $true when the window closed with at least one open run.
+    #
+    # .PARAMETER OwnsProcess
+    # $true when the process was started to run the tool script (see Test-DeviceInspectorProcessOwner).
+    #
+    # .EXAMPLE
+    # Test-DeviceInspectorExitNeeded -OpenRunClosed $true -OwnsProcess $false
+    #
+    # # Returns $false, because the process belongs to a console of the admin.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [bool] $true when the script ends the process.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.1
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [bool]$OpenRunClosed,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$OwnsProcess
+    )
+
+    process {
+        ($OpenRunClosed -and $OwnsProcess)
     }
 }
 

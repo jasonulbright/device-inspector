@@ -276,7 +276,8 @@ $script:RunspaceIdle  = @()
 $script:ResultNotices = 0
 $script:WindowClosing = $false
 $script:CloseChoice = 'Wait'
-$script:ExitWithOpenRuns = $false
+$script:ClosedWithOpenRuns = $false
+$script:OwnsProcess = $false
 $script:ButtonTips    = @{}
 $gridRuns.ItemsSource = $script:RunList
 
@@ -1588,8 +1589,8 @@ $window.Add_Closing({
     try { Update-DeviceActionRun } catch { Write-Log -Message ('The last pass over the running actions failed: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
     $open = @($script:RunList)
     if ($open.Count -gt 0) {
-        # The process must end by an explicit exit after the window closes (see the end of this script).
-        $script:ExitWithOpenRuns = $true
+        # The end of this script decides whether the process needs an explicit exit (see the end of this script).
+        $script:ClosedWithOpenRuns = $true
         try {
             $written = Write-DeviceInspectorCloseLog -Path $script:ActionLogPath -Run $open
             Write-Log -Message ('Window closed with {0} running actions. Wrote {1} CLOSED lines to the action log.' -f $open.Count, $written) -Quiet
@@ -1621,12 +1622,14 @@ $window.Add_Loaded({
 
 # Suite update notice: one shared daily lookup across the suite tools; the launcher installs.
 $null = Start-SuiteUpdateNotice -Path $PSScriptRoot -OnResult { param($u) if ($u.Available) { Add-LogLine ('Suite update available: v{0}. Update from the AppPackager Suite Launcher.' -f $u.Latest) } }
+$script:OwnsProcess = Test-DeviceInspectorProcessOwner -ScriptPath $PSCommandPath -CommandLineArgs @([Environment]::GetCommandLineArgs())
 [void]$window.ShowDialog()
 try { Stop-Transcript | Out-Null } catch { $null = $_ }
 # A run that was open when the window closed holds a Windows PowerShell remoting call (WinRM). The normal end of
-# the host waits for that call to return, so the process can stay for as long as the call is held (measured:
-# until the held call returned, or about 134 s when it never returned). BeginStop and CloseAsync do not change
-# this. Every log line is written and closed by now (each write opens and closes the file, and the transcript
-# is stopped), so an explicit exit loses no log line. It does not claim that the run stopped: the CLOSED
-# lines say that the result is not known.
-if ($script:ExitWithOpenRuns) { [Environment]::Exit(0) }
+# the host waits for that call to return, so the process can stay for as long as the call is held. BeginStop and
+# CloseAsync do not change this (measured in the pull request of W-12). Every log line is written and closed by
+# now (each write opens and closes the file, and the transcript is stopped), so an explicit exit loses no log
+# line. The exit happens only when this script owns the process (started with -File, as the suite launcher
+# does). A script that an admin runs inside a console returns as normal: the console stays open. The CLOSED
+# lines say that the result of the run is not known.
+if (Test-DeviceInspectorExitNeeded -OpenRunClosed $script:ClosedWithOpenRuns -OwnsProcess $script:OwnsProcess) { [Environment]::Exit(0) }
