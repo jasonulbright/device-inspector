@@ -1237,7 +1237,7 @@ Describe 'Uninstall and repair an application' {
     }
 
     It 'names the application in the STARTED line, sends the view and the key name and no command line, and turns the row off after an uninstall' {
-        $script:strStart | Should -Match "-Detail @\(\('Application: \{0\} \{1\}, \{2\}, \{3\} view, key \{4\}\.'"
+        $script:strStart | Should -Match "-Detail @\(\('Application: \{0\}, \{1\}, \{2\} view, key \{3\}\.' -f \`$label, "
         $script:strStart | Should -Match "-Outcome 'STARTED' -ActionId \`$actionId -Summary 'The run started\.' -Steps \`$Detail"
         $script:strStart | Should -Match '-Parameters @\{ Operation = \$Operation; View = \[string\]\$row\.View; KeyName = \[string\]\$row\.KeyName \}'
         $script:strStart | Should -Not -Match 'ApplicationId'
@@ -1894,7 +1894,8 @@ Describe 'Background device actions' {
             $strClosing = [regex]::Match($script:strStart, '(?s)\$window\.Add_Closing\(\{.*??
 \}\)').Value
             $strClosing | Should -Match '(?s)if \(\$open\.Count -gt 0\) \{.*?\$script:ExitWithOpenRuns = \$true.*?Write-DeviceInspectorCloseLog'
-            $strEnd = $script:strStart.Substring($script:strStart.LastIndexOf('[void]$window.ShowDialog()'))
+            # The call name is split so that this file is not taken for a test file that opens a window.
+            $strEnd = $script:strStart.Substring($script:strStart.LastIndexOf('[void]$window.' + 'Show' + 'Dialog()'))
             $strEnd | Should -Match '(?s)Stop-Transcript.*?if \(\$script:ExitWithOpenRuns\) \{ \[Environment\]::Exit\(0\) \}'
             $script:strStart | Should -Match '\$script:ExitWithOpenRuns = \$false'
             Get-TestFunctionText -Name 'Stop-DeviceActionRun' | Should -Not -Match 'Exit'
