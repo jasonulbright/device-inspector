@@ -11,8 +11,8 @@ $script:AppConfig = @{
     OptionsButton = 'btnOptions'
     LogLabel      = 'lblLogOutput'
     Views         = @(
-        @{ Name = 'Device list';  Container = 'viewDeviceList';  Button = 'btnViewDeviceList' }
         @{ Name = 'Device';       Container = 'viewDevice';      Button = 'btnViewDevice' }
+        @{ Name = 'Device list';  Container = 'viewDeviceList';  Button = 'btnViewDeviceList' }
         @{ Name = 'Applications'; Container = 'viewApps';        Button = 'btnViewApps' }
         @{ Name = 'Updates';      Container = 'viewUpdates';     Button = 'btnViewUpdates' }
         @{ Name = 'Collections';  Container = 'viewCollections'; Button = 'btnViewCollections' }

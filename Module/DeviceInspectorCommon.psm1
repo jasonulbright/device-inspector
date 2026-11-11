@@ -2603,6 +2603,10 @@ function Get-DeviceInspectorDeviceList {
         if ([string]::IsNullOrEmpty($NamePattern) -and [string]::IsNullOrEmpty($CollectionId)) {
             throw 'Enter a name pattern, a collection ID, or both.'
         }
+        # A pattern of wildcards only would read every device of the site before the limit.
+        if ([string]::IsNullOrEmpty($CollectionId) -and $NamePattern -notmatch '[A-Za-z0-9]') {
+            throw 'A name pattern without a collection needs at least one letter or digit.'
+        }
         $scriptBlockValue = {
             param($objItem, [string]$strName)
             $objProperty = $objItem.PSObject.Properties[$strName]
@@ -2636,7 +2640,7 @@ function Get-DeviceInspectorDeviceList {
                 $objLastActive = & $scriptBlockValue $objItem 'LastActiveTime'
                 $listDevice.Add([pscustomobject]@{
                         Name            = [string](& $scriptBlockValue $objItem 'Name')
-                        ResourceId      = [string](& $scriptBlockValue $objItem 'ResourceID')
+                        ResourceId      = [long](& $scriptBlockValue $objItem 'ResourceID')
                         Client          = [bool](& $scriptBlockValue $objItem 'IsClient')
                         Active          = [bool](& $scriptBlockValue $objItem 'IsActive')
                         ClientVersion   = [string](& $scriptBlockValue $objItem 'ClientVersion')

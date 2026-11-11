@@ -1262,6 +1262,27 @@ Describe 'Device list' {
         Should -Invoke -ModuleName DeviceInspectorCommon Connect-InspectorSite -Times 0 -Exactly
     }
 
+    It 'refuses a pattern of wildcards only without a collection, and accepts it with a collection' {
+        { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern '*' } | Should -Throw '*at least one letter or digit*'
+        (Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern '*' -CollectionId 'SMS00001').Total | Should -Be 1
+    }
+
+    It 'returns 500 rows by default and a numeric resource ID' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMDevice { 1..501 | ForEach-Object { [pscustomobject]@{ Name = ('WS{0:d4}' -f $_); ResourceID = $_; IsClient = $true; IsActive = $true } } }
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*'
+        @($objList.Devices).Count | Should -Be 500
+        $objList.Total | Should -Be 501
+        $objList.Truncated | Should -BeTrue
+        $objList.Devices[0].ResourceId | Should -BeOfType [long]
+    }
+
+    It 'ignores a search while work runs, and inspects only on a double-click on a row' {
+        $script:strStart | Should -Match "(?s)function Invoke-DeviceListSearch \{\s*if \(\`$script:IsBusy\) \{ return \}"
+        $script:strStart | Should -Match '\$txtListName\.IsEnabled = \$idle'
+        $script:strStart | Should -Match '\$txtListCollection\.IsEnabled = \$idle'
+        $script:strStart | Should -Match "(?s)\`$gridDeviceList\.Add_MouseDoubleClick\(\{.*?if \(\`$node -is \[System\.Windows\.Controls\.DataGridRow\]\) \{ Invoke-ListInspect \}"
+    }
+
     It 'closes the site drive when the read fails' {
         Mock -ModuleName DeviceInspectorCommon Get-CMDevice { throw 'provider error' }
         { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*' } | Should -Throw '*provider error*'
@@ -1274,6 +1295,5 @@ Describe 'Device list' {
         $script:strXaml | Should -Match 'x:Name="gridDeviceList"'
         $script:strStart | Should -Match "(?s)function Invoke-DeviceListSearch \{.*?Get-DeviceInspectorDeviceList -SiteServer \`$A\.Server -SiteCode \`$A\.Code -NamePattern \`$A\.Pattern -CollectionId \`$A\.Collection"
         $script:strStart | Should -Match "(?s)function Invoke-ListInspect \{.*?\`$txtDevice\.Text = \[string\]\`$row\.Name.*?Set-ActiveView -View 'Device'.*?Invoke-Inspect"
-        $script:strStart | Should -Match '\$gridDeviceList\.Add_MouseDoubleClick\(\{ Invoke-ListInspect \}\)'
     }
 }

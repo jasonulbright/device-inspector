@@ -44,7 +44,8 @@ The search reads with `Get-CMDevice -Name <pattern> -Fast`, or with `Get-CMColle
 ## Limits
 
 - The panel shows at most 500 devices. The summary line gives the total and asks you to narrow the pattern.
-- A search needs a name pattern, a collection ID, or both.
+- A search needs a name pattern, a collection ID, or both. A name pattern without a collection needs at least one letter or digit, so that a search does not read every device of the site.
+- The site returns all matching devices; the limit of 500 applies after the read.
 
 ## Troubleshooting
 
@@ -52,6 +53,7 @@ The search reads with `Get-CMDevice -Name <pattern> -Fast`, or with `Get-CMColle
 |---|---|---|
 | Enter a site server in the Inspect bar. ... | The site server box is empty. | Enter the site server. Set the site code in **Options**. |
 | Enter a name pattern, a collection ID, or both. | Both boxes are empty. | Enter a pattern or a collection ID. |
+| A name pattern without a collection needs at least one letter or digit. | The pattern is only `*` or `?`. | Add a letter or a digit, or enter a collection ID. |
 | The search failed. See the log. | The site cannot be opened or read. | Check the site server, the site code and the account rights. |
 
 ## Links

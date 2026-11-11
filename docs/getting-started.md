@@ -4,7 +4,7 @@ This page shows how to install Device Inspector, set the site server, and inspec
 
 ## What it does
 
-Device Inspector shows one device in five panels: Device, Applications, Updates, Collections and Problems. The Device list panel finds devices of the site by name or collection. It reads the site with ConfigurationManager cmdlets and WQL `SELECT` queries through `Invoke-CMWmiQuery`, and reads the device with one remote script block (`Invoke-Command`). See [Read-only design](reference/read-only-design.md). The inspection never changes the site or the device. The actions change them only when you turn on **Enable actions** and confirm. See [Actions](core/actions.md).
+Device Inspector has six panels: Device list, Device, Applications, Updates, Collections and Problems. The Device list panel finds devices of the site by name or collection. The other five show one device. It reads the site with ConfigurationManager cmdlets and WQL `SELECT` queries through `Invoke-CMWmiQuery`, and reads the device with one remote script block (`Invoke-Command`). See [Read-only design](reference/read-only-design.md). The inspection never changes the site or the device. The actions change them only when you turn on **Enable actions** and confirm. See [Actions](core/actions.md).
 
 ## When to use it
 
@@ -55,7 +55,7 @@ A site server with no site code is an error. In Options, **OK** opens a message 
 
 ![The message of the Options dialog for a site server with no site code](images/options-needs-site-code.png)
 
-The sidebar shows five panels. See [Inspect bar](core/inspect.md) for every control.
+The sidebar shows six panels. See [Inspect bar](core/inspect.md) for every control.
 
 ### Leave one source out
 

@@ -293,6 +293,8 @@ function Update-ControlState {
     $has = [bool]$script:Inspection
     $btnInspect.IsEnabled    = $idle
     $btnListSearch.IsEnabled = $idle
+    $txtListName.IsEnabled = $idle
+    $txtListCollection.IsEnabled = $idle
     $btnListInspect.IsEnabled = $idle -and $null -ne $gridDeviceList.SelectedItem
     $txtDevice.IsEnabled     = $idle
     $txtSiteServer.IsEnabled = $idle
@@ -1104,14 +1106,16 @@ $menuAddCollection.Add_Click({ Invoke-AddToCollection })
 
 # === Device list ===
 function Invoke-DeviceListSearch {
+    if ($script:IsBusy) { return }
     $pattern = ([string]$txtListName.Text).Trim()
     $collection = ([string]$txtListCollection.Text).Trim().ToUpperInvariant()
     $neutralName = 'name'
     $check = Test-DeviceInspectorInput -ComputerName $neutralName -SiteServer ([string]$txtSiteServer.Text) -SiteCode ([string]$global:Prefs.SiteCode)
     $problems = @()
     if (-not $check.IsValid) { $problems += $check.Errors }
-    if (-not $check.SiteServer) { $problems += 'Enter a site server in the Inspect bar. The device list reads the site.' }
+    if (-not $check.SiteServer -and $problems.Count -eq 0) { $problems += 'Enter a site server in the Inspect bar. The device list reads the site.' }
     if (-not $pattern -and -not $collection) { $problems += 'Enter a name pattern, a collection ID, or both.' }
+    if ($pattern -and -not $collection -and $pattern -notmatch '[A-Za-z0-9]') { $problems += 'A name pattern without a collection needs at least one letter or digit.' }
     if ($pattern -and $pattern -notmatch '^[A-Za-z0-9_.*?-]{1,63}$') { $problems += 'The name pattern can hold letters, digits, hyphen, underscore, dot, * and ?.' }
     if ($collection -and $collection -notmatch '^[A-Z0-9]{8}$') { $problems += 'A collection ID has eight letters and digits, for example SMS00001.' }
     if ($problems.Count -gt 0) {
@@ -1131,7 +1135,9 @@ function Invoke-DeviceListSearch {
         Update-StatusBarSummary
         if ($State.ErrorMsg) {
             Add-LogLine ('Device list failed: {0}' -f $State.ErrorMsg)
+            $gridDeviceList.ItemsSource = @()
             $txtListSummary.Text = 'The search failed. See the log.'
+            Update-ControlState
             [void](Show-ThemedMessage -Owner $window -Title 'Device list' -Message ([string]$State.ErrorMsg) -Icon Error)
             return
         }
@@ -1155,7 +1161,16 @@ $btnListSearch.Add_Click({ Invoke-DeviceListSearch })
 $txtListName.Add_KeyDown({ param($s, $e) if ($e.Key -eq [System.Windows.Input.Key]::Return) { Invoke-DeviceListSearch } })
 $txtListCollection.Add_KeyDown({ param($s, $e) if ($e.Key -eq [System.Windows.Input.Key]::Return) { Invoke-DeviceListSearch } })
 $btnListInspect.Add_Click({ Invoke-ListInspect })
-$gridDeviceList.Add_MouseDoubleClick({ Invoke-ListInspect })
+$gridDeviceList.Add_MouseDoubleClick({
+    param($s, $e)
+    # The event also fires on a header, the scroll bar and empty space; only a row inspects.
+    $node = $e.OriginalSource
+    while ($node -and -not ($node -is [System.Windows.Controls.DataGridRow]) -and -not ($node -is [System.Windows.Controls.DataGrid])) {
+        if ($node -is [System.Windows.Media.Visual] -or $node -is [System.Windows.Media.Media3D.Visual3D]) { $node = [System.Windows.Media.VisualTreeHelper]::GetParent($node) }
+        else { $node = [System.Windows.LogicalTreeHelper]::GetParent($node) }
+    }
+    if ($node -is [System.Windows.Controls.DataGridRow]) { Invoke-ListInspect }
+})
 $gridDeviceList.Add_SelectionChanged({ Update-ControlState })
 
 # === Log file ===
