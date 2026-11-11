@@ -260,44 +260,70 @@ $script:scriptBlockApplicationAction = {
 
     # Splits a command line into a file path and the arguments. A quoted path ends at
     # the closing quote. Without quotes the path is the text up to and including the
-    # first .exe that ends a word. Returns $null when no path is found.
+    # first .exe that ends a word. Returns $null when no path is found, and when the path
+    # is relative with a separator (for example .\x.exe), because the session folder
+    # of WinRM would decide where it points. A full path (drive or UNC) and a bare file
+    # name are the only forms that the tool accepts.
     $scriptBlockSplitCommand = {
         param([string]$strCommand)
         $strText = $strCommand.Trim()
         if ($strText.Length -eq 0) {
             return $null
         }
+        $strPath = ''
+        $strRest = ''
         if ($strText.StartsWith('"')) {
             $intEnd = $strText.IndexOf('"', 1)
             if ($intEnd -lt 2) {
                 return $null
             }
-            return [pscustomobject]@{ FilePath = $strText.Substring(1, $intEnd - 1); Arguments = $strText.Substring($intEnd + 1).Trim() }
+            $strPath = $strText.Substring(1, $intEnd - 1)
+            $strRest = $strText.Substring($intEnd + 1).Trim()
+        } else {
+            $objMatch = [regex]::Match($strText, '^(?<path>.+?\.exe)(?=\s|\z)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if (-not $objMatch.Success) {
+                return $null
+            }
+            $strPath = $objMatch.Groups['path'].Value
+            $strRest = $strText.Substring($strPath.Length).Trim()
         }
-        $objMatch = [regex]::Match($strText, '^(?<path>.+?\.exe)(?=\s|\z)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-        if (-not $objMatch.Success) {
+        $boolFull = $strPath -match '^(?:[A-Za-z]:[\\/]|\\\\[^\\/])'
+        $boolBare = $strPath.IndexOfAny([char[]]@('\', '/')) -lt 0
+        if (-not ($boolFull -or $boolBare)) {
             return $null
         }
-        return [pscustomobject]@{ FilePath = $objMatch.Groups['path'].Value; Arguments = $strText.Substring($objMatch.Groups['path'].Length).Trim() }
+        return [pscustomobject]@{ FilePath = $strPath; Arguments = $strRest }
     }
 
     # Maps the exit code of the installer. 0 is success. 3010 and 1641 are success with
     # a restart needed. 1605 on Uninstall is success only when the key is gone. 1618
     # means that another installation is in progress. Any other code is a failure.
     $scriptBlockMapExitCode = {
-        param([string]$strOperation, [int]$intCode, [bool]$boolKeyGone)
+        param([string]$strOperation, [int]$intCode, [bool]$boolKeyGone, [bool]$boolKeyKnown = $true)
         $boolSucceeded = $false
         $boolRestart = $false
         $strText = ''
         if ($intCode -eq 0) {
             $boolSucceeded = $true
             $strText = 'The installer finished with exit code 0.'
+            if ($strOperation -eq 'Uninstall' -and -not $boolKeyKnown) {
+                $strText = '{0} The tool could not read the uninstall key after the run.' -f $strText
+            } elseif ($strOperation -eq 'Uninstall' -and -not $boolKeyGone) {
+                $strText = '{0} The uninstall key is still there. The installer can remove it later. Inspect the device again.' -f $strText
+            }
         } elseif ($intCode -eq 3010 -or $intCode -eq 1641) {
             $boolSucceeded = $true
             $boolRestart = $true
             $strText = ('The installer finished with exit code {0}. A restart of the device is needed to finish. The tool never restarts the device.' -f $intCode)
+            if ($strOperation -eq 'Uninstall' -and -not $boolKeyKnown) {
+                $strText = '{0} The tool could not read the uninstall key after the run.' -f $strText
+            } elseif ($strOperation -eq 'Uninstall' -and -not $boolKeyGone) {
+                $strText = '{0} The uninstall key is still there. The installer can remove it later. Inspect the device again.' -f $strText
+            }
         } elseif ($intCode -eq 1605 -and $strOperation -eq 'Uninstall') {
-            if ($boolKeyGone) {
+            if (-not $boolKeyKnown) {
+                $strText = 'The installer returned 1605 (the product is not installed), but the tool could not read the uninstall key after the run. The result is not known.'
+            } elseif ($boolKeyGone) {
                 $boolSucceeded = $true
                 $strText = 'The installer returned 1605 (the product is not installed), and the uninstall key is gone. The product is already removed.'
             } else {
@@ -398,15 +424,13 @@ $script:scriptBlockApplicationAction = {
         $strQuiet = [System.Environment]::ExpandEnvironmentVariables($objEntry.QuietUninstallString.Trim())
         $objSplit = & $scriptBlockSplitCommand $strQuiet
         if ($null -eq $objSplit) {
-            return [pscustomobject]@{ Succeeded = $false; Summary = 'The quiet uninstall string has no file path that ends in .exe. The tool does not guess the command.'; Steps = @($listStep) }
+            return [pscustomobject]@{ Succeeded = $false; Summary = 'The quiet uninstall string has no file path that ends in .exe, or the path is relative. The tool does not guess the command.'; Steps = @($listStep) }
         }
         $strFilePath = $objSplit.FilePath
         $strArguments = $objSplit.Arguments
-        if (-not [System.IO.Path]::IsPathRooted($strFilePath)) {
-            $strSystemPath = Join-Path -Path ([System.Environment]::SystemDirectory) -ChildPath $strFilePath
-            if (Test-Path -LiteralPath $strSystemPath -PathType Leaf) {
-                $strFilePath = $strSystemPath
-            }
+        if ($strFilePath.IndexOfAny([char[]]@('\', '/')) -lt 0) {
+            # A bare file name is looked up in System32 only, never in the session folder.
+            $strFilePath = Join-Path -Path ([System.Environment]::SystemDirectory) -ChildPath $strFilePath
         }
         if (-not (Test-Path -LiteralPath $strFilePath -PathType Leaf)) {
             return [pscustomobject]@{ Succeeded = $false; Summary = ('The uninstall program {0} is not on the device. The tool does not run the command.' -f $strFilePath); Steps = @($listStep) }
@@ -445,6 +469,7 @@ $script:scriptBlockApplicationAction = {
     $listStep.Add(('The installer ended with exit code {0}.' -f $intExitCode))
 
     $boolKeyGone = $false
+    $boolKeyKnown = $true
     if ($Operation -eq 'Uninstall') {
         try {
             $boolKeyGone = ($null -eq (& $scriptBlockReadKey $View $KeyName))
@@ -454,14 +479,12 @@ $script:scriptBlockApplicationAction = {
                 $listStep.Add(('Check after the uninstall: the key {0} is still there.' -f $KeyName))
             }
         } catch {
-            $listStep.Add(('Check after the uninstall: the key cannot be read: {0}' -f $_.Exception.Message))
+            $boolKeyKnown = $false
+            $listStep.Add(('Check after the uninstall: the tool could not read the uninstall key: {0}' -f $_.Exception.Message))
         }
     }
-    $objMap = & $scriptBlockMapExitCode $Operation $intExitCode $boolKeyGone
+    $objMap = & $scriptBlockMapExitCode $Operation $intExitCode $boolKeyGone $boolKeyKnown
     $strSummary = ('{0} of {1}: {2}' -f $Operation, $strDisplay.Trim(), $objMap.Text)
-    if ($objMap.Succeeded -and $Operation -eq 'Uninstall' -and $intExitCode -ne 1605 -and -not $boolKeyGone) {
-        $strSummary = '{0} The uninstall key is still there. The installer can remove it later. Inspect the device again.' -f $strSummary
-    }
     [pscustomobject]@{ Succeeded = $objMap.Succeeded; Summary = $strSummary; Steps = @($listStep) }
 }
 

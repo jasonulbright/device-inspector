@@ -567,6 +567,25 @@ Describe 'Corrupt-inventory check and repair' {
         }
     }
 
+    It 'shows the spelling of the site in the comparison and in the check output, as before' {
+        InModuleScope DeviceInspectorCommon {
+            $objInspection = [pscustomobject]@{
+                Site   = [pscustomobject]@{ InstalledApplications = @([pscustomobject]@{ Name = '7-Zip'; Version = '1'; Publisher = '' }) }
+                Device = [pscustomobject]@{ InstalledApplications = @([pscustomobject]@{ Name = '7-zip'; Version = '2'; Publisher = '' }) }
+            }
+            $arrRow = @(Compare-DeviceInspectionApplication -Inspection $objInspection)
+            $arrRow.Count | Should -Be 1
+            $arrRow[0].Name | Should -BeExactly '7-Zip'
+            $arrRow[0].Status | Should -Be 'Version differs'
+            $objCheckInspection = [pscustomobject]@{
+                ComputerName = 'WS01'
+                Site         = [pscustomobject]@{ Found = $true; HardwareScanClientTime = '2026-11-10T10:01:00'; InstalledApplications = @([pscustomobject]@{ Name = '7-Zip'; Version = '1'; Publisher = '' }) }
+                Device       = [pscustomobject]@{ Client = [pscustomobject]@{ HardwareCycleLocalTime = '2026-11-10T10:00:00' }; InstalledApplications = @([pscustomobject]@{ Name = '7-zip'; Version = '2'; Publisher = ''; InstallDate = '20250101' }) }
+            }
+            (Test-DeviceInspectionInventory -Inspection $objCheckInspection).Applications | Should -Be @('Version differs: 7-Zip')
+        }
+    }
+
     It 'adds a Corrupt check to the problems of the inspection' {
         InModuleScope DeviceInspectorCommon {
             Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 's'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
@@ -909,6 +928,9 @@ Describe 'Uninstall and repair an application' {
         @{ Command = 'MsiExec.exe /X{23170F69-40C1-2702-2600-000001000000} /qn'; Path = 'MsiExec.exe'; Arguments = '/X{23170F69-40C1-2702-2600-000001000000} /qn' }
         @{ Command = 'C:\a.exe.old\b.exe /q'; Path = 'C:\a.exe.old\b.exe'; Arguments = '/q' }
         @{ Command = '"C:\Program Files\App\x.exe" "C:\Program Files\App\y.exe" /s'; Path = 'C:\Program Files\App\x.exe'; Arguments = '"C:\Program Files\App\y.exe" /s' }
+        @{ Command = 'cmd.exe /c exit 0'; Path = 'cmd.exe'; Arguments = '/c exit 0' }
+        @{ Command = '"\\server\share\u.exe" /S'; Path = '\\server\share\u.exe'; Arguments = '/S' }
+        @{ Command = 'D:/App/u.exe /S'; Path = 'D:/App/u.exe'; Arguments = '/S' }
     ) {
         $scriptBlockSplit = $script:hashtableBlock['scriptBlockSplitCommand']
         $objSplit = & $scriptBlockSplit $Command
@@ -917,7 +939,7 @@ Describe 'Uninstall and repair an application' {
     }
 
     It 'does not split <Command>, so the device refuses to run it' -ForEach @(
-        @{ Command = '' }, @{ Command = '   ' }, @{ Command = '"unterminated C:\app.exe /s' }, @{ Command = 'C:\App\uninstall.bat /s' }, @{ Command = 'rundll32.dll,Uninstall' }, @{ Command = '""' }
+        @{ Command = '' }, @{ Command = '   ' }, @{ Command = '"unterminated C:\app.exe /s' }, @{ Command = 'C:\App\uninstall.bat /s' }, @{ Command = 'rundll32.dll,Uninstall' }, @{ Command = '""' }, @{ Command = '.\x.exe /s' }, @{ Command = 'sub\x.exe /s' }, @{ Command = '"..\x.exe" /s' }, @{ Command = '\x.exe /s' }, @{ Command = '/x.exe /s' }, @{ Command = 'cmd /c del x' }
     ) {
         $scriptBlockSplit = $script:hashtableBlock['scriptBlockSplitCommand']
         $objSplit = & $scriptBlockSplit $Command
@@ -1030,6 +1052,63 @@ Describe 'Uninstall and repair an application' {
         $objBat.Summary | Should -Match 'no file path that ends in .exe'
     }
 
+    It 'refuses a relative quiet uninstall path with a separator, and looks up a bare file name in System32 only' {
+        $strRel = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strRel -Value @{ DisplayName = 'DI test relative'; QuietUninstallString = '.\unins000.exe /S' }
+        $objRel = Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strRel
+        $objRel.Succeeded | Should -BeFalse
+        $objRel.Summary | Should -Match 'path is relative'
+        $strSub = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strSub -Value @{ DisplayName = 'DI test sub'; QuietUninstallString = 'sub\unins000.exe /S' }
+        (Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strSub).Summary | Should -Match 'path is relative'
+        $strBare = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strBare -Value @{ DisplayName = 'DI test bare'; QuietUninstallString = 'cmd.exe /c exit 0' }
+        $objBare = Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strBare
+        $objBare.Succeeded | Should -BeTrue
+        $objBare.Steps | Should -Contain 'Dry run: would run: cmd.exe /c exit 0'
+        $strMissing = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strMissing -Value @{ DisplayName = 'DI test bare missing'; QuietUninstallString = 'ditest-no-such-program.exe /S' }
+        $objMissing = Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strMissing
+        $objMissing.Succeeded | Should -BeFalse
+        $objMissing.Summary | Should -Match 'is not on the device'
+        $objMissing.Summary | Should -Match 'System32'
+    }
+
+    It 'splits a command the same way in the row builder helper and in the device block' -ForEach @(
+        @{ Command = '"C:\Program Files\App\unins000.exe" /VERYSILENT' }, @{ Command = 'C:\App\u.exe /S' }, @{ Command = 'cmd.exe /c exit 0' }
+        @{ Command = '.\x.exe /s' }, @{ Command = 'sub\x.exe' }, @{ Command = '"..\x.exe" /s' }, @{ Command = 'cmd /c del x' }, @{ Command = '' }
+        @{ Command = '"\\server\share\u.exe" /S' }, @{ Command = '\x.exe' }, @{ Command = '"unterminated C:\a.exe' }, @{ Command = 'C:\a.exe.old\b.exe /q' }
+    ) {
+        $scriptBlockSplit = $script:hashtableBlock['scriptBlockSplitCommand']
+        $objDevice = & $scriptBlockSplit $Command
+        $objHelper = InModuleScope DeviceInspectorCommon -Parameters @{ Command = $Command } { param($Command) Split-DeviceInspectionCommand -Command $Command }
+        if ($null -eq $objDevice) {
+            $objHelper | Should -BeNullOrEmpty
+        } else {
+            $objHelper.FilePath | Should -Be $objDevice.FilePath
+            $objHelper.Arguments | Should -Be $objDevice.Arguments
+        }
+    }
+
+    It 'says that the tool could not read the key after the run, and does not say the key is still there' -ForEach @(
+        @{ Code = 0; Expected = $true; Text = 'could not read the uninstall key after the run' }
+        @{ Code = 3010; Expected = $true; Text = 'could not read the uninstall key after the run' }
+        @{ Code = 1605; Expected = $false; Text = 'could not read the uninstall key after the run' }
+    ) {
+        $scriptBlockMap = $script:hashtableBlock['scriptBlockMapExitCode']
+        $objMap = & $scriptBlockMap 'Uninstall' $Code $false $false
+        $objMap.Succeeded | Should -Be $Expected
+        $objMap.Text | Should -Match $Text
+        $objMap.Text | Should -Not -Match 'still there'
+    }
+
+    It 'adds the key still there note to an uninstall that ends with 0 and leaves the key, and not to a repair' {
+        $scriptBlockMap = $script:hashtableBlock['scriptBlockMapExitCode']
+        (& $scriptBlockMap 'Uninstall' 0 $false $true).Text | Should -Match 'key is still there'
+        (& $scriptBlockMap 'Uninstall' 0 $true $true).Text | Should -Not -Match 'still there'
+        (& $scriptBlockMap 'Repair' 0 $false $true).Text | Should -Not -Match 'still there'
+    }
+
     # These tests run an installer stand-in (cmd.exe and reg.exe). They run in GitHub CI
     # only. The lab does only dry runs of an uninstall or a repair.
     It 'runs the quiet uninstall string, waits, and reports that the key is gone' -Skip:($env:GITHUB_ACTIONS -ne 'true') {
@@ -1061,6 +1140,9 @@ Describe 'Uninstall and repair an application' {
         @{ Case = 'MSI'; Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'MsiExec.exe /I{23170F69-40C1-2702-2600-000001000000}'; Quiet = ''; Component = 0; Type = 'MSI'; CanUninstall = $true; CanRepair = $true; UninstallReason = ''; RepairReason = '' }
         @{ Case = 'EXE with a quiet uninstall string'; Key = 'App_is1'; Uninstall = '"C:\App\unins000.exe"'; Quiet = '"C:\App\unins000.exe" /VERYSILENT'; Component = 0; Type = 'EXE'; CanUninstall = $true; CanRepair = $false; UninstallReason = ''; RepairReason = 'no documented repair command' }
         @{ Case = 'EXE without a quiet uninstall string'; Key = 'App_is1'; Uninstall = '"C:\App\unins000.exe"'; Quiet = ''; Component = 0; Type = 'EXE'; CanUninstall = $false; CanRepair = $false; UninstallReason = 'does not guess silent switches'; RepairReason = 'does not guess silent switches' }
+        @{ Case = 'EXE with a quiet string that has no .exe path'; Key = 'App_is1'; Uninstall = '"C:\App\unins000.exe"'; Quiet = 'cmd /c del x'; Component = 0; Type = 'EXE'; CanUninstall = $false; CanRepair = $false; UninstallReason = 'no file path that ends in .exe'; RepairReason = 'no file path that ends in .exe' }
+        @{ Case = 'EXE with a relative quiet path'; Key = 'App_is1'; Uninstall = '"C:\App\unins000.exe"'; Quiet = '.\unins000.exe /S'; Component = 0; Type = 'EXE'; CanUninstall = $false; CanRepair = $false; UninstallReason = 'path is relative'; RepairReason = 'path is relative' }
+        @{ Case = 'EXE with a bare file name'; Key = 'App_is1'; Uninstall = 'x'; Quiet = 'cmd.exe /c exit 0'; Component = 0; Type = 'EXE'; CanUninstall = $true; CanRepair = $false; UninstallReason = ''; RepairReason = 'no documented repair command' }
         @{ Case = 'system component, MSI'; Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'MsiExec.exe /I{23170F69-40C1-2702-2600-000001000000}'; Quiet = ''; Component = 1; Type = 'MSI'; CanUninstall = $false; CanRepair = $false; UninstallReason = 'system component, part of another product'; RepairReason = 'system component, part of another product' }
         @{ Case = 'system component, EXE with a quiet string'; Key = 'Hidden'; Uninstall = 'C:\x.exe'; Quiet = 'C:\x.exe /S'; Component = 1; Type = 'EXE'; CanUninstall = $false; CanRepair = $false; UninstallReason = 'system component, part of another product'; RepairReason = 'system component, part of another product' }
     ) {

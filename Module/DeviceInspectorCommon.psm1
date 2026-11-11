@@ -1308,9 +1308,8 @@ function Compare-DeviceInspectionApplication {
                 if (-not $hashtablePublisher.ContainsKey($strKey)) {
                     $hashtablePublisher[$strKey] = [string]$objApplication.Publisher
                 }
-                if (-not $hashtableDisplay.ContainsKey($strKey)) {
-                    $hashtableDisplay[$strKey] = ([string]$objApplication.Name).Trim()
-                }
+                # The spelling of the site wins, as it did before the panel change.
+                $hashtableDisplay[$strKey] = ([string]$objApplication.Name).Trim()
             }
         }
         foreach ($strKey in @($hashtableDisplay.Keys | Sort-Object)) {
@@ -1338,6 +1337,78 @@ function Compare-DeviceInspectionApplication {
                 Status           = $strStatus
             }
         }
+    }
+}
+
+function Split-DeviceInspectionCommand {
+    # .SYNOPSIS
+    # Splits a command line into a file path and arguments, as the device does.
+    #
+    # .DESCRIPTION
+    # A quoted path ends at the closing quote. Without quotes the path is the text up
+    # to and including the first .exe that ends a word. Returns $null when no path is
+    # found, and when the path is relative with a separator. A full path (drive or
+    # UNC) and a bare file name are accepted. The remote script block of the
+    # application action holds its own copy of this rule, because a remote block
+    # cannot call module functions. A test keeps the two equal.
+    #
+    # .PARAMETER Command
+    # The command line, for example a QuietUninstallString.
+    #
+    # .EXAMPLE
+    # (Split-DeviceInspectionCommand -Command '"C:\App\unins000.exe" /S').FilePath
+    #
+    # # C:\App\unins000.exe
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties FilePath, Arguments. $null when the command cannot be split.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
+    # return shape, and positional contract may change without notice.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Command
+    )
+
+    process {
+        $strText = $Command.Trim()
+        if ($strText.Length -eq 0) {
+            return $null
+        }
+        $strPath = ''
+        $strRest = ''
+        if ($strText.StartsWith('"')) {
+            $intEnd = $strText.IndexOf('"', 1)
+            if ($intEnd -lt 2) {
+                return $null
+            }
+            $strPath = $strText.Substring(1, $intEnd - 1)
+            $strRest = $strText.Substring($intEnd + 1).Trim()
+        } else {
+            $objMatch = [regex]::Match($strText, '^(?<path>.+?\.exe)(?=\s|\z)', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if (-not $objMatch.Success) {
+                return $null
+            }
+            $strPath = $objMatch.Groups['path'].Value
+            $strRest = $strText.Substring($strPath.Length).Trim()
+        }
+        $boolFull = $strPath -match '^(?:[A-Za-z]:[\\/]|\\\\[^\\/])'
+        $boolBare = $strPath.IndexOfAny([char[]]@('\', '/')) -lt 0
+        if (-not ($boolFull -or $boolBare)) {
+            return $null
+        }
+        [pscustomobject]@{ FilePath = $strPath; Arguments = $strRest }
     }
 }
 
@@ -2047,6 +2118,9 @@ function ConvertTo-DeviceInspectionApplicationRow {
             } elseif ($boolMsi) {
                 $strUninstallCommand = 'msiexec.exe /x {0} /qn /norestart REBOOT=ReallySuppress' -f $strKeyName
                 $strRepairCommand = 'msiexec.exe /i {0} REINSTALL=ALL REINSTALLMODE=omus /qn /norestart REBOOT=ReallySuppress' -f $strKeyName
+            } elseif (-not [string]::IsNullOrWhiteSpace($strQuiet) -and $null -eq (Split-DeviceInspectionCommand -Command ([System.Environment]::ExpandEnvironmentVariables($strQuiet.Trim())))) {
+                $strUninstallReason = 'The quiet uninstall string has no file path that ends in .exe, or the path is relative, so the tool cannot run it. The tool does not guess the command.'
+                $strRepairReason = $strUninstallReason
             } elseif (-not [string]::IsNullOrWhiteSpace($strQuiet)) {
                 $strUninstallCommand = $strQuiet.Trim()
                 $strRepairReason = 'There is no documented repair command for this installer.'

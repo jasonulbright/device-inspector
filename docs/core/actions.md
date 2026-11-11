@@ -79,7 +79,7 @@ The Applications panel has **Uninstall...** and **Repair...** in its right-click
 | EXE without a quiet uninstall string | Off. The tool does not guess silent switches. | Off. |
 | System component (`SystemComponent` 1) | Off. It is part of another product. | Off. |
 
-Repair uses `/i` with `REINSTALL=ALL` and `REINSTALLMODE=omus`, not `/f`, because `/f` ignores properties on the command line. For an EXE entry, the device splits the quiet uninstall string into a file path and arguments: a quoted path, or the text up to and including the first `.exe`. It refuses to run when the file does not exist or when the string has no `.exe` path.
+Repair uses `/i` with `REINSTALL=ALL` and `REINSTALLMODE=omus`, not `/f`, because `/f` ignores properties on the command line. For an EXE entry, the device splits the quiet uninstall string into a file path and arguments: a quoted path, or the text up to and including the first `.exe`. It accepts a full path or a bare file name, and looks up a bare name in System32 only. It refuses to run when the file does not exist, when the string has no `.exe` path, or when the path is relative (for example `.\x.exe`).
 
 1. Turn on **Enable actions**.
 2. Inspect the device.
