@@ -806,6 +806,7 @@ function Get-SiteFact {
                 OperatingSystem       = $null
                 LastLogonUserName     = $null
                 LastHardwareInventory = $null
+                HardwareScanClientTime = $null
                 InstalledApplications = @()
                 Collections           = @()
                 Deployments           = @()
@@ -819,6 +820,22 @@ function Get-SiteFact {
         $intResourceId = [int]$objResource.ResourceID
 
         $strLastHardwareInventory = ConvertTo-InspectionTimestamp -Value $objResource.LastHardwareScan
+
+        # The site stores the hardware scan time as the local clock time of the client,
+        # with no zone. The inventory check compares it with the cycle start in the
+        # local time of the device, so the value stays unconverted.
+        $strHardwareScanClientTime = $null
+        try {
+            $strScanQuery = 'SELECT LastHardwareScan FROM SMS_G_System_WORKSTATION_STATUS WHERE ResourceID = {0}' -f $intResourceId
+            foreach ($objRow in @(Invoke-SiteQuery -Query $strScanQuery)) {
+                if ($null -ne $objRow.LastHardwareScan) {
+                    $strHardwareScanClientTime = ([datetime]$objRow.LastHardwareScan).ToString('yyyy-MM-ddTHH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
+                }
+            }
+        } catch {
+            Write-Debug -Message $_.Exception.Message
+            $Problems.Add(('Site hardware scan time: {0}' -f $_.Exception.Message))
+        }
 
         $listApplication = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
         foreach ($strClass in @('SMS_G_System_ADD_REMOVE_PROGRAMS', 'SMS_G_System_ADD_REMOVE_PROGRAMS_64')) {
@@ -933,6 +950,7 @@ function Get-SiteFact {
             OperatingSystem       = [string]$objResource.DeviceOS
             LastLogonUserName     = [string]$objResource.LastLogonUser
             LastHardwareInventory = $strLastHardwareInventory
+            HardwareScanClientTime = $strHardwareScanClientTime
             InstalledApplications = @($listApplication | Sort-Object -Property Name, Version -Unique)
             Collections           = @($listCollection | Sort-Object -Property Name, CollectionId)
             Deployments           = @($listDeployment | Sort-Object -Property Name, CollectionId)
@@ -1019,6 +1037,7 @@ function Get-DeviceFact {
                     $strSiteCode = $null
                     $strHardwareCycle = $null
                     $strDiscoveryCycle = $null
+                    $strHardwareCycleLocal = $null
                     try {
                         $strClientVersion = [string](Get-CimInstance -Namespace 'root\ccm' -ClassName SMS_Client).ClientVersion
                         foreach ($objAuthority in @(Get-CimInstance -Namespace 'root\ccm' -ClassName CCM_Authority)) {
@@ -1031,6 +1050,7 @@ function Get-DeviceFact {
                             $strStamp = ([datetime]$objCycle.LastCycleStartedDate).ToUniversalTime().ToString($strFormat, $objCulture)
                             if ($objCycle.InventoryActionID -eq '{00000000-0000-0000-0000-000000000001}') {
                                 $strHardwareCycle = $strStamp
+                                $strHardwareCycleLocal = ([datetime]$objCycle.LastCycleStartedDate).ToString('yyyy-MM-ddTHH:mm:ss', $objCulture)
                             } elseif ($objCycle.InventoryActionID -eq '{00000000-0000-0000-0000-000000000003}') {
                                 $strDiscoveryCycle = $strStamp
                             }
@@ -1045,6 +1065,7 @@ function Get-DeviceFact {
                         AssignedSiteCode           = $strSiteCode
                         CurrentManagementPoint     = $strManagementPoint
                         LastHardwareInventoryCycle = $strHardwareCycle
+                        HardwareCycleLocalTime     = $strHardwareCycleLocal
                         LastDiscoveryDataCycle     = $strDiscoveryCycle
                     }
                 }
@@ -1340,9 +1361,11 @@ function Test-DeviceInspectionInventory {
     # Flags a device whose site inventory is current but whose installed applications differ.
     #
     # .DESCRIPTION
-    # Read only. The site inventory is current when its date is not older than the
-    # start of the last hardware inventory cycle on the device, so the site holds the
-    # last report. Then the installed applications of the site inventory and of the
+    # Read only. The site inventory is current when its hardware scan time is not
+    # older than the start of the last hardware inventory cycle on the device, so the
+    # site holds the last report. Both times are local clock times of the device: the
+    # site stores the scan time that way, with no zone, and the cmdlet value of the
+    # device record can lag the processed report by hours. Then the installed applications of the site inventory and of the
     # device must match. A difference means that the inventory on the site is
     # corrupt. A device application whose install date is on or after the day of the
     # last cycle does not count, because the next cycle reports it.
@@ -1394,17 +1417,23 @@ function Test-DeviceInspectionInventory {
         if ($null -eq $objSite -or -not $objSite.Found -or $null -eq $objDevice -or $null -eq $objDevice.Client) {
             return (& $scriptBlockResult 'Unknown' $null $null @() 'The check needs the site record and the client facts of the device.')
         }
-        $strSite = [string]$objSite.LastHardwareInventory
-        $strCycle = [string]$objDevice.Client.LastHardwareInventoryCycle
+        $strSite = $null
+        $strCycle = $null
+        if ($null -ne $objSite.PSObject.Properties['HardwareScanClientTime']) {
+            $strSite = [string]$objSite.HardwareScanClientTime
+        }
+        if ($null -ne $objDevice.Client.PSObject.Properties['HardwareCycleLocalTime']) {
+            $strCycle = [string]$objDevice.Client.HardwareCycleLocalTime
+        }
         $objCulture = [System.Globalization.CultureInfo]::InvariantCulture
-        $enumStyle = [System.Globalization.DateTimeStyles]::AdjustToUniversal -bor [System.Globalization.DateTimeStyles]::AssumeUniversal
+        $enumStyle = [System.Globalization.DateTimeStyles]::None
         $datetimeSite = [datetime]::MinValue
         $datetimeCycle = [datetime]::MinValue
-        if (-not [datetime]::TryParse($strSite, $objCulture, $enumStyle, [ref]$datetimeSite) -or -not [datetime]::TryParse($strCycle, $objCulture, $enumStyle, [ref]$datetimeCycle)) {
+        if (-not [datetime]::TryParseExact($strSite, 'yyyy-MM-ddTHH:mm:ss', $objCulture, $enumStyle, [ref]$datetimeSite) -or -not [datetime]::TryParseExact($strCycle, 'yyyy-MM-ddTHH:mm:ss', $objCulture, $enumStyle, [ref]$datetimeCycle)) {
             return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() 'The site inventory date or the last hardware inventory cycle of the device is missing.')
         }
         if ($datetimeSite -lt $datetimeCycle) {
-            return (& $scriptBlockResult 'NotCurrent' $strSite $strCycle @() ('The site inventory ({0}) is older than the last hardware inventory cycle of the device ({1}). The site has not processed that report yet.' -f $strSite, $strCycle))
+            return (& $scriptBlockResult 'NotCurrent' $strSite $strCycle @() ('The site inventory scan ({0}, device local time) is older than the last hardware inventory cycle of the device ({1}). The site has not processed that report yet.' -f $strSite, $strCycle))
         }
         $strCycleDay = $datetimeCycle.ToString('yyyyMMdd', $objCulture)
         $hashtableInstallDate = @{}
@@ -1431,7 +1460,7 @@ function Test-DeviceInspectionInventory {
         if ($listApplication.Count -eq 0) {
             return (& $scriptBlockResult 'Current' $strSite $strCycle @() 'The site inventory is current and its applications match the device.')
         }
-        & $scriptBlockResult 'Corrupt' $strSite $strCycle $listApplication.ToArray() ('The site inventory is current ({0}), but {1} applications differ from the device. The inventory on the site can be corrupt. Repair inventory runs a full hardware inventory.' -f $strSite, $listApplication.Count)
+        & $scriptBlockResult 'Corrupt' $strSite $strCycle $listApplication.ToArray() ('The site inventory is current (scan {0}, device local time), but {1} applications differ from the device. The inventory on the site can be corrupt. Repair inventory runs a full hardware inventory.' -f $strSite, $listApplication.Count)
     }
 }
 

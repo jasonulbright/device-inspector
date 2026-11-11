@@ -166,6 +166,9 @@ Describe 'Get-SiteFact' {
                         [pscustomobject]@{ CI_ID = 101 }
                         [pscustomobject]@{ CI_ID = 102 }
                     }
+                    '*SMS_G_System_WORKSTATION_STATUS*' {
+                        [pscustomobject]@{ LastHardwareScan = [datetime]'2026-11-10T19:22:32' }
+                    }
                 }
             }
             Mock Get-CMDeviceCollection {
@@ -209,6 +212,15 @@ Describe 'Get-SiteFact' {
             $objSite.RequiredUpdates[0].Severity | Should -Be 'Important'
             $objSite.RequiredUpdates[0].IsSuperseded | Should -BeTrue
             $listProblem.Count | Should -Be 0
+        }
+    }
+
+    It 'keeps the hardware scan time of the site as the local clock time of the client' {
+        InModuleScope DeviceInspectorCommon {
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.HardwareScanClientTime | Should -Be '2026-11-10T19:22:32'
+            Should -Invoke Invoke-SiteQuery -ParameterFilter { $Query -eq 'SELECT LastHardwareScan FROM SMS_G_System_WORKSTATION_STATUS WHERE ResourceID = 16777221' }
         }
     }
 

@@ -433,16 +433,22 @@ Describe 'Corrupt-inventory check and repair' {
         $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
         $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
         function New-CheckInspection {
-            param([string]$SiteDate = '2026-11-10T10:01:00Z', [string]$Cycle = '2026-11-10T10:00:00Z', [object[]]$DeviceApp, [object[]]$SiteApp)
+            param([string]$SiteDate = '2026-11-10T10:01:00', [string]$Cycle = '2026-11-10T10:00:00', [object[]]$DeviceApp, [object[]]$SiteApp)
             [pscustomobject]@{
                 ComputerName = 'WS01'; InspectedAt = '2026-11-11T00:00:00Z'; SiteServer = 's'; SiteCode = 'XYZ'
-                Site = [pscustomobject]@{ Found = $true; LastHardwareInventory = $SiteDate; InstalledApplications = @($SiteApp) }
-                Device = [pscustomobject]@{ Client = [pscustomobject]@{ LastHardwareInventoryCycle = $Cycle }; InstalledApplications = @($DeviceApp) }
+                Site = [pscustomobject]@{ Found = $true; LastHardwareInventory = '2026-11-05T17:41:51Z'; HardwareScanClientTime = $SiteDate; InstalledApplications = @($SiteApp) }
+                Device = [pscustomobject]@{ Client = [pscustomobject]@{ LastHardwareInventoryCycle = '2026-11-10T15:00:00Z'; HardwareCycleLocalTime = $Cycle }; InstalledApplications = @($DeviceApp) }
                 Problems = @()
             }
         }
         $script:objAppA = [pscustomobject]@{ Name = 'App A'; Version = '1.0'; Publisher = ''; InstallDate = '20260101' }
         $script:objAppASite = [pscustomobject]@{ Name = 'App A '; Version = '1.0'; Publisher = '' }
+    }
+
+    It 'compares the client local times, not the cmdlet date of the device record' {
+        $objInspection = New-CheckInspection -SiteDate '2026-11-10T19:22:32' -Cycle '2026-11-10T19:21:32' -DeviceApp @($script:objAppA) -SiteApp @($script:objAppASite)
+        $objInspection.Site.LastHardwareInventory = '2026-11-05T17:41:51Z'
+        (Test-DeviceInspectionInventory -Inspection $objInspection).State | Should -Be 'Current'
     }
 
     It 'says Current when the site inventory is current and the applications match, names trimmed' {
@@ -472,7 +478,7 @@ Describe 'Corrupt-inventory check and repair' {
 
     It 'says NotCurrent when the site has not processed the last cycle' {
         $objOld = [pscustomobject]@{ Name = 'Old App'; Version = '2.0'; Publisher = ''; InstallDate = '20250101' }
-        $objCheck = Test-DeviceInspectionInventory -Inspection (New-CheckInspection -SiteDate '2026-11-05T17:41:51Z' -Cycle '2026-11-11T00:21:32Z' -DeviceApp @($objOld) -SiteApp @())
+        $objCheck = Test-DeviceInspectionInventory -Inspection (New-CheckInspection -SiteDate '2026-11-10T19:20:00' -Cycle '2026-11-10T19:21:32' -DeviceApp @($objOld) -SiteApp @())
         $objCheck.State | Should -Be 'NotCurrent'
         $objCheck.Differences | Should -Be 0
     }
