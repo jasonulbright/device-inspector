@@ -1137,6 +1137,13 @@ function Get-DeviceFact {
                             InstallState    = [string]$objApplication.InstallState
                             EvaluationState = [int]$objApplication.EvaluationState
                             LastEvaluation  = $strLastEvaluation
+                            Id              = [string]$objApplication.Id
+                            Revision        = [string]$objApplication.Revision
+                            IsMachineTarget = [bool]$objApplication.IsMachineTarget
+                            IsPreflightOnly = [bool]$objApplication.IsPreflightOnly
+                            AllowedActions  = @($objApplication.AllowedActions | ForEach-Object { [string]$_ })
+                            SoftwareVersion = [string]$objApplication.SoftwareVersion
+                            Publisher       = [string]$objApplication.Publisher
                         })
                 }
             } catch {
@@ -1496,7 +1503,7 @@ function Test-DeviceInspectionInventory {
         }
         $listApplication = New-Object -TypeName 'System.Collections.Generic.List[string]'
         foreach ($objRow in @(ConvertTo-DeviceInspectionApplicationRow -Inspection $Inspection)) {
-            if ($objRow.Status -eq 'Match') {
+            if ($objRow.Status -eq 'Match' -or $objRow.Status -eq 'Client application') {
                 continue
             }
             $strKey = ([string]$objRow.Name).Trim().ToLowerInvariant()
@@ -1822,9 +1829,13 @@ function ConvertTo-DeviceInspectionApplicationRow {
     # Merges the installed applications of the device and of the site inventory.
     #
     # .DESCRIPTION
-    # Joins the two lists by application name, ignoring case. Status is Match when
-    # the name and the version are equal, Version differs when only the name is equal,
-    # Device only or Inventory only when one list lacks the application.
+    # Joins the two lists by application name, ignoring case and spaces at the ends.
+    # Status is Match when the name and the version are equal, Version differs when
+    # only the name is equal, Device only or Inventory only when one list lacks the
+    # application. A Configuration Manager application that the client lists as
+    # installed is linked to the row with the same name, or else gets its own row
+    # with the status Client application. One row for each application ID, with
+    # its highest revision.
     #
     # .PARAMETER Inspection
     # The object that Get-DeviceInspection returns.
@@ -1838,12 +1849,14 @@ function ConvertTo-DeviceInspectionApplicationRow {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] Properties Name, DeviceVersion, InventoryVersion, Publisher, Status.
+    # [pscustomobject] Properties Name, DeviceVersion, InventoryVersion, Publisher,
+    # Status, ClientApplication, ClientApplicationId, ClientRevision,
+    # ClientMachineTarget, ClientAllowedActions, CanUninstall, CanRepair.
     #
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.0.20261111.1
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1852,6 +1865,92 @@ function ConvertTo-DeviceInspectionApplicationRow {
     )
 
     process {
+        # A Configuration Manager application installed by the client gets its own
+        # row (status Client application) unless an uninstall entry has the same
+        # name, because the two names usually differ. Only these rows carry the
+        # client application fields that Uninstall and Repair need.
+        $scriptBlockRow = {
+            param($strName, $strDeviceVersion, $strSiteVersion, $strPublisher, $strStatus, $objClientApplication)
+            $strId = ''
+            $strRevision = ''
+            $boolMachine = $true
+            $boolCanUninstall = $false
+            $boolCanRepair = $false
+            $strClientName = ''
+            $strAllowed = ''
+            if ($null -ne $objClientApplication) {
+                $arrAllowed = @()
+                if ($null -ne $objClientApplication.PSObject.Properties['AllowedActions']) {
+                    $arrAllowed = @($objClientApplication.AllowedActions)
+                }
+                $boolPreflight = $null -ne $objClientApplication.PSObject.Properties['IsPreflightOnly'] -and [bool]$objClientApplication.IsPreflightOnly
+                $strId = [string]$objClientApplication.Id
+                $strRevision = [string]$objClientApplication.Revision
+                $boolMachine = [bool]$objClientApplication.IsMachineTarget
+                $strClientName = [string]$objClientApplication.Name
+                $strAllowed = $arrAllowed -join ', '
+                $boolCanUninstall = ($arrAllowed -contains 'Uninstall') -or (([string]$objClientApplication.InstallState) -eq 'Installed' -and -not $boolPreflight)
+                $boolCanRepair = $arrAllowed -contains 'Repair'
+                # The device is read in the context of the signed-in account over WinRM,
+                # not of the user that a user-targeted deployment belongs to.
+                if (-not $boolMachine) {
+                    $boolCanUninstall = $false
+                    $boolCanRepair = $false
+                }
+            }
+            [pscustomobject]@{
+                Name                  = $strName
+                DeviceVersion         = $strDeviceVersion
+                InventoryVersion      = $strSiteVersion
+                Publisher             = $strPublisher
+                Status                = $strStatus
+                ClientApplication     = $strClientName
+                ClientApplicationId   = $strId
+                ClientRevision        = $strRevision
+                ClientMachineTarget   = $boolMachine
+                ClientAllowedActions  = $strAllowed
+                CanUninstall          = [bool]$boolCanUninstall
+                CanRepair             = [bool]$boolCanRepair
+            }
+        }
+        $scriptBlockRevision = {
+            param($objValue)
+            $intRevision = [uint64]0
+            if ([uint64]::TryParse([string]$objValue, [ref]$intRevision)) {
+                return $intRevision
+            }
+            return [uint64]0
+        }
+        $hashtableById = @{}
+        if ($null -ne $Inspection.Device -and $null -ne $Inspection.Device.PSObject.Properties['ClientApplications']) {
+            foreach ($objClientApplication in @($Inspection.Device.ClientApplications)) {
+                if ($null -eq $objClientApplication.PSObject.Properties['Id'] -or [string]::IsNullOrEmpty([string]$objClientApplication.Id)) {
+                    continue
+                }
+                $strId = [string]$objClientApplication.Id
+                if (-not $hashtableById.ContainsKey($strId) -or (& $scriptBlockRevision $objClientApplication.Revision) -gt (& $scriptBlockRevision $hashtableById[$strId].Revision)) {
+                    $hashtableById[$strId] = $objClientApplication
+                }
+            }
+        }
+        # The device acts on the highest revision of an ID, so the row uses the same
+        # revision and is left out when that revision is not installed.
+        foreach ($strId in @($hashtableById.Keys)) {
+            if (([string]$hashtableById[$strId].InstallState) -ne 'Installed') {
+                $hashtableById.Remove($strId)
+            }
+        }
+        $hashtableClient = @{}
+        $hashtableClientUsed = @{}
+        $listClientExtra = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        foreach ($strId in @($hashtableById.Keys | Sort-Object)) {
+            $strNameKey = ([string]$hashtableById[$strId].Name).Trim().ToLowerInvariant()
+            if ($hashtableClient.ContainsKey($strNameKey)) {
+                $listClientExtra.Add($hashtableById[$strId])
+            } else {
+                $hashtableClient[$strNameKey] = $hashtableById[$strId]
+            }
+        }
         $hashtableDevice = @{}
         $hashtableSite = @{}
         $hashtablePublisher = @{}
@@ -1903,13 +2002,24 @@ function ConvertTo-DeviceInspectionApplicationRow {
             } elseif ($strDeviceVersion -ne $strSiteVersion) {
                 $strStatus = 'Version differs'
             }
-            [pscustomobject]@{
-                Name = $hashtableDisplay[$strKey]
-                DeviceVersion = $strDeviceVersion
-                InventoryVersion = $strSiteVersion
-                Publisher = [string]$hashtablePublisher[$strKey]
-                Status = $strStatus
+            $objClientApplication = $null
+            if ($hashtableClient.ContainsKey($strKey)) {
+                $objClientApplication = $hashtableClient[$strKey]
+                $hashtableClientUsed[$strKey] = $true
             }
+            & $scriptBlockRow $hashtableDisplay[$strKey] $strDeviceVersion $strSiteVersion ([string]$hashtablePublisher[$strKey]) $strStatus $objClientApplication
+        }
+        $listOwnRow = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        foreach ($strKey in @($hashtableClient.Keys | Sort-Object)) {
+            if (-not $hashtableClientUsed.ContainsKey($strKey)) {
+                $listOwnRow.Add($hashtableClient[$strKey])
+            }
+        }
+        foreach ($objExtra in $listClientExtra) {
+            $listOwnRow.Add($objExtra)
+        }
+        foreach ($objClientApplication in @($listOwnRow | Sort-Object -Property Name, Id)) {
+            & $scriptBlockRow ([string]$objClientApplication.Name).Trim() ([string]$objClientApplication.SoftwareVersion) '' ([string]$objClientApplication.Publisher) 'Client application' $objClientApplication
         }
     }
 }
@@ -2310,4 +2420,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'

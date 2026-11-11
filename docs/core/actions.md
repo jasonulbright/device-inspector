@@ -68,6 +68,25 @@ Both entries send the IDs of the rows in the confirmation, so an update that arr
 
 The tool calls `CCM_SoftwareUpdatesManager.InstallUpdates` on the device with the updates. The client accepts the job and returns. It then downloads and installs the updates. The log shows the state of each update five seconds after the request. A restart can follow, as the deployment sets. Inspect the device again to see the new states. `UpdatesDeployment.log` on the device shows the install.
 
+### Uninstall or repair an application
+
+The Applications panel has **Uninstall...** and **Repair...** in its right-click menu. They act on one selected row that carries a Configuration Manager application:
+
+- A row with the status **Client application**: an application that the client lists as installed.
+- A row of an uninstall entry with the same name as such an application.
+
+The name of the uninstall entry and the name of the application often differ (on the lab, `7-Zip 26.03 (x64 edition)` and `7-Zip (x64 edition) - 26.03`), so the application usually has its own row.
+
+**Uninstall** is on when the client allows it: the application is installed and the deployment is not a simulation, or its allowed actions list Uninstall. On the lab, the allowed actions listed only Install after the install, so the tool also sends Uninstall for an installed application, and the dialog and the log say so. **Repair** is on when the allowed actions list Repair. The deployment type needs a repair command for that. Both are off for an application deployed to a user: the tool reads the device with the signed-in account, not in the context of that user.
+
+1. Turn on **Enable actions**.
+2. Inspect the device.
+3. On the Applications panel, right-click the row, then select **Uninstall...** or **Repair...**.
+4. Select **Dry run**. The log shows the application, its revision, its install state and its allowed actions.
+5. Repeat, and select **Run**.
+
+The tool calls the `Uninstall` or `Repair` method of `CCM_Application` on the device with the immediate enforce preference. When the client holds several revisions, the tool picks the highest. The `STARTED` line of the action log names the application, its ID and its revision. After a run, both entries are off for that row until the next inspection. When the client gives no return value, the result is `FAILED` with the text that the request is not confirmed. The log shows the job ID and the state ten seconds later. `AppEnforce.log` on the device shows the run. A required deployment of the application can install it again at the next evaluation.
+
 ### Repair a corrupt inventory
 
 Each inspection with the site and the device runs an inventory check. The Device panel shows it in the group **Inventory check**.
@@ -128,6 +147,10 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 | ... failed with return value <n>. | The client refused the request. | Read `PolicyAgent.log` on the device. |
 | The hardware inventory status cannot be read: ... | WMI refused the read of `root\ccm\invagt`. | Check the rights on `root\ccm\invagt`. Repair the client. |
 | The hardware inventory status record cannot be deleted. The schedule was not triggered. | WMI refused the delete. | Check the rights on `root\ccm\invagt`. Read `InventoryAgent.log`. |
+| The client does not allow Repair for this application now. ... | The deployment type has no repair command, or the application is not installed. | Add a repair command to the deployment type. |
+| The client does not allow Uninstall for this application now. ... | The application is not installed, or the deployment is a simulation. | Inspect the device again. |
+| The application is deployed to a user. ... | A user-targeted deployment. | Use the deployment in the Configuration Manager console. |
+| The client policy has no application with this ID now. | The deployment was removed after the inspection. | Inspect the device again. |
 | No update to install: ... | No selected update is missing on the device. | Inspect again. The update can be installed already. |
 | The client refused the install request (return value <n>). | The client did not accept the job. | Read `UpdatesDeployment.log` on the device. |
 | The cycle did not start (return value <n>). | The client refused the trigger after the delete. | Read `InventoryAgent.log` on the device. The next scheduled cycle sends a full report. |
@@ -141,4 +164,6 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 - [InventoryActionStatus Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/client-classes/inventoryactionstatus-client-wmi-class): Lists the properties of the status record.
 - [InstallUpdates Method in Class CCM_SoftwareUpdatesManager](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/installupdates-method-in-class-ccm_softwareupdatesmanager): Describes the install request.
 - [CCM_SoftwareUpdate Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/ccm_softwareupdate-client-wmi-class): Lists ComplianceState and EvaluationState.
+- [Uninstall Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/uninstall-method-in-class-ccm_application): Describes the uninstall request.
+- [Repair Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/repair-method-in-class-ccm_application): Describes the repair request.
 - [Hardware inventory views in Configuration Manager](https://learn.microsoft.com/intune/configmgr/develop/core/understand/sqlviews/hardware-inventory-views-configuration-manager): Describes the Add Remove Programs inventory that the check compares.

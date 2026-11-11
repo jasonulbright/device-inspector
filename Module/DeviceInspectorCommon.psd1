@@ -31,6 +31,7 @@
         'Invoke-DeviceInspectorFullInventory'
         'Invoke-DeviceInspectorInventoryRepair'
         'Invoke-DeviceInspectorUpdateInstall'
+        'Invoke-DeviceInspectorApplicationAction'
         'ConvertTo-DeviceInspectorActionText'
         'Write-DeviceInspectorActionLog'
         'New-DeviceInspectorActionRecord'
