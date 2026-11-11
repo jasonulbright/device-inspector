@@ -1105,6 +1105,20 @@ function Invoke-DeviceInspectorCollectionChange {
             if ($Operation -eq 'Add' -and $arrRule.Count -gt 0) {
                 return (& $scriptBlockEnd $false ('The device already has a direct rule in {0}.' -f $CollectionId))
             }
+            # A direct rule adds a device only when the limiting collection holds it.
+            if ($Operation -eq 'Add') {
+                $strLimit = ''
+                if ($null -ne $objCollection.PSObject.Properties['LimitToCollectionID']) {
+                    $strLimit = [string]$objCollection.LimitToCollectionID
+                }
+                if (-not [string]::IsNullOrEmpty($strLimit)) {
+                    $arrLimitMember = @(Get-CMCollectionMember -CollectionId $strLimit -ResourceId ([int]$strResourceId) -ErrorAction Stop)
+                    if ($arrLimitMember.Count -eq 0) {
+                        return (& $scriptBlockEnd $false ('The device is not a member of the limiting collection {0} of {1}. A direct rule would not add it.' -f $strLimit, $CollectionId))
+                    }
+                    $listStep.Add(('The device is a member of the limiting collection {0}.' -f $strLimit))
+                }
+            }
             if ($boolDryRun) {
                 if ($Operation -eq 'Remove') {
                     $listStep.Add(('Dry run: would remove the direct rule of resource {0} from {1}, update the collection membership, and request machine policy on the device.' -f $strResourceId, $CollectionId))

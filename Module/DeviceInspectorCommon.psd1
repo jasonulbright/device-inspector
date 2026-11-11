@@ -28,6 +28,7 @@
         'Write-DeviceInspectionFullLog'
         'Test-DeviceInspectionInventory'
         'Get-DeviceInspectorActionBlock'
+        'Get-DeviceInspectorCollectionList'
         'Invoke-DeviceInspectorPolicyUpdate'
         'Invoke-DeviceInspectorFullInventory'
         'Invoke-DeviceInspectorInventoryRepair'

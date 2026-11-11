@@ -1108,3 +1108,69 @@ Describe 'Remove from collection' {
         $script:strStart | Should -Match 'function Test-DeviceActionReady \{[^}]*Get-DeviceInspectorActionBlock[^}]*-Kind Device'
     }
 }
+
+Describe 'Add to collection' {
+    BeforeAll {
+        $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+    }
+
+    BeforeEach {
+        InModuleScope DeviceInspectorCommon {
+            Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
+            Mock Disconnect-InspectorSite { }
+            Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 16777221; Name = 'WS01' } }
+            Mock Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ00030'; Name = 'Pilot 2'; LimitToCollectionID = 'SMS00001' } }
+            Mock Get-CMDeviceCollectionDirectMembershipRule { }
+            Mock Add-CMDeviceCollectionDirectMembershipRule { }
+            Mock Invoke-CMCollectionUpdate { }
+            Mock Invoke-CMClientAction { }
+            Mock Get-CMCollectionMember { [pscustomobject]@{ ResourceID = 16777221; IsDirect = $true } }
+            Mock Start-Sleep { }
+        }
+    }
+
+    It 'checks the limiting collection, and adds the rule when the device is a member of it' {
+        $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ00030' -Operation Add
+        $objResult.Succeeded | Should -BeTrue
+        ($objResult.Steps -join "`n") | Should -Match 'member of the limiting collection SMS00001'
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -ParameterFilter { $CollectionId -eq 'SMS00001' -and $ResourceId -eq 16777221 }
+        Should -Invoke -ModuleName DeviceInspectorCommon Add-CMDeviceCollectionDirectMembershipRule -Times 1 -Exactly
+    }
+
+    It 'refuses the add when the device is not a member of the limiting collection, also in a dry run' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { } -ParameterFilter { $CollectionId -eq 'SMS00001' }
+        $objDry = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ00030' -Operation Add -DryRun
+        $objDry.Succeeded | Should -BeFalse
+        $objDry.Summary | Should -Match 'not a member of the limiting collection SMS00001'
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ00030' -Operation Add).Succeeded | Should -BeFalse
+        Should -Invoke -ModuleName DeviceInspectorCommon Add-CMDeviceCollectionDirectMembershipRule -Times 0 -Exactly
+    }
+
+    It 'lists the device collections for the browser and closes the site drive' {
+        $arrList = @(Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ')
+        $arrList.Count | Should -Be 1
+        $arrList[0].CollectionID | Should -Be 'XYZ00030'
+        $arrList[0].IsBuiltIn | Should -BeFalse
+        $arrList[0].FolderID | Should -Be 0
+        $arrList[0].LimitToCollectionID | Should -Be 'SMS00001'
+        Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 1 -Exactly
+        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { throw 'provider error' }
+        { Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ' } | Should -Throw '*provider error*'
+        Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 2 -Exactly
+    }
+
+    It 'marks built-in collections in the list' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'SMS00001'; Name = 'All Systems'; MemberCount = 5; LimitToCollectionID = '' } }
+        @(Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ')[0].IsBuiltIn | Should -BeTrue
+    }
+
+    It 'has a button and a menu entry that open the browser through the site gate' {
+        $script:strXaml | Should -Match 'x:Name="btnAddCollection"'
+        $script:strXaml | Should -Match 'x:Name="menuAddCollection"[^>]*ToolTipService.ShowOnDisabled="True"'
+        $script:strStart | Should -Match '\$btnAddCollection\.IsEnabled = Test-SiteActionReady'
+        $script:strStart | Should -Match "(?s)function Invoke-AddToCollection \{\s*\`$gate = Get-DeviceInspectorActionBlock .*?-Kind Site"
+        $script:strStart | Should -Match "(?s)function Invoke-AddToCollection \{.*?Show-CollectionPickerDialog -Owner \`$window -Collections \`$choices.*?Invoke-DeviceAction -SiteAction -Name 'Add to collection' -Function 'Invoke-DeviceInspectorCollectionChange'"
+        $script:strStart | Should -Match "(?s)function Invoke-AddToCollection \{.*?-not \`$_\.IsBuiltIn -and \`$direct -notcontains"
+    }
+}

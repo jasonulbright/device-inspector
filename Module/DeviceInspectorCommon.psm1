@@ -2392,6 +2392,83 @@ function Write-DeviceInspectionFullLog {
     }
 }
 
+function Get-DeviceInspectorCollectionList {
+    # .SYNOPSIS
+    # Reads the device collections of the site for the collection browser.
+    #
+    # .DESCRIPTION
+    # Read only. Opens the site drive, reads all device collections with one
+    # Get-CMDeviceCollection call, and closes the drive. The objects have the
+    # property names that the collection browser of the window reads. The browser
+    # shows a flat list, so FolderID is 0 for every collection.
+    #
+    # .PARAMETER SiteServer
+    # The SMS Provider computer.
+    #
+    # .PARAMETER SiteCode
+    # The site code.
+    #
+    # .PARAMETER Credential
+    # An optional credential for the site drive.
+    #
+    # .EXAMPLE
+    # $arrCollection = @(Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ')
+    #
+    # # One object for each device collection.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties CollectionID, Name, MemberCount, LimitToCollectionID,
+    # IsBuiltIn, FolderID.
+    #
+    # .NOTES
+    # Throws when the site cannot be opened or read.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SiteServer,
+
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9]{3}\z')]
+        [string]$SiteCode,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    process {
+        $hashtableConnect = @{ SiteServer = $SiteServer; SiteCode = $SiteCode }
+        if ($PSBoundParameters.ContainsKey('Credential')) {
+            $hashtableConnect['Credential'] = $Credential
+        }
+        $objConnection = $null
+        try {
+            $objConnection = Connect-InspectorSite @hashtableConnect
+            foreach ($objCollection in @(Get-CMDeviceCollection -ErrorAction Stop)) {
+                $strId = [string]$objCollection.CollectionID
+                [pscustomobject]@{
+                    CollectionID        = $strId
+                    Name                = [string]$objCollection.Name
+                    MemberCount         = [int]$objCollection.MemberCount
+                    LimitToCollectionID = [string]$objCollection.LimitToCollectionID
+                    IsBuiltIn           = $strId.StartsWith('SMS', [System.StringComparison]::OrdinalIgnoreCase)
+                    FolderID            = 0
+                }
+            }
+        } finally {
+            Disconnect-InspectorSite -Connection $objConnection
+        }
+    }
+}
+
 function Get-DeviceInspectorActionBlock {
     # .SYNOPSIS
     # Returns the reason why an action cannot start now, or an empty string.
@@ -2517,4 +2594,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Get-DeviceInspectorCollectionList', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'

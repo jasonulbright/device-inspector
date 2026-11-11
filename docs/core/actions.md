@@ -105,6 +105,18 @@ The entry is off, with the reason as its tooltip:
 
 The tool opens the site drive and checks the device record (exactly one), the collection and the direct rule. It refuses the change when the device record now has another resource ID than the inspection. It runs `Remove-CMDeviceCollectionDirectMembershipRule -CollectionId <ID> -ResourceId <ID> -Force`, then `Invoke-CMCollectionUpdate` for the collection. It waits up to 60 seconds until `Get-CMCollectionMember` shows the new membership, because the client notification has an effect only after that, and then runs `Invoke-CMClientAction -ActionType ClientNotificationRequestMachinePolicyNow` for the device (the parameter `-NotificationType` is deprecated). When the membership update or the notification fails, the rule stays removed and the log says so. If another rule also adds the device, the device stays a member. Deployments to the collection stop applying to the device. Inspect the device again after the membership update.
 
+### Add the device to a collection
+
+The Collections panel has the button **Add to collection...** above the grid, and the same entry in the right-click menu.
+
+1. Turn on **Enable actions**.
+2. Inspect the device with the site.
+3. Select **Add to collection...**. The tool reads the device collections of the site in the background.
+4. The collection browser opens. It lists the device collections, with their ID and member count, without the built-in collections and without the collections where the device already has a direct rule. Type in the filter box to find a collection. Select it, then select **OK**.
+5. Select **Dry run**, then repeat and select **Run**.
+
+The tool checks the device record (exactly one, with the resource ID of the inspection), the collection, that no direct rule exists, and that the device is a member of the limiting collection of the collection. A direct rule cannot add a device that the limiting collection does not hold. It runs `Add-CMDeviceCollectionDirectMembershipRule -CollectionId <ID> -ResourceId <ID>`, then `Invoke-CMCollectionUpdate`, waits up to 60 seconds for the new membership, and then sends the client notification. Deployments to the collection start to apply to the device. The browser shows a flat list: it does not show the console folders.
+
 ### Repair a corrupt inventory
 
 Each inspection with the site and the device runs an inventory check. The Device panel shows it in the group **Inventory check**.
@@ -172,6 +184,8 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 | The device has no direct rule in <ID>. ... | The membership comes from a query, include or other rule. | Change the rule of the collection in the Configuration Manager console. |
 | <ID> is a built-in collection. ... | Built-in collections have no direct rules. | None. |
 | The site has <n> device records named <name>. ... | The change needs exactly one device record. | Remove the duplicate record in the console. |
+| The device already has a direct rule in <ID>. | A direct rule exists. | None. |
+| The device is not a member of the limiting collection <ID> of <ID>. ... | The limiting collection does not hold the device. | Pick another collection, or change the limiting collection in the console. |
 | The site did not change the rule. ... | The account has no right to modify the collection. | Check the role and the scope of the account. |
 | No update to install: ... | No selected update is missing on the device. | Inspect again. The update can be installed already. |
 | The client refused the install request (return value <n>). | The client did not accept the job. | Read `UpdatesDeployment.log` on the device. |
@@ -188,6 +202,8 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 - [CCM_SoftwareUpdate Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/ccm_softwareupdate-client-wmi-class): Lists ComplianceState and EvaluationState.
 - [Uninstall Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/uninstall-method-in-class-ccm_application): Describes the uninstall request.
 - [Repair Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/repair-method-in-class-ccm_application): Describes the repair request.
+- [Add-CMDeviceCollectionDirectMembershipRule](https://learn.microsoft.com/powershell/module/configurationmanager/add-cmdevicecollectiondirectmembershiprule): Describes the new direct rule.
+- [Get-CMDeviceCollection](https://learn.microsoft.com/powershell/module/configurationmanager/get-cmdevicecollection): Describes the collection list of the browser.
 - [Remove-CMDeviceCollectionDirectMembershipRule](https://learn.microsoft.com/powershell/module/configurationmanager/remove-cmdevicecollectiondirectmembershiprule): Describes the removal of a direct rule.
 - [Invoke-CMClientAction](https://learn.microsoft.com/powershell/module/configurationmanager/invoke-cmclientaction): Describes the client notification.
 - [SMS_FullCollectionMembership Server WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/collections/sms_fullcollectionmembership-server-wmi-class): Describes `IsDirect`.

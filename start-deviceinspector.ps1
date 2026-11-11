@@ -150,6 +150,8 @@ $menuInstallSelected = @($gridUpdates.ContextMenu.Items | Where-Object { $_.Name
 $menuInstallAll      = @($gridUpdates.ContextMenu.Items | Where-Object { $_.Name -eq 'menuInstallAll' })[0]
 $gridCollections = $window.FindName('gridCollections')
 $menuRemoveCollection = @($gridCollections.ContextMenu.Items | Where-Object { $_.Name -eq 'menuRemoveCollection' })[0]
+$menuAddCollection    = @($gridCollections.ContextMenu.Items | Where-Object { $_.Name -eq 'menuAddCollection' })[0]
+$btnAddCollection     = $window.FindName('btnAddCollection')
 $gridDeployments = $window.FindName('gridDeployments')
 $txtProblems     = $window.FindName('txtProblems')
 
@@ -289,6 +291,7 @@ function Update-ControlState {
     $toggleActions.IsEnabled = $idle
     $btnPolicyUpdate.IsEnabled = Test-DeviceActionReady
     $btnFullInventory.IsEnabled = Test-DeviceActionReady
+    $btnAddCollection.IsEnabled = Test-SiteActionReady
     $btnRepairInventory.IsEnabled = (Test-DeviceActionReady) -and (Test-InventoryCorrupt)
 }
 
@@ -1035,6 +1038,8 @@ $gridCollections.ContextMenu.Add_Opened({
         else { '' })
     if ($reason) { Set-MenuItemState -Item $menuRemoveCollection -Enabled $false -Reason $reason }
     else { Set-MenuItemState -Item $menuRemoveCollection -Enabled $true -Reason ('Remove the direct rule of the device from {0}.' -f $row.Name) }
+    if ($gate) { Set-MenuItemState -Item $menuAddCollection -Enabled $false -Reason $gate }
+    else { Set-MenuItemState -Item $menuAddCollection -Enabled $true -Reason 'Pick a device collection and add a direct membership rule for the device.' }
 })
 $menuRemoveCollection.Add_Click({
     $rows = @($gridCollections.SelectedItems)
@@ -1047,6 +1052,44 @@ $menuRemoveCollection.Add_Click({
         -Detail @(('Collection: {0} ({1}).' -f $row.Name, $row.CollectionId)) `
         -AfterRun { param($r) if ($script:CollectionRowDone) { $script:CollectionRowDone.IsRemoved = $true; $script:CollectionRowDone.Membership = 'Rule removed: inspect again' }; $gridCollections.Items.Refresh(); Add-LogLine ('{0}: inspect {1} again after the membership update.' -f $r.Action, $r.ComputerName) }
 })
+
+# Add to collection: load the device collections of the site in the background, then
+# show the collection browser. Built-in collections and collections where the device
+# already has a direct rule are left out.
+function Invoke-AddToCollection {
+    $gate = Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Site
+    if ($gate) { Add-LogLine ('Add to collection: {0}' -f $gate); return }
+    $arguments = @{ Server = [string]$script:Inspection.SiteServer; Code = [string]$script:Inspection.SiteCode }
+    Start-BackgroundWork -Title 'Reading the device collections' -Step 'Connecting to the site...' -Arguments $arguments -Work {
+        param($A, $State)
+        try { $State.Result = @(Get-DeviceInspectorCollectionList -SiteServer $A.Server -SiteCode $A.Code) }
+        catch { $State.ErrorMsg = $_.Exception.Message }
+        finally { $State.Done = $true }
+    } -OnDone {
+        param($State)
+        if ($State.ErrorMsg) {
+            Add-LogLine ('Add to collection: the collections cannot be read: {0}' -f $State.ErrorMsg)
+            [void](Show-ThemedMessage -Owner $window -Title 'Add to collection' -Message ([string]$State.ErrorMsg) -Icon Error)
+            return
+        }
+        $direct = @(@($gridCollections.ItemsSource) | Where-Object { $true -eq $_.IsDirect -and -not $_.IsRemoved } | ForEach-Object { [string]$_.CollectionId })
+        $choices = @(@($State.Result) | Where-Object { -not $_.IsBuiltIn -and $direct -notcontains [string]$_.CollectionID })
+        Add-LogLine ('Add to collection: {0} device collections, {1} to pick from.' -f @($State.Result).Count, $choices.Count)
+        if ($choices.Count -eq 0) {
+            [void](Show-ThemedMessage -Owner $window -Title 'Add to collection' -Message 'The site has no device collection to pick: each one is built in or already has a direct rule for the device.' -Icon Info)
+            return
+        }
+        $picked = Show-CollectionPickerDialog -Owner $window -Collections $choices -Folders @() -Title 'Add to collection' -IncludeBuiltIn $false
+        if (-not $picked) { Add-LogLine 'Add to collection: no collection picked.'; return }
+        Invoke-DeviceAction -SiteAction -Name 'Add to collection' -Function 'Invoke-DeviceInspectorCollectionChange' `
+            -Parameters @{ CollectionId = [string]$picked.CollectionID; Operation = 'Add'; ExpectedResourceId = [int]$script:Inspection.Site.ResourceId } `
+            -Message ('The site adds a direct membership rule for the device to {0} ({1}), starts a membership update of the collection, waits up to 60 seconds for the new membership, and then asks the client for machine policy. Deployments to this collection start to apply to the device.' -f $picked.Name, $picked.CollectionID) `
+            -Detail @(('Collection: {0} ({1}).' -f $picked.Name, $picked.CollectionID)) `
+            -AfterRun { param($r) Add-LogLine ('{0}: inspect {1} again to see the new membership.' -f $r.Action, $r.ComputerName) }
+    }
+}
+$btnAddCollection.Add_Click({ Invoke-AddToCollection })
+$menuAddCollection.Add_Click({ Invoke-AddToCollection })
 
 # === Log file ===
 $btnOpenLog.Add_Click({
