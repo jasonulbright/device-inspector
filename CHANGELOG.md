@@ -2,7 +2,7 @@
 
 All notable changes to Device Inspector are documented in this file.
 
-## [Unreleased]
+## [2026.11.10.0007] - 2026-11-10
 
 ## 1 Applications panel that shows the uninstall keys of the device live
 
