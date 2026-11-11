@@ -1927,7 +1927,7 @@ Describe 'End of a run' {
             param([object]$Record)
             $strPath = Join-Path -Path $TestDrive -ChildPath ('Logs\{0}.log' -f [guid]::NewGuid().ToString('N'))
             $null = Write-DeviceInspectorActionLog -Path $strPath -Result $Record
-            return @([System.IO.File]::ReadAllLines($strPath) | Where-Object { $_ -notmatch '^\s' })
+            return , @([System.IO.File]::ReadAllLines($strPath) | Where-Object { $_ -notmatch '^\s' })
         }
     }
 
@@ -1963,7 +1963,7 @@ Describe 'End of a run' {
         $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result @($objResult) -ErrorMessage '' -Detail @('Application: X.')
         $objRecord.ActionId | Should -Be 'a1b2c3d4'
         $objRecord.Steps | Should -Be @('Application: X.')
-        $arrLine = Get-TestHeaderLine -Record $objRecord
+        $arrLine = @(Get-TestHeaderLine -Record $objRecord)
         $arrLine.Count | Should -Be 1
         $arrLine[0] | Should -Match '\| a1b2c3d4 \| \S+ \| WS01 \| Corrupt-inventory repair \| RUN \| OK \| Done\.$'
     }
@@ -1979,7 +1979,7 @@ Describe 'End of a run' {
         @($objRecord).Count | Should -Be 1
         $objRecord.Outcome | Should -Be 'FAILED'
         $objRecord.Summary | Should -Be $Expected
-        $arrLine = Get-TestHeaderLine -Record $objRecord
+        $arrLine = @(Get-TestHeaderLine -Record $objRecord)
         $arrLine.Count | Should -Be 1
         $arrLine[0] | Should -Match ('\| a1b2c3d4 \| \S+ \| WS01 \| Corrupt-inventory repair \| RUN \| FAILED \| {0}$' -f [regex]::Escape($Expected))
     }
