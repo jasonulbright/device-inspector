@@ -33,7 +33,7 @@ A right-click on a collection row opens **Remove from collection...** and **Add 
 | Column | Content |
 |---|---|
 | **Collection ID** | The ID of the collection, for example `SMS00001`. |
-| **Membership** | `Direct rule` when a direct membership rule adds the device (`IsDirect` of `SMS_FullCollectionMembership` is true), `Query or other rule` when it is false, `Unknown` when the site gives no value. On the lab (2026-11-11), a device with a direct rule and a query rule in one collection showed `IsDirect` true, and after the removal of the direct rule it stayed a member with `IsDirect` false. |
+| **Membership** | `Direct rule` when a direct membership rule adds the device (`IsDirect` of `SMS_FullCollectionMembership` is true), `Query or other rule` when it is false, `Unknown` when the site gives no value. On the lab (2026-11-10), a device with a direct rule and a query rule in one collection showed `IsDirect` true, and after the removal of the direct rule it stayed a member with `IsDirect` false. |
 | **Collection** | The name of the collection. |
 | **Deployment** | The name of the deployment. |
 | **Type** | `Application`, `Software update`, `Program`, `Configuration baseline` or another type that the site reports. |

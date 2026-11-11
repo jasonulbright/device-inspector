@@ -130,7 +130,7 @@ Each inspection with the site and the device runs an inventory check. The Device
 
 An application on the device with an install date on or after the day of the last cycle does not count, because the next cycle reports it. The install date can be `yyyyMMdd`, `yyyy-MM-dd`, `yyyy/MM/dd` or `M/d/yyyy`. An application that is removed or changed after the last cycle also shows as a difference, so the state **Corrupt** is a hint. Check the **Difference** rows before you repair.
 
-The check reads the hardware scan time from `SMS_G_System_WORKSTATION_STATUS`. The site stores it as the local clock time of the client, with no zone. The **Last hardware inventory** fact of the site record comes from `Get-CMDevice`. On the lab on 2026-11-11 it showed the date of an older report for hours after the site processed a new full report. The check does not use it.
+The check reads the hardware scan time from `SMS_G_System_WORKSTATION_STATUS`. The site stores it as the local clock time of the client, with no zone. The **Last hardware inventory** fact of the site record comes from `Get-CMDevice`. On the lab on 2026-11-10 it showed the date of an older report for hours after the site processed a new full report. The check does not use it.
 
 The **Repair inventory...** button is on the Device panel. It is on only when the state is **Corrupt**.
 
