@@ -35,6 +35,9 @@ This page lists the Microsoft Learn pages for each feature of Device Inspector. 
 - [CCM_SoftwareUpdate Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/ccm_softwareupdate-client-wmi-class): Lists ComplianceState and EvaluationState.
 - [Uninstall Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/uninstall-method-in-class-ccm_application): Describes the uninstall request.
 - [Repair Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/repair-method-in-class-ccm_application): Describes the repair request.
+- [Remove-CMDeviceCollectionDirectMembershipRule](https://learn.microsoft.com/powershell/module/configurationmanager/remove-cmdevicecollectiondirectmembershiprule): Describes the removal of a direct rule.
+- [Invoke-CMClientAction](https://learn.microsoft.com/powershell/module/configurationmanager/invoke-cmclientaction): Describes the client notification.
+- [SMS_FullCollectionMembership Server WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/collections/sms_fullcollectionmembership-server-wmi-class): Describes `IsDirect`.
 - [Hardware inventory views in Configuration Manager](https://learn.microsoft.com/intune/configmgr/develop/core/understand/sqlviews/hardware-inventory-views-configuration-manager): Describes the Add Remove Programs inventory that the check compares.
 
 ### [Collections panel](core/collections.md)

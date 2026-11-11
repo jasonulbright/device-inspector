@@ -868,11 +868,18 @@ function Get-SiteFact {
         }
 
         $listCollectionId = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $hashtableDirect = @{}
         try {
-            $strMembershipQuery = 'SELECT CollectionID FROM SMS_FullCollectionMembership WHERE ResourceID = {0}' -f $intResourceId
+            $strMembershipQuery = 'SELECT CollectionID, IsDirect FROM SMS_FullCollectionMembership WHERE ResourceID = {0}' -f $intResourceId
             foreach ($objRow in @(Invoke-SiteQuery -Query $strMembershipQuery)) {
                 if (([string]$objRow.CollectionID) -match '^[A-Za-z0-9]{8}$') {
                     $listCollectionId.Add([string]$objRow.CollectionID)
+                    $objDirect = $objRow.PSObject.Properties['IsDirect']
+                    $objDirectValue = $null
+                    if ($null -ne $objDirect -and $null -ne $objDirect.Value) {
+                        $objDirectValue = [bool]$objDirect.Value
+                    }
+                    $hashtableDirect[[string]$objRow.CollectionID] = $objDirectValue
                 }
             }
         } catch {
@@ -902,6 +909,7 @@ function Get-SiteFact {
             $listCollection.Add([pscustomobject]@{
                     CollectionId = $strCollectionId
                     Name         = $strCollectionName
+                    IsDirect     = $hashtableDirect[$strCollectionId]
                 })
         }
 
@@ -2118,12 +2126,13 @@ function ConvertTo-DeviceInspectionCollectionRow {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] Properties CollectionId, Name.
+    # [pscustomobject] Properties CollectionId, Name, Membership (Direct rule, Query
+    # or other rule, or Unknown), IsDirect ($true, $false or $null), IsBuiltIn, IsRemoved.
     #
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.0.20261106.0
+    # Version: 1.0.20261111.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -2136,9 +2145,23 @@ function ConvertTo-DeviceInspectionCollectionRow {
             return
         }
         foreach ($objCollection in @($Inspection.Site.Collections)) {
+            $objDirect = $null
+            if ($null -ne $objCollection.PSObject.Properties['IsDirect']) {
+                $objDirect = $objCollection.IsDirect
+            }
+            $strMembership = 'Unknown'
+            if ($true -eq $objDirect) {
+                $strMembership = 'Direct rule'
+            } elseif ($false -eq $objDirect) {
+                $strMembership = 'Query or other rule'
+            }
             [pscustomobject]@{
                 CollectionId = [string]$objCollection.CollectionId
                 Name = [string]$objCollection.Name
+                Membership = $strMembership
+                IsDirect = $objDirect
+                IsBuiltIn = ([string]$objCollection.CollectionId).StartsWith('SMS', [System.StringComparison]::OrdinalIgnoreCase)
+                IsRemoved = $false
             }
         }
     }
@@ -2291,7 +2314,7 @@ function ConvertTo-DeviceInspectionHtml {
         $arrUpdate = @(ConvertTo-DeviceInspectionUpdateRow -Inspection $Inspection)
         $listLine.Add((& $scriptBlockTable 'Updates' $arrUpdate @('Source', 'Article', 'Severity', 'State', 'Deadline', 'Title')))
         $arrCollection = @(ConvertTo-DeviceInspectionCollectionRow -Inspection $Inspection)
-        $listLine.Add((& $scriptBlockTable 'Collections' $arrCollection @('CollectionId', 'Name')))
+        $listLine.Add((& $scriptBlockTable 'Collections' $arrCollection @('CollectionId', 'Name', 'Membership')))
         $arrDeployment = @(ConvertTo-DeviceInspectionDeploymentRow -Inspection $Inspection)
         $listLine.Add((& $scriptBlockTable 'Deployments targeted at this device' $arrDeployment @('Name', 'Type', 'Intent', 'Collection', 'Deadline')))
         $listLine.Add(('<h2 class="problem">Problems ({0})</h2>' -f @($Inspection.Problems).Count))
@@ -2369,6 +2392,80 @@ function Write-DeviceInspectionFullLog {
     }
 }
 
+function Get-DeviceInspectorActionBlock {
+    # .SYNOPSIS
+    # Returns the reason why an action cannot start now, or an empty string.
+    #
+    # .DESCRIPTION
+    # The window calls it before it opens a confirmation and before it turns a menu
+    # entry on. A device action needs an inspection that reached the device. A site
+    # action needs an inspection that found the device on the site.
+    #
+    # .PARAMETER Inspection
+    # The inspection on screen, or $null.
+    #
+    # .PARAMETER ActionsEnabled
+    # The state of the Enable actions switch.
+    #
+    # .PARAMETER Busy
+    # $true while background work runs.
+    #
+    # .PARAMETER Kind
+    # Device or Site.
+    #
+    # .EXAMPLE
+    # Get-DeviceInspectorActionBlock -Inspection $null -ActionsEnabled $true -Busy $false -Kind Site
+    #
+    # # Returns 'Inspect a device that the site knows first.'
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] The reason, or an empty string when the action can start.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [object]$Inspection,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$ActionsEnabled,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$Busy,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Device', 'Site')]
+        [string]$Kind
+    )
+
+    process {
+        if (-not $ActionsEnabled) {
+            return 'Turn on Enable actions first.'
+        }
+        if ($Busy) {
+            return 'Wait for the running task to end.'
+        }
+        if ($Kind -eq 'Device') {
+            if ($null -eq $Inspection -or $null -eq $Inspection.PSObject.Properties['Device'] -or $null -eq $Inspection.Device) {
+                return 'Inspect a device that answers first.'
+            }
+            return ''
+        }
+        if ($null -eq $Inspection -or $null -eq $Inspection.PSObject.Properties['Site'] -or $null -eq $Inspection.Site -or -not $Inspection.Site.Found -or [string]::IsNullOrEmpty([string]$Inspection.SiteServer)) {
+            return 'Inspect a device that the site knows first.'
+        }
+        ''
+    }
+}
+
 function Write-DeviceInspectionFile {
     # .SYNOPSIS
     # Writes text to a file as UTF-8 without a byte order mark.
@@ -2420,4 +2517,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'

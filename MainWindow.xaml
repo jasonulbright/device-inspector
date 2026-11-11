@@ -427,13 +427,14 @@
                               CellStyle="{StaticResource GridCellStyle}">
                         <DataGrid.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Remove from collection" IsEnabled="False" ToolTip="Planned for a later release. This release is read only."/>
+                                <MenuItem x:Name="menuRemoveCollection" Header="Remove from collection..." IsEnabled="False" ToolTipService.ShowOnDisabled="True"/>
                                 <MenuItem Header="Add to collection..."   IsEnabled="False" ToolTip="Planned for a later release. This release is read only."/>
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Collection ID" Width="140" Binding="{Binding CollectionId}"/>
                             <DataGridTextColumn Header="Collection"    Width="4*"  Binding="{Binding Name}"/>
+                            <DataGridTextColumn Header="Membership"    Width="170" Binding="{Binding Membership}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                     <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
