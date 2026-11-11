@@ -750,9 +750,10 @@ function Get-SiteFact {
     #
     # Cmdlets: Get-CMDevice (device record and last hardware scan),
     # Get-CMDeviceCollection (collection names), Get-CMDeployment (deployments),
-    # Get-CMSoftwareUpdate (update details). Three reads have no cmdlet
+    # Get-CMSoftwareUpdate (update details). Four reads have no cmdlet
     # and use Invoke-CMWmiQuery: the installed applications from hardware inventory,
-    # the collection memberships of the device and the required updates of the device.
+    # the collection memberships of the device, the required updates of the device
+    # and the hardware scan time of the device.
     #
     # .PARAMETER ComputerName
     # The device name, without a domain suffix.

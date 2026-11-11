@@ -266,10 +266,11 @@ Describe 'Get-SiteFact' {
         }
     }
 
-    It 'uses a query only for the three reads that have no cmdlet' {        InModuleScope DeviceInspectorCommon {
+    It 'uses a query only for the four reads that have no cmdlet' {        InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
-            Should -Invoke Invoke-SiteQuery -Times 4 -Exactly
+            Should -Invoke Invoke-SiteQuery -Times 5 -Exactly
+            Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_G_System_WORKSTATION_STATUS *' }
             Should -Invoke Invoke-SiteQuery -Times 0 -Exactly -ParameterFilter { $Query -like '*SMS_R_System*' -or $Query -like '*SMS_DeploymentSummary*' -or $Query -like '*FROM SMS_SoftwareUpdate*' -or $Query -like '*FROM SMS_Collection *' }
         }
     }

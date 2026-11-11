@@ -28,7 +28,7 @@ None.
 | Site | `Invoke-CMWmiQuery` on `SMS_UpdateComplianceStatus` (status 2), then `Get-CMSoftwareUpdate -Fast -IncludeUpgrade` | Updates that the site lists as required for the device. Expired updates are left out. |
 | The device | `Invoke-Command` with one script block | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last hardware inventory cycle, last discovery data cycle). Installed applications from the uninstall registry keys. Client application policy (`CCM_Application`). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
 
-`Invoke-CMWmiQuery` is a ConfigurationManager cmdlet. The tool uses it only for the three reads that no cmdlet returns: the installed applications of hardware inventory, the collection memberships of the device and the required updates of the device. See [Data sources](data-sources.md).
+`Invoke-CMWmiQuery` is a ConfigurationManager cmdlet. The tool uses it only for the four reads that no cmdlet returns: the installed applications of hardware inventory, the collection memberships of the device, the required updates of the device and the hardware scan time of the device (for the inventory check). See [Data sources](data-sources.md).
 
 Two "last hardware inventory" values exist on purpose. The site value is the scan date that the site stored. The device value is the start time of the last hardware inventory cycle on the client. They can differ.
 
