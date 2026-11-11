@@ -55,12 +55,14 @@ Each inspection with the site and the device runs an inventory check. The Device
 
 | State | Meaning |
 |---|---|
-| **Current** | The site inventory date is not older than the start of the last hardware inventory cycle on the device, and the installed applications of the site inventory and of the device match. |
+| **Current** | The hardware scan time of the site is not older than the start of the last hardware inventory cycle on the device, and the installed applications of the site inventory and of the device match. Both times are local clock times of the device. |
 | **Corrupt** | The site inventory is current, but applications differ. The rows **Difference** name them. The **Problems** panel gets a line. |
 | **NotCurrent** | The site has not processed the last hardware inventory cycle of the device yet. The check does not compare the applications. |
 | **Unknown** | The site record, the client facts or a date is missing. |
 
 An application on the device with an install date on or after the day of the last cycle does not count, because the next cycle reports it.
+
+The check reads the hardware scan time from `SMS_G_System_WORKSTATION_STATUS`. The site stores it as the local clock time of the client, with no zone. The **Last hardware inventory** fact of the site record comes from `Get-CMDevice`. On the lab on 2026-11-11 it showed the date of an older report for hours after the site processed a new full report. The check does not use it.
 
 The **Repair inventory...** button is on the Device panel. It is on only when the state is **Corrupt**.
 

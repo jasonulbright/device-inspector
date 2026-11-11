@@ -20,6 +20,7 @@ None.
 |---|---|---|
 | Site | `Get-CMSite` | No fact. The tool runs it once, when it opens the site drive, to check that the site answers. |
 | Site | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | Device record (resource ID, client installed, client version, active, operating system, last logon user). Last hardware inventory date. |
+| Site | `Invoke-CMWmiQuery` on `SMS_G_System_WORKSTATION_STATUS` | The hardware scan time, as the local clock time of the client, for the inventory check. |
 | Site | `Invoke-CMWmiQuery` on `SMS_G_System_ADD_REMOVE_PROGRAMS` and `SMS_G_System_ADD_REMOVE_PROGRAMS_64` | Installed applications from hardware inventory (32-bit and 64-bit). |
 | Site | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | Collection memberships (collection IDs). |
 | Site | `Get-CMDeviceCollection` | Collection names. One call, then a filter. |
