@@ -843,7 +843,7 @@ function Invoke-DeviceAction {
     }
     $device = [string]$script:Inspection.ComputerName
     $choice = Show-ActionConfirmDialog -Title $Name -Message $Message -Devices @($device)
-    if ($choice -eq 'Cancel') { Add-LogLine ('{0}: cancelled.' -f $Name); return }
+    if ($choice -eq 'Cancel') { Add-LogLine ('{0}: cancelled.' -f $Name); Update-StatusBarSummary; return }
     $dry = ($choice -eq 'DryRun')
     if (-not $dry) {
         # A run that stops part way (window closed, connection lost) still leaves this line.
@@ -1053,9 +1053,6 @@ $menuRemoveCollection.Add_Click({
         -AfterRun { param($r) if ($script:CollectionRowDone) { $script:CollectionRowDone.IsRemoved = $true; $script:CollectionRowDone.Membership = 'Rule removed: inspect again' }; $gridCollections.Items.Refresh(); Add-LogLine ('{0}: inspect {1} again after the membership update.' -f $r.Action, $r.ComputerName) }
 })
 
-# Add to collection: load the device collections of the site in the background, then
-# show the collection browser. Built-in collections and collections where the device
-# already has a direct rule are left out.
 function Invoke-AddToCollection {
     $gate = Get-DeviceInspectorActionBlock -Inspection $script:Inspection -ActionsEnabled $script:ActionsEnabled -Busy $script:IsBusy -Kind Site
     if ($gate) { Add-LogLine ('Add to collection: {0}' -f $gate); return }
@@ -1067,13 +1064,13 @@ function Invoke-AddToCollection {
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
+        Update-StatusBarSummary
         if ($State.ErrorMsg) {
             Add-LogLine ('Add to collection: the collections cannot be read: {0}' -f $State.ErrorMsg)
             [void](Show-ThemedMessage -Owner $window -Title 'Add to collection' -Message ([string]$State.ErrorMsg) -Icon Error)
             return
         }
-        $direct = @(@($gridCollections.ItemsSource) | Where-Object { $true -eq $_.IsDirect -and -not $_.IsRemoved } | ForEach-Object { [string]$_.CollectionId })
-        $choices = @(@($State.Result) | Where-Object { -not $_.IsBuiltIn -and $direct -notcontains [string]$_.CollectionID })
+        $choices = @(Select-DeviceInspectorAddableCollection -Collections @($State.Result) -Rows @($gridCollections.ItemsSource))
         Add-LogLine ('Add to collection: {0} device collections, {1} to pick from.' -f @($State.Result).Count, $choices.Count)
         if ($choices.Count -eq 0) {
             [void](Show-ThemedMessage -Owner $window -Title 'Add to collection' -Message 'The site has no device collection to pick: each one is built in or already has a direct rule for the device.' -Icon Info)

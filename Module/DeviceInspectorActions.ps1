@@ -1107,14 +1107,14 @@ function Invoke-DeviceInspectorCollectionChange {
             }
             # A direct rule adds a device only when the limiting collection holds it.
             if ($Operation -eq 'Add') {
-                $strLimit = ''
-                if ($null -ne $objCollection.PSObject.Properties['LimitToCollectionID']) {
-                    $strLimit = [string]$objCollection.LimitToCollectionID
+                if ($null -eq $objCollection.PSObject.Properties['LimitToCollectionID']) {
+                    return (& $scriptBlockEnd $false ('The limiting collection of {0} cannot be read.' -f $CollectionId))
                 }
+                $strLimit = [string]$objCollection.LimitToCollectionID
                 if (-not [string]::IsNullOrEmpty($strLimit)) {
                     $arrLimitMember = @(Get-CMCollectionMember -CollectionId $strLimit -ResourceId ([int]$strResourceId) -ErrorAction Stop)
                     if ($arrLimitMember.Count -eq 0) {
-                        return (& $scriptBlockEnd $false ('The device is not a member of the limiting collection {0} of {1}. A direct rule would not add it.' -f $strLimit, $CollectionId))
+                        return (& $scriptBlockEnd $false ('The device is not a member of the limiting collection {0} of {1}, or the account cannot read that collection. A direct rule would not add it.' -f $strLimit, $CollectionId))
                     }
                     $listStep.Add(('The device is a member of the limiting collection {0}.' -f $strLimit))
                 }
