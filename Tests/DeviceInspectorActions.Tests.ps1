@@ -788,19 +788,74 @@ Describe 'Uninstall and repair an application' {
         }
     }
 
-    It 'picks the superseding revision, else the highest' {
+    It 'picks the highest revision, also with a revision that is not a number' {
         InModuleScope DeviceInspectorCommon {
             $script:arrTestApp = @(
-                [pscustomobject]@{ Id = 'A/1'; Revision = '9'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'None'; EvaluationState = 1 }
+                [pscustomobject]@{ Id = 'A/1'; Revision = '9'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'Superseding'; EvaluationState = 1 }
                 [pscustomobject]@{ Id = 'A/1'; Revision = '12'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'None'; EvaluationState = 1 }
+                [pscustomobject]@{ Id = 'A/1'; Revision = 'x'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'None'; EvaluationState = 1 }
             )
             Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 0 } }
-            $null = & $script:scriptBlockApplicationAction $false 'A/1' 'Uninstall'
+            $objRaw = & $script:scriptBlockApplicationAction $false 'A/1' 'Uninstall'
+            $objRaw.Succeeded | Should -BeTrue
             Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter { $Arguments.Revision -eq '12' }
-            $script:arrTestApp[0].SupersessionState = 'Superseding'
-            $null = & $script:scriptBlockApplicationAction $false 'A/1' 'Uninstall'
-            Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter { $Arguments.Revision -eq '9' }
         }
+    }
+
+    It 'refuses a user-targeted application, an application that is not installed, and a simulation' -ForEach @(
+        @{ Case = 'user-targeted'; Machine = $false; State = 'Installed'; Preflight = $false; Expected = 'deployed to a user' }
+        @{ Case = 'not installed'; Machine = $true; State = 'NotInstalled'; Preflight = $false; Expected = 'not installed, or the deployment is a simulation' }
+        @{ Case = 'simulation'; Machine = $true; State = 'Installed'; Preflight = $true; Expected = 'not installed, or the deployment is a simulation' }
+    ) {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Machine = $Machine; State = $State; Preflight = $Preflight; Expected = $Expected } {
+            param($Machine, $State, $Preflight, $Expected)
+            $script:arrTestApp = @([pscustomobject]@{ Id = 'A/1'; Revision = '1'; Name = 'App'; InstallState = $State; IsMachineTarget = $Machine; IsPreflightOnly = $Preflight; AllowedActions = @('Install'); SupersessionState = 'None'; EvaluationState = 1 })
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockApplicationAction $false 'A/1' 'Uninstall'
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match $Expected
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'says in the log when it sends Uninstall that the allowed actions do not list, and fails without a return value' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_7' 'Uninstall'
+            ($objRaw.Steps -join "`n") | Should -Match 'allowed actions of the client do not list Uninstall'
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'gave no return value'
+        }
+    }
+
+    It 'turns both entries off for a user-targeted application, and gives each application ID one row' {
+        $objInspection = [pscustomobject]@{
+            Site = $null
+            Device = [pscustomobject]@{
+                InstalledApplications = @()
+                ClientApplications = @(
+                    [pscustomobject]@{ Name = 'Dup'; Id = 'S/B'; Revision = '1'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall', 'Repair'); SoftwareVersion = '1'; Publisher = '' }
+                    [pscustomobject]@{ Name = 'Dup'; Id = 'S/A'; Revision = '3'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SoftwareVersion = '3'; Publisher = '' }
+                    [pscustomobject]@{ Name = 'Dup'; Id = 'S/A'; Revision = '7'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SoftwareVersion = '7'; Publisher = '' }
+                    [pscustomobject]@{ Name = 'User App'; Id = 'S/U'; Revision = '1'; InstallState = 'Installed'; IsMachineTarget = $false; IsPreflightOnly = $false; AllowedActions = @('Uninstall', 'Repair'); SoftwareVersion = '1'; Publisher = '' }
+                )
+            }
+        }
+        $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection)
+        $arrDup = @($arrRow | Where-Object Name -eq 'Dup')
+        $arrDup.Count | Should -Be 2
+        @($arrDup | ForEach-Object { $_.ClientApplicationId } | Sort-Object) | Should -Be @('S/A', 'S/B')
+        @($arrDup | Where-Object ClientApplicationId -eq 'S/A')[0].ClientRevision | Should -Be '7'
+        $objUser = @($arrRow | Where-Object Name -eq 'User App')[0]
+        $objUser.CanUninstall | Should -BeFalse
+        $objUser.CanRepair | Should -BeFalse
+    }
+
+    It 'names the application in the STARTED line and turns the row off after a run' {
+        $script:strStart | Should -Match "-Detail @\(\('Application: \{0\}, ID \{1\}, revision \{2\}\.'"
+        $script:strStart | Should -Match "-Outcome 'STARTED' -Summary 'The run started\.' -Steps \`$Detail"
+        $script:strStart | Should -Match '\$script:ApplicationRowDone\.CanUninstall = \$false; \$script:ApplicationRowDone\.CanRepair = \$false; Update-AppFilter'
+        $script:strStart | Should -Match "(?s)function Select-RowUnderPointer \{.*?if \(-not \`$node\) \{\s*\`$Grid\.SelectedItems\.Clear\(\)"
     }
 
     It 'fails when the application is gone, and when the client refuses' {

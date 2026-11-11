@@ -1829,9 +1829,13 @@ function ConvertTo-DeviceInspectionApplicationRow {
     # Merges the installed applications of the device and of the site inventory.
     #
     # .DESCRIPTION
-    # Joins the two lists by application name, ignoring case. Status is Match when
-    # the name and the version are equal, Version differs when only the name is equal,
-    # Device only or Inventory only when one list lacks the application.
+    # Joins the two lists by application name, ignoring case and spaces at the ends.
+    # Status is Match when the name and the version are equal, Version differs when
+    # only the name is equal, Device only or Inventory only when one list lacks the
+    # application. A Configuration Manager application that the client lists as
+    # installed is linked to the row with the same name, or else gets its own row
+    # with the status Client application. One row for each application ID, with
+    # its highest revision.
     #
     # .PARAMETER Inspection
     # The object that Get-DeviceInspection returns.
@@ -1845,12 +1849,14 @@ function ConvertTo-DeviceInspectionApplicationRow {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] Properties Name, DeviceVersion, InventoryVersion, Publisher, Status.
+    # [pscustomobject] Properties Name, DeviceVersion, InventoryVersion, Publisher,
+    # Status, ClientApplication, ClientApplicationId, ClientRevision,
+    # ClientMachineTarget, ClientAllowedActions, CanUninstall, CanRepair.
     #
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.0.20261111.1
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1871,6 +1877,7 @@ function ConvertTo-DeviceInspectionApplicationRow {
             $boolCanUninstall = $false
             $boolCanRepair = $false
             $strClientName = ''
+            $strAllowed = ''
             if ($null -ne $objClientApplication) {
                 $arrAllowed = @()
                 if ($null -ne $objClientApplication.PSObject.Properties['AllowedActions']) {
@@ -1881,8 +1888,15 @@ function ConvertTo-DeviceInspectionApplicationRow {
                 $strRevision = [string]$objClientApplication.Revision
                 $boolMachine = [bool]$objClientApplication.IsMachineTarget
                 $strClientName = [string]$objClientApplication.Name
+                $strAllowed = $arrAllowed -join ', '
                 $boolCanUninstall = ($arrAllowed -contains 'Uninstall') -or (([string]$objClientApplication.InstallState) -eq 'Installed' -and -not $boolPreflight)
                 $boolCanRepair = $arrAllowed -contains 'Repair'
+                # The device is read in the context of the signed-in account over WinRM,
+                # not of the user that a user-targeted deployment belongs to.
+                if (-not $boolMachine) {
+                    $boolCanUninstall = $false
+                    $boolCanRepair = $false
+                }
             }
             [pscustomobject]@{
                 Name                  = $strName
@@ -1894,12 +1908,20 @@ function ConvertTo-DeviceInspectionApplicationRow {
                 ClientApplicationId   = $strId
                 ClientRevision        = $strRevision
                 ClientMachineTarget   = $boolMachine
+                ClientAllowedActions  = $strAllowed
                 CanUninstall          = [bool]$boolCanUninstall
                 CanRepair             = [bool]$boolCanRepair
             }
         }
-        $hashtableClient = @{}
-        $hashtableClientUsed = @{}
+        $scriptBlockRevision = {
+            param($objValue)
+            $intRevision = [uint64]0
+            if ([uint64]::TryParse([string]$objValue, [ref]$intRevision)) {
+                return $intRevision
+            }
+            return [uint64]0
+        }
+        $hashtableById = @{}
         if ($null -ne $Inspection.Device -and $null -ne $Inspection.Device.PSObject.Properties['ClientApplications']) {
             foreach ($objClientApplication in @($Inspection.Device.ClientApplications)) {
                 if ($null -eq $objClientApplication.PSObject.Properties['Id'] -or [string]::IsNullOrEmpty([string]$objClientApplication.Id)) {
@@ -1908,7 +1930,21 @@ function ConvertTo-DeviceInspectionApplicationRow {
                 if (([string]$objClientApplication.InstallState) -ne 'Installed') {
                     continue
                 }
-                $hashtableClient[([string]$objClientApplication.Name).Trim().ToLowerInvariant()] = $objClientApplication
+                $strId = [string]$objClientApplication.Id
+                if (-not $hashtableById.ContainsKey($strId) -or (& $scriptBlockRevision $objClientApplication.Revision) -gt (& $scriptBlockRevision $hashtableById[$strId].Revision)) {
+                    $hashtableById[$strId] = $objClientApplication
+                }
+            }
+        }
+        $hashtableClient = @{}
+        $hashtableClientUsed = @{}
+        $listClientExtra = New-Object -TypeName 'System.Collections.Generic.List[object]'
+        foreach ($strId in @($hashtableById.Keys | Sort-Object)) {
+            $strNameKey = ([string]$hashtableById[$strId].Name).Trim().ToLowerInvariant()
+            if ($hashtableClient.ContainsKey($strNameKey)) {
+                $listClientExtra.Add($hashtableById[$strId])
+            } else {
+                $hashtableClient[$strNameKey] = $hashtableById[$strId]
             }
         }
         $hashtableDevice = @{}
@@ -1969,11 +2005,13 @@ function ConvertTo-DeviceInspectionApplicationRow {
             }
             & $scriptBlockRow $hashtableDisplay[$strKey] $strDeviceVersion $strSiteVersion ([string]$hashtablePublisher[$strKey]) $strStatus $objClientApplication
         }
+        $listOwnRow = New-Object -TypeName 'System.Collections.Generic.List[object]'
         foreach ($strKey in @($hashtableClient.Keys | Sort-Object)) {
-            if ($hashtableClientUsed.ContainsKey($strKey)) {
-                continue
+            if (-not $hashtableClientUsed.ContainsKey($strKey)) {
+                $listOwnRow.Add($hashtableClient[$strKey])
             }
-            $objClientApplication = $hashtableClient[$strKey]
+        }
+        foreach ($objClientApplication in @(@($listOwnRow) + @($listClientExtra) | Sort-Object -Property Name, Id)) {
             & $scriptBlockRow ([string]$objClientApplication.Name).Trim() ([string]$objClientApplication.SoftwareVersion) '' ([string]$objClientApplication.Publisher) 'Client application' $objClientApplication
         }
     }

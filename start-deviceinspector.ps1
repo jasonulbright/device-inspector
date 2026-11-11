@@ -386,6 +386,7 @@ $script:BgOnDone       = $null
 $script:ActionChoice   = 'Cancel'
 $script:ActionAfterRun = $null
 $script:ActionPending  = $null
+$script:ApplicationRowDone = $null
 
 function Initialize-BgRunspace {
     if ($script:BgRunspace -and $script:BgRunspace.RunspaceStateInfo.State -eq 'Opened') { return }
@@ -818,7 +819,8 @@ function Invoke-DeviceAction {
         [Parameter(Mandatory)][string]$Message,
         [Parameter(Mandatory)][string]$Function,
         [hashtable]$Parameters = @{},
-        [scriptblock]$AfterRun
+        [scriptblock]$AfterRun,
+        [string[]]$Detail = @()
     )
     if (-not (Test-DeviceActionReady)) {
         Add-LogLine ('{0}: turn on Enable actions and inspect a device that answers first.' -f $Name)
@@ -830,7 +832,7 @@ function Invoke-DeviceAction {
     $dry = ($choice -eq 'DryRun')
     if (-not $dry) {
         # A run that stops part way (window closed, connection lost) still leaves this line.
-        $start = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $false -Succeeded $false -Outcome 'STARTED' -Summary 'The run started.' -Steps @()
+        $start = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $false -Succeeded $false -Outcome 'STARTED' -Summary 'The run started.' -Steps $Detail
         try { $null = Write-DeviceInspectorActionLog -Path $script:ActionLogPath -Result $start }
         catch {
             Add-LogLine ('{0}: the action log cannot be written, so the run does not start. {1}' -f $Name, $_.Exception.Message)
@@ -839,7 +841,7 @@ function Invoke-DeviceAction {
         }
     }
     $script:ActionAfterRun = $AfterRun
-    $script:ActionPending = @{ Name = $Name; Device = $device; DryRun = $dry }
+    $script:ActionPending = @{ Name = $Name; Device = $device; DryRun = $dry; Detail = $Detail }
     $arguments = @{ Function = $Function; Parameters = (@{ ComputerName = $device; DryRun = $dry } + $Parameters) }
     $title = $(if ($dry) { 'Dry run: {0} on {1}' -f $Name, $device } else { '{0} on {1}' -f $Name, $device })
     try {
@@ -850,7 +852,7 @@ function Invoke-DeviceAction {
         $script:IsBusy = $false
         $progressOverlay.Visibility = [System.Windows.Visibility]::Collapsed
         Update-ControlState
-        $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -Summary ('The run did not start: {0}' -f $_.Exception.Message) -Steps @()
+        $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -Summary ('The run did not start: {0}' -f $_.Exception.Message) -Steps $Detail
         Write-ActionResult -Result $failed
         [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ('The run did not start: {0}' -f $_.Exception.Message) -Icon Error)
     }
@@ -869,7 +871,7 @@ function Start-ActionWork {
     } -OnDone {
         param($State)
         if ($State.ErrorMsg) {
-            $failed = New-DeviceInspectorActionRecord -Action $script:ActionPending.Name -ComputerName $script:ActionPending.Device -DryRun ([bool]$script:ActionPending.DryRun) -Succeeded $false -Summary ([string]$State.ErrorMsg) -Steps @()
+            $failed = New-DeviceInspectorActionRecord -Action $script:ActionPending.Name -ComputerName $script:ActionPending.Device -DryRun ([bool]$script:ActionPending.DryRun) -Succeeded $false -Summary ([string]$State.ErrorMsg) -Steps ([string[]]@($script:ActionPending.Detail))
             Write-ActionResult -Result $failed
             Add-LogLine ('Action failed: {0}' -f $State.ErrorMsg)
             Set-StatusText 'Action failed. See the log.'
@@ -916,7 +918,7 @@ function Set-MenuItemState {
 }
 
 # A right-click selects the row under the pointer when that row is not selected,
-# so a menu entry acts on the row that the person points at.
+# and clears the selection off the rows, so a menu entry acts on the row under the pointer.
 function Select-RowUnderPointer {
     param([Parameter(Mandatory)]$Grid, [Parameter(Mandatory)]$MouseArgs)
     $node = $MouseArgs.OriginalSource
@@ -924,7 +926,11 @@ function Select-RowUnderPointer {
         if ($node -is [System.Windows.Media.Visual] -or $node -is [System.Windows.Media.Media3D.Visual3D]) { $node = [System.Windows.Media.VisualTreeHelper]::GetParent($node) }
         else { $node = [System.Windows.LogicalTreeHelper]::GetParent($node) }
     }
-    if ($node -and -not $node.IsSelected) {
+    if (-not $node) {
+        $Grid.SelectedItems.Clear()
+        return
+    }
+    if (-not $node.IsSelected) {
         $Grid.SelectedItems.Clear()
         $node.IsSelected = $true
     }
@@ -961,7 +967,6 @@ function Invoke-UpdateInstall {
 $menuInstallSelected.Add_Click({ Invoke-UpdateInstall -Rows (Get-InstallableUpdateRow -Rows @($gridUpdates.SelectedItems)) -All $false })
 $menuInstallAll.Add_Click({ Invoke-UpdateInstall -Rows (Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)) -All $true })
 
-# Uninstall and repair: one selected row that carries a Configuration Manager application.
 function Get-ActionGateText {
     if (-not $script:ActionsEnabled) { return 'Turn on Enable actions first.' }
     if ($script:IsBusy) { return 'Wait for the running task to end.' }
@@ -978,6 +983,7 @@ $gridApps.ContextMenu.Add_Opened({
         if ($gate) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason $gate; continue }
         if (-not $row) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason 'Select one row.'; continue }
         if ([string]::IsNullOrEmpty([string]$row.ClientApplicationId)) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason 'This entry is not a Configuration Manager application on the device. Uninstall and Repair work on rows with the status Client application, or on entries with the same name.'; continue }
+        if (-not [bool]$row.ClientMachineTarget) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason 'The application is deployed to a user. The tool acts only on applications deployed to the device.'; continue }
         if (-not [bool]$row.($pair.Flag)) {
             $why = $(if ($pair.Op -eq 'Repair') { 'The client does not allow Repair for this application. The deployment type needs a repair command.' } else { 'The client does not allow Uninstall for this application now.' })
             Set-MenuItemState -Item $pair.Item -Enabled $false -Reason $why
@@ -992,11 +998,13 @@ function Invoke-ApplicationOperation {
     $rows = @($gridApps.SelectedItems)
     if ($rows.Count -ne 1 -or [string]::IsNullOrEmpty([string]$rows[0].ClientApplicationId)) { Add-LogLine ('{0}: select one row with a Configuration Manager application.' -f $Operation); return }
     $row = $rows[0]
-    $text = $(if ($Operation -eq 'Uninstall') { 'The Configuration Manager client on the device uninstalls {0} (revision {1}) now, with the uninstall command of its deployment type.' } else { 'The Configuration Manager client on the device repairs {0} (revision {1}) now, with the repair command of its deployment type.' })
+    $text = $(if ($Operation -eq 'Uninstall') { 'The Configuration Manager client on the device uninstalls {0} (revision {1}) now, with the uninstall command of its deployment type. Allowed actions of the client: {2}.' } else { 'The Configuration Manager client on the device repairs {0} (revision {1}) now, with the repair command of its deployment type. Allowed actions of the client: {2}.' })
+    $script:ApplicationRowDone = $row
     Invoke-DeviceAction -Name ('{0} application' -f $Operation) -Function 'Invoke-DeviceInspectorApplicationAction' `
         -Parameters @{ ApplicationId = [string]$row.ClientApplicationId; Operation = $Operation } `
-        -Message ($text -f $row.ClientApplication, $row.ClientRevision) `
-        -AfterRun { param($r) Add-LogLine ('{0}: inspect {1} again to see the new state.' -f $r.Action, $r.ComputerName) }
+        -Message ($text -f $row.ClientApplication, $row.ClientRevision, $(if ($row.ClientAllowedActions) { $row.ClientAllowedActions } else { 'none' })) `
+        -Detail @(('Application: {0}, ID {1}, revision {2}.' -f $row.ClientApplication, $row.ClientApplicationId, $row.ClientRevision)) `
+        -AfterRun { param($r) if ($script:ApplicationRowDone) { $script:ApplicationRowDone.CanUninstall = $false; $script:ApplicationRowDone.CanRepair = $false; Update-AppFilter }; Add-LogLine ('{0}: inspect {1} again to see the new state.' -f $r.Action, $r.ComputerName) }
 }
 $menuUninstallApp.Add_Click({ Invoke-ApplicationOperation -Operation 'Uninstall' })
 $menuRepairApp.Add_Click({ Invoke-ApplicationOperation -Operation 'Repair' })

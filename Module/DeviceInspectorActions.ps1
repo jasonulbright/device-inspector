@@ -225,9 +225,8 @@ $script:scriptBlockUpdateInstall = {
     [pscustomobject]@{ Succeeded = $true; Summary = ('The client accepted the install of {0} updates. It downloads and installs them now. A restart can follow, as the deployment sets.' -f $arrTarget.Count); Steps = @($listStep) }
 }
 
-# Runs on the device. Uninstalls or repairs one Configuration Manager application
-# with the CCM_Application method of the same name. When the client holds several
-# revisions of the application, it picks the superseding one, else the highest.
+# Runs on the device. Several revisions of one application ID can be in the client
+# policy; the highest revision is the one that the method acts on.
 $script:scriptBlockApplicationAction = {
     param (
         [Parameter(Mandatory = $true)][bool]$DryRun,
@@ -254,15 +253,20 @@ $script:scriptBlockApplicationAction = {
     if ($arrMatch.Count -eq 0) {
         return [pscustomobject]@{ Succeeded = $false; Summary = 'The client policy has no application with this ID now. Inspect the device again.'; Steps = @($listStep) }
     }
-    $objApplication = $arrMatch[0]
-    if ($arrMatch.Count -gt 1) {
-        $arrSuperseding = @($arrMatch | Where-Object { ([string]$_.SupersessionState) -eq 'Superseding' -or ([string]$_.SupersessionState) -eq '1' })
-        $arrPick = $arrMatch
-        if ($arrSuperseding.Count -gt 0) {
-            $arrPick = $arrSuperseding
+    $scriptBlockRevision = {
+        param($objValue)
+        $intRevision = [uint64]0
+        if ([uint64]::TryParse([string]$objValue, [ref]$intRevision)) {
+            return $intRevision
         }
-        $objApplication = @($arrPick | Sort-Object -Property { [int]$_.Revision } -Descending)[0]
-        $listStep.Add(('The client holds {0} revisions. Picked revision {1}.' -f $arrMatch.Count, [string]$objApplication.Revision))
+        return [uint64]0
+    }
+    $objApplication = @($arrMatch | Sort-Object -Property { & $scriptBlockRevision $_.Revision } -Descending)[0]
+    if ($arrMatch.Count -gt 1) {
+        $listStep.Add(('The client holds {0} revisions. Picked the highest, revision {1}.' -f $arrMatch.Count, [string]$objApplication.Revision))
+    }
+    if (-not [bool]$objApplication.IsMachineTarget) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The application is deployed to a user. The tool acts only on applications deployed to the device.'; Steps = @($listStep) }
     }
     $arrAllowed = @($objApplication.AllowedActions | ForEach-Object { [string]$_ })
     $listStep.Add(('{0}, revision {1}, install state {2}, allowed actions: {3}.' -f [string]$objApplication.Name, [string]$objApplication.Revision, [string]$objApplication.InstallState, ($arrAllowed -join ', ')))
@@ -271,7 +275,14 @@ $script:scriptBlockApplicationAction = {
         $boolAllowed = ([string]$objApplication.InstallState) -eq 'Installed' -and -not [bool]$objApplication.IsPreflightOnly
     }
     if (-not $boolAllowed) {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client does not allow {0} for this application now. For Repair, the deployment type needs a repair command.' -f $Operation); Steps = @($listStep) }
+        $strWhy = 'The application is not installed, or the deployment is a simulation.'
+        if ($Operation -eq 'Repair') {
+            $strWhy = 'The deployment type needs a repair command.'
+        }
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client does not allow {0} for this application now. {1}' -f $Operation, $strWhy); Steps = @($listStep) }
+    }
+    if (-not ($arrAllowed -contains $Operation)) {
+        $listStep.Add(('The allowed actions of the client do not list {0}. The application is installed, so the tool sends the request.' -f $Operation))
     }
     if ($DryRun) {
         $listStep.Add(('Dry run: would call CCM_Application.{0} for {1}, revision {2}.' -f $Operation, [string]$objApplication.Name, [string]$objApplication.Revision))
@@ -305,9 +316,14 @@ $script:scriptBlockApplicationAction = {
         return [pscustomobject]@{ Succeeded = $false; Summary = ('The client refused the {0} request (return value {1}).' -f $Operation, $objReturnValue); Steps = @($listStep) }
     }
     if ($null -eq $objReturnValue) {
-        $listStep.Add(('{0} gave no return value. The state read below shows the outcome.' -f $Operation))
+        $listStep.Add(('{0} gave no return value. The request is not confirmed.' -f $Operation))
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client gave no return value for the {0} request. Inspect the device again to see the state.' -f $Operation); Steps = @($listStep) }
     }
-    $listStep.Add(('{0} accepted. Job {1}.' -f $Operation, $strJobId))
+    if ([string]::IsNullOrEmpty($strJobId)) {
+        $listStep.Add(('{0} accepted.' -f $Operation))
+    } else {
+        $listStep.Add(('{0} accepted. Job {1}.' -f $Operation, $strJobId))
+    }
     Start-Sleep -Seconds 10
     try {
         $objAfter = @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_Application' | Where-Object { [string]$_.Id -eq $ApplicationId -and [string]$_.Revision -eq [string]$objApplication.Revision })[0]
