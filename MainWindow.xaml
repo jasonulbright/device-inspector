@@ -482,9 +482,14 @@
 
             <Border Grid.Row="4">
                 <DockPanel>
-                    <TextBlock x:Name="lblLogOutput" DockPanel.Dock="Top" Text="LOG OUTPUT"
-                               FontSize="10" FontWeight="SemiBold"
-                               Margin="8,6,0,4"/>
+                    <DockPanel DockPanel.Dock="Top" LastChildFill="False" Margin="0,2,4,2">
+                        <TextBlock x:Name="lblLogOutput" DockPanel.Dock="Left" Text="LOG OUTPUT"
+                                   FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Margin="8,4,0,4"/>
+                        <Button x:Name="btnOpenLog" DockPanel.Dock="Right" Content="Open log file"
+                                Style="{StaticResource SquareInlineButtonStyle}" Height="24" MinWidth="110" Margin="0"
+                                ToolTip="Open the full log file of this session. It holds every log line, the full report of each inspection and each action with its steps."/>
+                    </DockPanel>
                     <TextBox x:Name="txtLog"
                              IsReadOnly="True"
                              TextWrapping="NoWrap"

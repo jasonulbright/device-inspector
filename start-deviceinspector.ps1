@@ -150,6 +150,7 @@ $txtProgressTitle = $window.FindName('txtProgressTitle')
 $txtProgressStep  = $window.FindName('txtProgressStep')
 
 $lblLogOutput = $window.FindName('lblLogOutput')
+$btnOpenLog   = $window.FindName('btnOpenLog')
 $txtLog       = $window.FindName('txtLog')
 $txtStatus    = $window.FindName('txtStatus')
 
@@ -163,6 +164,17 @@ function Add-LogLine {
     else { $txtLog.AppendText([Environment]::NewLine + $line) }
     $txtLog.ScrollToEnd()
     try { Write-Log -Message $Message -Quiet } catch { $null = $_ }
+}
+
+# The window log shows one line for each event. The log file also gets the full text:
+# the whole report of each inspection, with every list entry, and each action with its steps.
+function Write-FullOutput {
+    param([Parameter(Mandatory)][string]$Title, [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Lines)
+    try {
+        Write-Log -Message ('----- {0} -----' -f $Title) -Quiet
+        foreach ($line in $Lines) { Write-Log -Message $line -Quiet }
+        Write-Log -Message ('----- end of {0} -----' -f $Title) -Quiet
+    } catch { $null = $_ }
 }
 
 function Set-StatusText {
@@ -456,6 +468,7 @@ function Invoke-Inspect {
         $r = $State.Result
         Show-Inspection -Inspection $r
         Add-LogLine ('Inspection of {0} finished: {1} problems.' -f $r.ComputerName, @($r.Problems).Count)
+        Write-FullOutput -Title ('Full report: {0}' -f $r.ComputerName) -Lines ((ConvertTo-DeviceInspectionReport -Inspection $r -MaximumListedItems 100000) -split "`n")
         foreach ($p in @($r.Problems)) { Add-LogLine ('  problem: {0}' -f $p) }
     }
 }
@@ -859,6 +872,13 @@ $btnPolicyUpdate.Add_Click({
         -Message 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it (Machine Policy Retrieval and Evaluation Cycle).'
 })
 
+# === Log file ===
+$btnOpenLog.Add_Click({
+    if (-not (Test-Path -LiteralPath $script:ToolLogPath)) { Add-LogLine ('The log file does not exist yet: {0}' -f $script:ToolLogPath); return }
+    try { Invoke-Item -LiteralPath $script:ToolLogPath; Add-LogLine ('Opened the log file: {0}' -f $script:ToolLogPath) }
+    catch { Add-LogLine ('The log file cannot be opened: {0}' -f $_.Exception.Message) }
+})
+
 # === Window state (geometry logic: SuiteCommon) ===
 $global:WindowStatePath = Join-Path $PSScriptRoot 'DeviceInspector.windowstate.json'
 
@@ -882,6 +902,7 @@ $window.Add_Loaded({
     Update-ControlState
     Update-StatusBarSummary
     Add-LogLine 'Device Inspector ready. Enter a device name and a site server, then click Inspect. The tool only reads until you turn on Enable actions.'
+    Add-LogLine ('Log file: {0}' -f $script:ToolLogPath)
 })
 
 # Suite update notice: one shared daily lookup across the suite tools; the launcher installs.
