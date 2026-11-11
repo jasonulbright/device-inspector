@@ -51,6 +51,10 @@
         'Unregister-DeviceInspectorActionRun'
         'Add-DeviceInspectorActionId'
         'Write-DeviceInspectorCloseLog'
+        'Get-DeviceInspectorCloseWarningText'
+        'Get-DeviceInspectorApplicationLabel'
+        'Test-DeviceInspectorProcessOwner'
+        'Test-DeviceInspectorExitNeeded'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

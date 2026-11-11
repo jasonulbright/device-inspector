@@ -862,6 +862,42 @@ Describe 'Uninstall and repair an application' {
         }
     }
 
+    It 'adds the version to the name only when the name does not hold it' {
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool' -Version '1.2.3' | Should -Be 'Contoso Tool 1.2.3'
+        Get-DeviceInspectorApplicationLabel -Name 'Microsoft Visual C++ 2022 X86 Minimum Runtime - 14.51.36247' -Version '14.51.36247' | Should -Be 'Microsoft Visual C++ 2022 X86 Minimum Runtime - 14.51.36247'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool 1.2.3 (x64)' -Version '1.2.3' | Should -Be 'Contoso Tool 1.2.3 (x64)'
+        Get-DeviceInspectorApplicationLabel -Name 'CONTOSO TOOL V1.2.3' -Version 'v1.2.3' | Should -Be 'CONTOSO TOOL V1.2.3'
+        Get-DeviceInspectorApplicationLabel -Name '  Contoso Tool  ' -Version ' 1.2.3 ' | Should -Be 'Contoso Tool 1.2.3'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool' -Version '' | Should -Be 'Contoso Tool'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool' -Version $null | Should -Be 'Contoso Tool'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool, 1.2.3' -Version '1.2.3' | Should -Be 'Contoso Tool, 1.2.3'
+    }
+
+    It 'matches the version at token boundaries only' {
+        # A version inside a longer number or a longer version is not the version of the name.
+        Get-DeviceInspectorApplicationLabel -Name 'Office 2019' -Version '1' | Should -Be 'Office 2019 1'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool 1.2.34' -Version '1.2.3' | Should -Be 'Contoso Tool 1.2.34 1.2.3'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool 11.2.3' -Version '1.2.3' | Should -Be 'Contoso Tool 11.2.3 1.2.3'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool 1.2.3.4' -Version '1.2.3' | Should -Be 'Contoso Tool 1.2.3.4 1.2.3'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool v1.2.3' -Version '1.2.3' | Should -Be 'Contoso Tool v1.2.3 1.2.3'
+        # The dots of the version are literal, not regular expression wildcards.
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool 1x2x3' -Version '1.2.3' | Should -Be 'Contoso Tool 1x2x3 1.2.3'
+    }
+
+    It 'treats a version with trailing .0 parts as equal to the shorter version' {
+        Get-DeviceInspectorApplicationLabel -Name 'Microsoft Visual C++ 2022 X86 Minimum Runtime - 14.51.36247' -Version '14.51.36247.0' | Should -Be 'Microsoft Visual C++ 2022 X86 Minimum Runtime - 14.51.36247'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool 1.2' -Version '1.2.0.0' | Should -Be 'Contoso Tool 1.2'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool 1.0' -Version '1.0' | Should -Be 'Contoso Tool 1.0'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool' -Version '1.0.0' | Should -Be 'Contoso Tool 1.0.0'
+        Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool 2' -Version '10.0' | Should -Be 'Contoso Tool 2 10.0'
+    }
+
+    It 'builds the confirmation text and the log detail of an application with the label' {
+        $strFunction = [regex]::Match($script:strStart, '(?s)function Invoke-ApplicationOperation \{.*?\r?\n\}\r?\n').Value
+        $strFunction | Should -Match 'Get-DeviceInspectorApplicationLabel -Name \(\[string\]\$row\.Name\) -Version \(\[string\]\$row\.Version\)'
+        $strFunction | Should -Not -Match '\$row\.Name, \$row\.Version'
+    }
+
     It 'names the action and passes operation, view and key name after DryRun' {
         Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
         (Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Uninstall -View '64-bit' -KeyName '{23170F69-40C1-2702-2600-000001000000}' -DryRun).Action | Should -Be 'Uninstall application'
@@ -1221,7 +1257,7 @@ Describe 'Uninstall and repair an application' {
     }
 
     It 'names the application in the STARTED line, sends the view and the key name and no command line, and turns the row off after an uninstall' {
-        $script:strStart | Should -Match "-Detail @\(\('Application: \{0\} \{1\}, \{2\}, \{3\} view, key \{4\}\.'"
+        $script:strStart | Should -Match "-Detail @\(\('Application: \{0\}, \{1\}, \{2\} view, key \{3\}\.' -f \`$label, "
         $script:strStart | Should -Match "-Outcome 'STARTED' -ActionId \`$actionId -Summary 'The run started\.' -Steps \`$Detail"
         $script:strStart | Should -Match '-Parameters @\{ Operation = \$Operation; View = \[string\]\$row\.View; KeyName = \[string\]\$row\.KeyName \}'
         $script:strStart | Should -Not -Match 'ApplicationId'
@@ -1862,9 +1898,63 @@ Describe 'Background device actions' {
             $strClosing.IndexOf('Update-DeviceActionRun') | Should -BeLessThan $strClosing.IndexOf('$open = ')
         }
 
+        It 'writes the warning text in the singular for one run and in the plural for more runs' {
+            $strNl = "`n"
+            $strOne = Get-DeviceInspectorCloseWarningText -Run @(New-TestRun -ComputerName 'WS01') -NewLine $strNl
+            $strOne | Should -Match '^1 action is still running\. If you close the tool, it stops waiting for it, and the run on the device can stop before it is complete\. Wait for the running action to end before you close\.'
+            $strOne | Should -Not -Match 'actions are'
+            $strOne | Should -Not -Match '1 actions'
+            @($strOne -split "`n" | Where-Object { $_ -match '^Client policy update on WS01 \(ID \S+\)$' }).Count | Should -Be 1
+            $strTwo = Get-DeviceInspectorCloseWarningText -Run @((New-TestRun -ComputerName 'WS01'), (New-TestRun -ComputerName 'WS02')) -NewLine $strNl
+            $strTwo | Should -Match '^2 actions are still running\. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete\. Wait for the running actions to end before you close\.'
+            @($strTwo -split "`n" | Where-Object { $_ -match ' on WS0[12] \(ID ' }).Count | Should -Be 2
+        }
+
+        It 'ends the process only when a run was open and the script owns the process' {
+            Test-DeviceInspectorExitNeeded -OpenRunClosed $true -OwnsProcess $true | Should -BeTrue
+            Test-DeviceInspectorExitNeeded -OpenRunClosed $true -OwnsProcess $false | Should -BeFalse
+            Test-DeviceInspectorExitNeeded -OpenRunClosed $false -OwnsProcess $true | Should -BeFalse
+            Test-DeviceInspectorExitNeeded -OpenRunClosed $false -OwnsProcess $false | Should -BeFalse
+        }
+
+        It 'owns the process when the command line runs the script with -File, as the suite launcher and powershell -File do' {
+            $strScript = Join-Path -Path $TestDrive -ChildPath 'Tool Folder\start-deviceinspector.ps1'
+            # The suite launcher: powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "<entry>"
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('C:\Windows\powershell.exe', '-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', $strScript) | Should -BeTrue
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('powershell.exe', '-File', $strScript.ToUpperInvariant()) | Should -BeTrue
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('powershell.exe', '-f', $strScript) | Should -BeTrue
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('powershell.exe', ('-File:' + $strScript)) | Should -BeTrue
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('powershell.exe', '-File', 'start-deviceinspector.ps1') -BaseDirectory (Split-Path -Path $strScript -Parent) | Should -BeTrue
+        }
+
+        It 'does not own the process when an admin runs the script inside a console or runs another script' {
+            $strScript = Join-Path -Path $TestDrive -ChildPath 'Tool Folder\start-deviceinspector.ps1'
+            # A console: the command line holds no script. The tool runs by call operator or dot source.
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('C:\Windows\powershell.exe') | Should -BeFalse
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('C:\Windows\powershell.exe', '-NoProfile', '-STA') | Should -BeFalse
+            # Another script owns the process, and this script runs inside it.
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('powershell.exe', '-File', (Join-Path -Path $TestDrive -ChildPath 'other.ps1'), $strScript) | Should -BeFalse
+            # -Command is not -File.
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs @('powershell.exe', '-Command', ('& ''{0}''' -f $strScript)) | Should -BeFalse
+            Test-DeviceInspectorProcessOwner -ScriptPath '' -CommandLineArgs @('powershell.exe', '-File', $strScript) | Should -BeFalse
+            Test-DeviceInspectorProcessOwner -ScriptPath $strScript -CommandLineArgs $null | Should -BeFalse
+        }
+
+        It 'sets the close flag where open runs get a CLOSED line and asks the decision function before the exit' {
+            $strClosing = [regex]::Match($script:strStart, '(?s)\$window\.Add_Closing\(\{.*?\r?\n\}\)').Value
+            $strClosing | Should -Match '(?s)if \(\$open\.Count -gt 0\) \{.*?\$script:ClosedWithOpenRuns = \$true.*?Write-DeviceInspectorCloseLog'
+            $script:strStart | Should -Match '\$script:OwnsProcess = Test-DeviceInspectorProcessOwner -ScriptPath \$PSCommandPath -CommandLineArgs @\(\[Environment\]::GetCommandLineArgs\(\)\)'
+            $script:strStart | Should -Match 'if \(Test-DeviceInspectorExitNeeded -OpenRunClosed \$script:ClosedWithOpenRuns -OwnsProcess \$script:OwnsProcess\) \{ \[Environment\]::Exit\(0\) \}'
+            # The exit comes after the transcript stops, so every log line is written first.
+            $script:strStart.IndexOf('Test-DeviceInspectorExitNeeded') | Should -BeGreaterThan $script:strStart.LastIndexOf('Stop-Transcript')
+            # Nothing else in the script ends the process by an explicit exit.
+            @([regex]::Matches($script:strStart, '\[Environment\]::Exit')).Count | Should -Be 1
+            Get-TestFunctionText -Name 'Stop-DeviceActionRun' | Should -Not -Match 'Exit'
+        }
+
         It 'uses the owner text in the close dialog, with Wait as the default button, and never stops an open run' {
             $strDialog = Get-TestFunctionText -Name 'Show-CloseWarningDialog'
-            $strDialog | Should -Match 'actions are still running\. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete\. Wait for the running actions to end before you close\.'
+            $strDialog | Should -Match 'Get-DeviceInspectorCloseWarningText -Run @\(\$Runs\)'
             $strDialog | Should -Match 'x:Name="btnWait"[^>]*IsDefault="True" IsCancel="True"'
             $strDialog | Should -Not -Match 'x:Name="btnCloseAnyway"[^>]*IsDefault'
             $strStop = Get-TestFunctionText -Name 'Stop-DeviceActionRun'

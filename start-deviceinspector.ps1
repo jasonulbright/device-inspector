@@ -276,6 +276,8 @@ $script:RunspaceIdle  = @()
 $script:ResultNotices = 0
 $script:WindowClosing = $false
 $script:CloseChoice = 'Wait'
+$script:ClosedWithOpenRuns = $false
+$script:OwnsProcess = $false
 $script:ButtonTips    = @{}
 $gridRuns.ItemsSource = $script:RunList
 
@@ -1022,10 +1024,8 @@ function Show-CloseWarningDialog {
     $theme = [ControlzEx.Theming.ThemeManager]::Current.DetectTheme($window)
     if ($theme) { [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($dlg, $theme) }
     $dlg.Owner = $window
-    $nl = [Environment]::NewLine
-    $names = (@($Runs) | ForEach-Object { '{0} on {1} (ID {2})' -f $_.Action, $_.ComputerName, $_.ActionId }) -join $nl
     $dlg.FindName('txtIcon').Text = [string][char]0x26A0
-    $dlg.FindName('txtMsg').Text = ('{0} actions are still running. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete. Wait for the running actions to end before you close.{1}{1}{2}' -f @($Runs).Count, $nl, $names)
+    $dlg.FindName('txtMsg').Text = Get-DeviceInspectorCloseWarningText -Run @($Runs)
     $script:CloseChoice = 'Wait'
     $dlg.FindName('btnCloseAnyway').Add_Click({ param($s, $e) $script:CloseChoice = 'Close'; [System.Windows.Window]::GetWindow($s).Close() })
     [void]$dlg.ShowDialog()
@@ -1410,12 +1410,13 @@ function Invoke-ApplicationOperation {
     $command = [string]$row.$commandName
     $verb = $(if ($Operation -eq 'Uninstall') { 'uninstalls' } else { 'repairs' })
     $nl = [Environment]::NewLine
-    $text = ('The device {0} {1} {2} ({3}, {4} view, key {5}) now. It reads the registry key again, then runs this command and waits up to 10 minutes for it:{6}{6}{7}{6}{6}The tool adds no switches. If the installer needs a restart, the tool does not restart the device.' -f $verb, $row.Name, $row.Version, $row.Type, $row.View, $row.KeyName, $nl, $command)
+    $label = Get-DeviceInspectorApplicationLabel -Name ([string]$row.Name) -Version ([string]$row.Version)
+    $text = ('The device {0} {1} ({2}, {3} view, key {4}) now. It reads the registry key again, then runs this command and waits up to 10 minutes for it:{5}{5}{6}{5}{5}The tool adds no switches. If the installer needs a restart, the tool does not restart the device.' -f $verb, $label, $row.Type, $row.View, $row.KeyName, $nl, $command)
     Invoke-DeviceAction -Name ('{0} application' -f $Operation) -Function 'Invoke-DeviceInspectorApplicationAction' `
         -Parameters @{ Operation = $Operation; View = [string]$row.View; KeyName = [string]$row.KeyName } `
         -Message $text `
         -Context @{ Row = $row } `
-        -Detail @(('Application: {0} {1}, {2}, {3} view, key {4}.' -f $row.Name, $row.Version, $row.Type, $row.View, $row.KeyName), ('Command shown to the person: {0}' -f $command)) `
+        -Detail @(('Application: {0}, {1}, {2} view, key {3}.' -f $label, $row.Type, $row.View, $row.KeyName), ('Command shown to the person: {0}' -f $command)) `
         -AfterRun {
             param($r, $ctx)
             # After a real Uninstall the row stays in the list until the next inspection. Its actions turn off.
@@ -1588,6 +1589,8 @@ $window.Add_Closing({
     try { Update-DeviceActionRun } catch { Write-Log -Message ('The last pass over the running actions failed: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
     $open = @($script:RunList)
     if ($open.Count -gt 0) {
+        # The end of this script decides whether the process needs an explicit exit (see the end of this script).
+        $script:ClosedWithOpenRuns = $true
         try {
             $written = Write-DeviceInspectorCloseLog -Path $script:ActionLogPath -Run $open
             Write-Log -Message ('Window closed with {0} running actions. Wrote {1} CLOSED lines to the action log.' -f $open.Count, $written) -Quiet
@@ -1619,5 +1622,14 @@ $window.Add_Loaded({
 
 # Suite update notice: one shared daily lookup across the suite tools; the launcher installs.
 $null = Start-SuiteUpdateNotice -Path $PSScriptRoot -OnResult { param($u) if ($u.Available) { Add-LogLine ('Suite update available: v{0}. Update from the AppPackager Suite Launcher.' -f $u.Latest) } }
+$script:OwnsProcess = Test-DeviceInspectorProcessOwner -ScriptPath $PSCommandPath -CommandLineArgs @([Environment]::GetCommandLineArgs())
 [void]$window.ShowDialog()
 try { Stop-Transcript | Out-Null } catch { $null = $_ }
+# A run that was open when the window closed holds a Windows PowerShell remoting call (WinRM). The normal end of
+# the host waits for that call to return, so the process can stay for as long as the call is held. BeginStop and
+# CloseAsync do not change this (measured in the pull request of W-12). Every log line is written and closed by
+# now (each write opens and closes the file, and the transcript is stopped), so an explicit exit loses no log
+# line. The exit happens only when this script owns the process (started with -File, as the suite launcher
+# does). A script that an admin runs inside a console returns as normal: the console stays open. The CLOSED
+# lines say that the result of the run is not known.
+if (Test-DeviceInspectorExitNeeded -OpenRunClosed $script:ClosedWithOpenRuns -OwnsProcess $script:OwnsProcess) { [Environment]::Exit(0) }
