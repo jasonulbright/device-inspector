@@ -405,14 +405,11 @@
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="txtAppFilter" Grid.Column="0" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
                                  Controls:TextBoxHelper.Watermark="Filter by application name..."/>
-                        <ComboBox x:Name="cboAppStatus" Grid.Column="1" Width="180" FontSize="12"
-                                  ToolTip="Limit rows by comparison status">
+                        <ComboBox x:Name="cboAppType" Grid.Column="1" Width="180" FontSize="12"
+                                  ToolTip="Limit rows by installer type">
                             <ComboBoxItem Content="All" IsSelected="True"/>
-                            <ComboBoxItem Content="Match"/>
-                            <ComboBoxItem Content="Version differs"/>
-                            <ComboBoxItem Content="Device only"/>
-                            <ComboBoxItem Content="Inventory only"/>
-                            <ComboBoxItem Content="Client application"/>
+                            <ComboBoxItem Content="MSI"/>
+                            <ComboBoxItem Content="EXE"/>
                         </ComboBox>
                     </Grid>
                     <DataGrid x:Name="gridApps" Grid.Row="1"
@@ -426,11 +423,12 @@
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Application"       Width="4*" Binding="{Binding Name}"/>
-                            <DataGridTextColumn Header="Device version"    Width="2*" Binding="{Binding DeviceVersion}"/>
-                            <DataGridTextColumn Header="Inventory version" Width="2*" Binding="{Binding InventoryVersion}"/>
-                            <DataGridTextColumn Header="Publisher"         Width="3*" Binding="{Binding Publisher}"/>
-                            <DataGridTextColumn Header="Status"            Width="140" Binding="{Binding Status}"/>
+                            <DataGridTextColumn Header="Application"  Width="4*" Binding="{Binding Name}"/>
+                            <DataGridTextColumn Header="Version"      Width="2*" Binding="{Binding Version}"/>
+                            <DataGridTextColumn Header="Publisher"    Width="3*" Binding="{Binding Publisher}"/>
+                            <DataGridTextColumn Header="Install date" Width="110" Binding="{Binding InstallDate}"/>
+                            <DataGridTextColumn Header="Type"         Width="70" Binding="{Binding Type}"/>
+                            <DataGridTextColumn Header="View"         Width="80" Binding="{Binding View}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>

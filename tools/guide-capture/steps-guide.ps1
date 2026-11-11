@@ -7,7 +7,7 @@ $win = Find-Top 'Device Inspector' 10
 function Wait-Idle { Start-Sleep -Seconds 2; $null = Wait-Until { (Get-El $win 'btnInspect').Current.IsEnabled } 240; Start-Sleep -Seconds 1 }
 function Show-View([string]$Button) { Invoke-El (Get-El $win $Button); Start-Sleep -Milliseconds 600 }
 function Close-Message($Box) { Invoke-El (Get-El $Box 'btnPrimary'); Start-Sleep -Milliseconds 500 }
-function Select-Status([string]$Item) { Expand-El (Get-El $win 'cboAppStatus'); Start-Sleep -Milliseconds 400; Click-El (Find-Role $win 'ListItem' $Item); Start-Sleep -Milliseconds 600 }
+function Select-AppType([string]$Item) { Expand-El (Get-El $win 'cboAppType'); Start-Sleep -Milliseconds 400; Click-El (Find-Role $win 'ListItem' $Item); Start-Sleep -Milliseconds 600 }
 
 Section 'first run' {
     Shot $win 'start-first-run'
@@ -37,10 +37,10 @@ Section 'inspect the client' {
     Show-View 'btnViewApps'; Set-Text (Get-El $win 'txtAppFilter') 'micro'; Start-Sleep -Milliseconds 600; Shot $win 'apps-panel'
     Set-Text (Get-El $win 'txtAppFilter') 'edge'; Start-Sleep -Milliseconds 600; Shot $win 'apps-filter-text'
     Set-Text (Get-El $win 'txtAppFilter') 'micro'; Start-Sleep -Milliseconds 400
-    Expand-El (Get-El $win 'cboAppStatus'); Start-Sleep -Milliseconds 500; Shot $win 'apps-status-list' -Hover
-    Click-El (Find-Role $win 'ListItem' 'Version differs'); Start-Sleep -Milliseconds 600; Shot $win 'apps-status-version-differs'
-    Select-Status 'Device only'; Shot $win 'apps-status-device-only'
-    Select-Status 'All'
+    Expand-El (Get-El $win 'cboAppType'); Start-Sleep -Milliseconds 500; Shot $win 'apps-type-list' -Hover
+    Click-El (Find-Role $win 'ListItem' 'MSI'); Start-Sleep -Milliseconds 600; Shot $win 'apps-type-msi'
+    Select-AppType 'EXE'; Shot $win 'apps-type-exe'
+    Select-AppType 'All'
     $row = (Get-El $win 'gridApps').FindFirst('Descendants', (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem)))
     if (-not $row) { throw 'The Applications grid has no row.' }
     # Shot copies the screen area of the window, so the open context menu is in the image.

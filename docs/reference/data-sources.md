@@ -63,8 +63,8 @@ These stay on the device. `Invoke-Command` runs one script block on the device o
 | Client service state and start mode | `Win32_Service` (`CcmExec`) |
 | Client version, assigned site code, management point | `root\ccm` `SMS_Client`, `CCM_Authority` |
 | Last hardware and discovery inventory cycle | `root\ccm\invagt` `InventoryActionStatus` |
-| Installed applications | The machine-wide uninstall registry keys (`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` and the `WOW6432Node` key). An entry with no display name is left out. Entries with `SystemComponent` set to 1 are kept, because the Add Remove Programs inventory of the site keeps them. The install date (`InstallDate`) is read for the inventory check. |
-| Client application policy | `root\ccm\ClientSDK` `CCM_Application` |
+| Installed applications (the Applications panel) | The machine-wide uninstall registry keys (`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` and the `WOW6432Node` key). One entry for each key, with the view (`64-bit` or `32-bit`), the key name, `DisplayName`, `DisplayVersion`, `Publisher`, `InstallDate`, `UninstallString`, `QuietUninstallString`, `SystemComponent` and `WindowsInstaller`. An entry with no display name is left out. Entries with `SystemComponent` set to 1 are kept, and their actions are off. The panel does not compare them with the site inventory. The inventory check uses the names, the versions and the install dates. |
+| Client application policy (the text report and the JSON export only) | `root\ccm\ClientSDK` `CCM_Application` |
 | Pending updates in the client policy (with `UpdateID` and `ComplianceState` for the install action) | `root\ccm\ClientSDK` `CCM_SoftwareUpdate` |
 
 ## Site against device
@@ -73,7 +73,7 @@ These stay on the device. `Invoke-Command` runs one script block on the device o
 |---|---|---|---|
 | Client version | site and device equal | site and device equal | Equal. |
 | Operating system | site: generic text. Device: Windows 11 Enterprise Evaluation 10.0.26200 | site: generic text. Device: Windows Server 2025 Datacenter Evaluation 10.0.26100 | The device. The site stores the generic product line. |
-| Installed applications | site inventory 18 rows, device 9 rows | site 74, device 25 | They measure different things. The site lists the 32-bit and 64-bit Add Remove Programs inventory. The device lists the machine-wide uninstall keys. The Applications panel compares them row by row. |
+| Installed applications | site inventory 18 rows, device 9 rows | site 74, device 25 | They measure different things. The site lists the 32-bit and 64-bit Add Remove Programs inventory. The device lists the machine-wide uninstall keys. The Applications panel shows the device list only. The inventory check compares the two lists by name. |
 | Required updates | site 7 | site 4 | The site value comes from the last update scan that the client reported. The device list holds only the updates in the client policy (1 on the workstation, 0 on the site server). The device is right for now. The site is right for what the client last reported. The panel shows both. |
 
 ## Time

@@ -1015,7 +1015,7 @@ function Get-DeviceFact {
     #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.1.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1096,36 +1096,47 @@ function Get-DeviceFact {
 
             $listInstalled = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
             try {
+                # HKLM only: the 64-bit view and the 32-bit (WOW6432Node) view. Each entry
+                # keeps its view and its key name, so two entries with the same name and
+                # version stay two entries and Uninstall can find each key again.
                 $arrKeyPath = @(
-                    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
-                    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+                    @{ View = '64-bit'; Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' }
+                    @{ View = '32-bit'; Path = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' }
                 )
-                foreach ($strKeyPath in $arrKeyPath) {
-                    foreach ($objEntry in @(Get-ItemProperty -Path $strKeyPath -ErrorAction SilentlyContinue)) {
-                        $objName = $objEntry.PSObject.Properties['DisplayName']
-                        if ($null -eq $objName -or [string]::IsNullOrWhiteSpace([string]$objName.Value)) {
+                $scriptBlockText = {
+                    param($objEntry, [string]$strProperty)
+                    $objProperty = $objEntry.PSObject.Properties[$strProperty]
+                    if ($null -eq $objProperty -or $null -eq $objProperty.Value) {
+                        return ''
+                    }
+                    return [string]$objProperty.Value
+                }
+                $scriptBlockFlag = {
+                    param($objEntry, [string]$strProperty)
+                    $objProperty = $objEntry.PSObject.Properties[$strProperty]
+                    $intFlag = 0
+                    if ($null -ne $objProperty -and $null -ne $objProperty.Value -and [int]::TryParse([string]$objProperty.Value, [ref]$intFlag)) {
+                        return $intFlag
+                    }
+                    return 0
+                }
+                foreach ($hashtableKeyPath in $arrKeyPath) {
+                    foreach ($objEntry in @(Get-ItemProperty -Path $hashtableKeyPath.Path -ErrorAction SilentlyContinue)) {
+                        $strName = & $scriptBlockText $objEntry 'DisplayName'
+                        if ([string]::IsNullOrWhiteSpace($strName)) {
                             continue
                         }
-                        $objVersion = $objEntry.PSObject.Properties['DisplayVersion']
-                        $objPublisher = $objEntry.PSObject.Properties['Publisher']
-                        $objInstallDate = $objEntry.PSObject.Properties['InstallDate']
-                        $strInstallDate = ''
-                        if ($null -ne $objInstallDate) {
-                            $strInstallDate = [string]$objInstallDate.Value
-                        }
-                        $strVersion = ''
-                        if ($null -ne $objVersion) {
-                            $strVersion = [string]$objVersion.Value
-                        }
-                        $strPublisher = ''
-                        if ($null -ne $objPublisher) {
-                            $strPublisher = [string]$objPublisher.Value
-                        }
                         $listInstalled.Add([pscustomobject]@{
-                                Name        = ([string]$objName.Value).Trim()
-                                Version     = $strVersion
-                                Publisher   = $strPublisher
-                                InstallDate = $strInstallDate
+                                Name                = $strName.Trim()
+                                Version             = (& $scriptBlockText $objEntry 'DisplayVersion')
+                                Publisher           = (& $scriptBlockText $objEntry 'Publisher')
+                                InstallDate         = (& $scriptBlockText $objEntry 'InstallDate')
+                                KeyName             = [string]$objEntry.PSChildName
+                                View                = $hashtableKeyPath.View
+                                UninstallString     = (& $scriptBlockText $objEntry 'UninstallString')
+                                QuietUninstallString = (& $scriptBlockText $objEntry 'QuietUninstallString')
+                                SystemComponent     = (& $scriptBlockFlag $objEntry 'SystemComponent')
+                                WindowsInstaller    = (& $scriptBlockFlag $objEntry 'WindowsInstaller')
                             })
                     }
                 }
@@ -1180,7 +1191,7 @@ function Get-DeviceFact {
             [pscustomobject]@{
                 OperatingSystem       = $objOperatingSystem
                 Client                = $objClient
-                InstalledApplications = @($listInstalled | Sort-Object -Property Name, Version -Unique)
+                InstalledApplications = @($listInstalled | Sort-Object -Property Name, Version, View, KeyName)
                 ClientApplications    = @($listClientApplication | Sort-Object -Property Name)
                 PendingUpdates        = @($listPendingUpdate | Sort-Object -Property Name)
                 Problems              = @($listProblem)
@@ -1232,6 +1243,104 @@ function Get-DeviceFact {
     }
 }
 
+function Compare-DeviceInspectionApplication {
+    # .SYNOPSIS
+    # Compares the installed applications of the device with the site inventory.
+    #
+    # .DESCRIPTION
+    # Joins the two lists by application name, ignoring case and spaces at the ends.
+    # Status is Match when the name and the version are equal, Version differs when
+    # only the name is equal, Device only or Inventory only when one list lacks the
+    # application. Test-DeviceInspectionInventory uses this comparison. The
+    # Applications panel does not show it.
+    #
+    # .PARAMETER Inspection
+    # The object that Get-DeviceInspection returns.
+    #
+    # .EXAMPLE
+    # $arrDifference = Compare-DeviceInspectionApplication -Inspection $objInspection | Where-Object Status -ne 'Match'
+    #
+    # # One row for each application name that differs.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties Name, DeviceVersion, InventoryVersion, Publisher, Status.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
+    # return shape, and positional contract may change without notice.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261110.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Inspection
+    )
+
+    process {
+        $hashtableDevice = @{}
+        $hashtableSite = @{}
+        $hashtablePublisher = @{}
+        $hashtableDisplay = @{}
+        if ($null -ne $Inspection.Device) {
+            foreach ($objApplication in @($Inspection.Device.InstalledApplications)) {
+                $strKey = ([string]$objApplication.Name).Trim().ToLowerInvariant()
+                if (-not $hashtableDevice.ContainsKey($strKey)) {
+                    $hashtableDevice[$strKey] = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                }
+                $hashtableDevice[$strKey].Add([string]$objApplication.Version)
+                $hashtablePublisher[$strKey] = [string]$objApplication.Publisher
+                $hashtableDisplay[$strKey] = ([string]$objApplication.Name).Trim()
+            }
+        }
+        if ($null -ne $Inspection.Site) {
+            foreach ($objApplication in @($Inspection.Site.InstalledApplications)) {
+                $strKey = ([string]$objApplication.Name).Trim().ToLowerInvariant()
+                if (-not $hashtableSite.ContainsKey($strKey)) {
+                    $hashtableSite[$strKey] = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                }
+                $hashtableSite[$strKey].Add([string]$objApplication.Version)
+                if (-not $hashtablePublisher.ContainsKey($strKey)) {
+                    $hashtablePublisher[$strKey] = [string]$objApplication.Publisher
+                }
+                if (-not $hashtableDisplay.ContainsKey($strKey)) {
+                    $hashtableDisplay[$strKey] = ([string]$objApplication.Name).Trim()
+                }
+            }
+        }
+        foreach ($strKey in @($hashtableDisplay.Keys | Sort-Object)) {
+            $strDeviceVersion = ''
+            $strSiteVersion = ''
+            $strStatus = 'Match'
+            if ($hashtableDevice.ContainsKey($strKey)) {
+                $strDeviceVersion = (@($hashtableDevice[$strKey] | Sort-Object -Unique) -join ', ')
+            }
+            if ($hashtableSite.ContainsKey($strKey)) {
+                $strSiteVersion = (@($hashtableSite[$strKey] | Sort-Object -Unique) -join ', ')
+            }
+            if (-not $hashtableSite.ContainsKey($strKey)) {
+                $strStatus = 'Device only'
+            } elseif (-not $hashtableDevice.ContainsKey($strKey)) {
+                $strStatus = 'Inventory only'
+            } elseif ($strDeviceVersion -ne $strSiteVersion) {
+                $strStatus = 'Version differs'
+            }
+            [pscustomobject]@{
+                Name             = $hashtableDisplay[$strKey]
+                DeviceVersion    = $strDeviceVersion
+                InventoryVersion = $strSiteVersion
+                Publisher        = [string]$hashtablePublisher[$strKey]
+                Status           = $strStatus
+            }
+        }
+    }
+}
+
 #endregion Private helpers
 
 #region Public functions
@@ -1248,9 +1357,10 @@ function Get-DeviceInspection {
     #
     # Site facts: resource record, last hardware inventory, installed
     # applications, collection memberships, deployments targeted at those
-    # collections. Device facts: operating system, installed applications,
-    # client health (service, version, management point, inventory cycles),
-    # and the client application policy.
+    # collections. Device facts: operating system, installed applications (one
+    # entry for each uninstall registry key under HKLM, with the view, the key name
+    # and the uninstall strings), client health (service, version, management
+    # point, inventory cycles), and the client application policy.
     #
     # .PARAMETER ComputerName
     # The device name. Letters, digits, hyphen, underscore and dot only.
@@ -1293,7 +1403,7 @@ function Get-DeviceInspection {
     #
     # Positional parameters: position 0 is ComputerName. Other parameters are named.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.1.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1433,7 +1543,7 @@ function Test-DeviceInspectionInventory {
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.1.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1510,8 +1620,8 @@ function Test-DeviceInspectionInventory {
             }
         }
         $listApplication = New-Object -TypeName 'System.Collections.Generic.List[string]'
-        foreach ($objRow in @(ConvertTo-DeviceInspectionApplicationRow -Inspection $Inspection)) {
-            if ($objRow.Status -eq 'Match' -or $objRow.Status -eq 'Client application') {
+        foreach ($objRow in @(Compare-DeviceInspectionApplication -Inspection $Inspection)) {
+            if ($objRow.Status -eq 'Match') {
                 continue
             }
             $strKey = ([string]$objRow.Name).Trim().ToLowerInvariant()
@@ -1557,7 +1667,7 @@ function ConvertTo-DeviceInspectionReport {
     # .NOTES
     # Positional parameters: position 0 is Inspection.
     #
-    # Version: 1.0.20261105.0
+    # Version: 1.1.20261110.0
     [CmdletBinding()]
     [OutputType([string])]
     param (
@@ -1631,7 +1741,7 @@ function ConvertTo-DeviceInspectionReport {
         $listLine.Add('')
 
         if ($null -ne $Inspection.Device) {
-            $arrDeviceApplication = @($Inspection.Device.InstalledApplications | ForEach-Object { '  {0} {1}' -f $_.Name, $_.Version })
+            $arrDeviceApplication = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $Inspection | ForEach-Object { '  {0} {1} | {2} | {3} | {4}' -f $_.Name, $_.Version, $_.Type, $_.View, $_.KeyName })
             $arrClientApplication = @($Inspection.Device.ClientApplications | ForEach-Object { '  {0} | {1} | evaluation state {2}' -f $_.Name, $_.InstallState, $_.EvaluationState })
         }
 
@@ -1834,16 +1944,30 @@ function ConvertTo-DeviceInspectionFactRow {
 
 function ConvertTo-DeviceInspectionApplicationRow {
     # .SYNOPSIS
-    # Merges the installed applications of the device and of the site inventory.
+    # Turns the uninstall registry keys that the device reported into panel rows.
     #
     # .DESCRIPTION
-    # Joins the two lists by application name, ignoring case and spaces at the ends.
-    # Status is Match when the name and the version are equal, Version differs when
-    # only the name is equal, Device only or Inventory only when one list lacks the
-    # application. A Configuration Manager application that the client lists as
-    # installed is linked to the row with the same name, or else gets its own row
-    # with the status Client application. One row for each application ID, with
-    # its highest revision.
+    # One row for each entry that the device reported from the uninstall registry keys
+    # (HKLM, 64-bit and 32-bit view). The panel is a live view of these keys. It does
+    # not compare them with the site inventory.
+    #
+    # Type is MSI when the key name is a product code in braces and the uninstall
+    # string starts with msiexec, or the entry has WindowsInstaller 1. Every other entry
+    # is EXE.
+    #
+    # Uninstall and Repair rules. MSI: both are on. EXE with a quiet uninstall string:
+    # Uninstall is on and Repair is off, because the key holds no repair command. EXE
+    # without a quiet uninstall string: both are off, because the tool does not guess
+    # silent switches. A system component (SystemComponent 1): both are off. A disabled
+    # action has its reason in UninstallReason or RepairReason. Reason holds the first
+    # of the two that is not empty.
+    #
+    # The rows keep the order of the device list, which Get-DeviceFact sorts by name,
+    # version, view and key name.
+    #
+    # UninstallCommand and RepairCommand hold the command line for display in the
+    # confirmation text. The device builds the real command line from its own registry
+    # key. The window never sends a command line.
     #
     # .PARAMETER Inspection
     # The object that Get-DeviceInspection returns.
@@ -1851,20 +1975,24 @@ function ConvertTo-DeviceInspectionApplicationRow {
     # .EXAMPLE
     # $arrRow = ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection
     #
-    # # One row for each application name in either list.
+    # # One row for each uninstall key of the device.
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] Properties Name, DeviceVersion, InventoryVersion, Publisher,
-    # Status, ClientApplication, ClientApplicationId, ClientRevision,
-    # ClientMachineTarget, ClientAllowedActions, CanUninstall, CanRepair.
+    # [pscustomobject] Properties Name, Version, Publisher, InstallDate, Type (MSI or
+    # EXE), View (64-bit or 32-bit), KeyName, CanUninstall, CanRepair, Reason,
+    # UninstallReason, RepairReason, UninstallCommand, RepairCommand.
     #
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.0.20261111.1
+    # Version 2 replaced the comparison with the site inventory (breaking change):
+    # the properties DeviceVersion, InventoryVersion, Status and the Client* properties
+    # are gone.
+    #
+    # Version: 2.0.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1873,161 +2001,79 @@ function ConvertTo-DeviceInspectionApplicationRow {
     )
 
     process {
-        # A Configuration Manager application installed by the client gets its own
-        # row (status Client application) unless an uninstall entry has the same
-        # name, because the two names usually differ. Only these rows carry the
-        # client application fields that Uninstall and Repair need.
-        $scriptBlockRow = {
-            param($strName, $strDeviceVersion, $strSiteVersion, $strPublisher, $strStatus, $objClientApplication)
-            $strId = ''
-            $strRevision = ''
-            $boolMachine = $true
-            $boolCanUninstall = $false
-            $boolCanRepair = $false
-            $strClientName = ''
-            $strAllowed = ''
-            if ($null -ne $objClientApplication) {
-                $arrAllowed = @()
-                if ($null -ne $objClientApplication.PSObject.Properties['AllowedActions']) {
-                    $arrAllowed = @($objClientApplication.AllowedActions)
-                }
-                $boolPreflight = $null -ne $objClientApplication.PSObject.Properties['IsPreflightOnly'] -and [bool]$objClientApplication.IsPreflightOnly
-                $strId = [string]$objClientApplication.Id
-                $strRevision = [string]$objClientApplication.Revision
-                $boolMachine = [bool]$objClientApplication.IsMachineTarget
-                $strClientName = [string]$objClientApplication.Name
-                $strAllowed = $arrAllowed -join ', '
-                $boolCanUninstall = ($arrAllowed -contains 'Uninstall') -or (([string]$objClientApplication.InstallState) -eq 'Installed' -and -not $boolPreflight)
-                $boolCanRepair = $arrAllowed -contains 'Repair'
-                # The device is read in the context of the signed-in account over WinRM,
-                # not of the user that a user-targeted deployment belongs to.
-                if (-not $boolMachine) {
-                    $boolCanUninstall = $false
-                    $boolCanRepair = $false
-                }
+        if ($null -eq $Inspection.Device -or $null -eq $Inspection.Device.PSObject.Properties['InstalledApplications']) {
+            return
+        }
+        $strGuidPattern = '^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}\z'
+        $strMsiexecPattern = '^\s*"?(?:[^"]*[\\/])?msiexec(?:\.exe)?"?(?:\s|\z)'
+        $strKeyNamePattern = '^[^\\/:*?"<>|\x00-\x1F]{1,255}\z'
+        $scriptBlockText = {
+            param($objEntry, [string]$strProperty)
+            $objProperty = $objEntry.PSObject.Properties[$strProperty]
+            if ($null -eq $objProperty -or $null -eq $objProperty.Value) {
+                return ''
+            }
+            return [string]$objProperty.Value
+        }
+        $scriptBlockFlag = {
+            param($objEntry, [string]$strProperty)
+            $objProperty = $objEntry.PSObject.Properties[$strProperty]
+            $intFlag = 0
+            if ($null -ne $objProperty -and $null -ne $objProperty.Value -and [int]::TryParse([string]$objProperty.Value, [ref]$intFlag)) {
+                return $intFlag
+            }
+            return 0
+        }
+        foreach ($objEntry in @($Inspection.Device.InstalledApplications)) {
+            $strKeyName = & $scriptBlockText $objEntry 'KeyName'
+            $strView = & $scriptBlockText $objEntry 'View'
+            $strUninstall = & $scriptBlockText $objEntry 'UninstallString'
+            $strQuiet = & $scriptBlockText $objEntry 'QuietUninstallString'
+            $boolMsi = ($strKeyName -match $strGuidPattern) -and (($strUninstall -match $strMsiexecPattern) -or ((& $scriptBlockFlag $objEntry 'WindowsInstaller') -eq 1))
+            $strType = 'EXE'
+            if ($boolMsi) {
+                $strType = 'MSI'
+            }
+            $strUninstallReason = ''
+            $strRepairReason = ''
+            $strUninstallCommand = ''
+            $strRepairCommand = ''
+            if ((& $scriptBlockFlag $objEntry 'SystemComponent') -eq 1) {
+                $strUninstallReason = 'This entry is a system component, part of another product.'
+                $strRepairReason = $strUninstallReason
+            } elseif (($strView -ne '64-bit' -and $strView -ne '32-bit') -or $strKeyName -notmatch $strKeyNamePattern) {
+                $strUninstallReason = 'The device did not report a usable registry view and key name for this entry. Inspect the device again.'
+                $strRepairReason = $strUninstallReason
+            } elseif ($boolMsi) {
+                $strUninstallCommand = 'msiexec.exe /x {0} /qn /norestart REBOOT=ReallySuppress' -f $strKeyName
+                $strRepairCommand = 'msiexec.exe /i {0} REINSTALL=ALL REINSTALLMODE=omus /qn /norestart REBOOT=ReallySuppress' -f $strKeyName
+            } elseif (-not [string]::IsNullOrWhiteSpace($strQuiet)) {
+                $strUninstallCommand = $strQuiet.Trim()
+                $strRepairReason = 'There is no documented repair command for this installer.'
+            } else {
+                $strUninstallReason = 'The entry has no quiet uninstall string. The tool does not guess silent switches.'
+                $strRepairReason = $strUninstallReason
+            }
+            $strReason = $strUninstallReason
+            if ([string]::IsNullOrEmpty($strReason)) {
+                $strReason = $strRepairReason
             }
             [pscustomobject]@{
-                Name                  = $strName
-                DeviceVersion         = $strDeviceVersion
-                InventoryVersion      = $strSiteVersion
-                Publisher             = $strPublisher
-                Status                = $strStatus
-                ClientApplication     = $strClientName
-                ClientApplicationId   = $strId
-                ClientRevision        = $strRevision
-                ClientMachineTarget   = $boolMachine
-                ClientAllowedActions  = $strAllowed
-                CanUninstall          = [bool]$boolCanUninstall
-                CanRepair             = [bool]$boolCanRepair
+                Name             = ([string]$objEntry.Name).Trim()
+                Version          = & $scriptBlockText $objEntry 'Version'
+                Publisher        = & $scriptBlockText $objEntry 'Publisher'
+                InstallDate      = & $scriptBlockText $objEntry 'InstallDate'
+                Type             = $strType
+                View             = $strView
+                KeyName          = $strKeyName
+                CanUninstall     = [string]::IsNullOrEmpty($strUninstallReason)
+                CanRepair        = [string]::IsNullOrEmpty($strRepairReason)
+                Reason           = $strReason
+                UninstallReason  = $strUninstallReason
+                RepairReason     = $strRepairReason
+                UninstallCommand = $strUninstallCommand
+                RepairCommand    = $strRepairCommand
             }
-        }
-        $scriptBlockRevision = {
-            param($objValue)
-            $intRevision = [uint64]0
-            if ([uint64]::TryParse([string]$objValue, [ref]$intRevision)) {
-                return $intRevision
-            }
-            return [uint64]0
-        }
-        $hashtableById = @{}
-        if ($null -ne $Inspection.Device -and $null -ne $Inspection.Device.PSObject.Properties['ClientApplications']) {
-            foreach ($objClientApplication in @($Inspection.Device.ClientApplications)) {
-                if ($null -eq $objClientApplication.PSObject.Properties['Id'] -or [string]::IsNullOrEmpty([string]$objClientApplication.Id)) {
-                    continue
-                }
-                $strId = [string]$objClientApplication.Id
-                if (-not $hashtableById.ContainsKey($strId) -or (& $scriptBlockRevision $objClientApplication.Revision) -gt (& $scriptBlockRevision $hashtableById[$strId].Revision)) {
-                    $hashtableById[$strId] = $objClientApplication
-                }
-            }
-        }
-        # The device acts on the highest revision of an ID, so the row uses the same
-        # revision and is left out when that revision is not installed.
-        foreach ($strId in @($hashtableById.Keys)) {
-            if (([string]$hashtableById[$strId].InstallState) -ne 'Installed') {
-                $hashtableById.Remove($strId)
-            }
-        }
-        $hashtableClient = @{}
-        $hashtableClientUsed = @{}
-        $listClientExtra = New-Object -TypeName 'System.Collections.Generic.List[object]'
-        foreach ($strId in @($hashtableById.Keys | Sort-Object)) {
-            $strNameKey = ([string]$hashtableById[$strId].Name).Trim().ToLowerInvariant()
-            if ($hashtableClient.ContainsKey($strNameKey)) {
-                $listClientExtra.Add($hashtableById[$strId])
-            } else {
-                $hashtableClient[$strNameKey] = $hashtableById[$strId]
-            }
-        }
-        $hashtableDevice = @{}
-        $hashtableSite = @{}
-        $hashtablePublisher = @{}
-        if ($null -ne $Inspection.Device) {
-            foreach ($objApplication in @($Inspection.Device.InstalledApplications)) {
-                $strKey = ([string]$objApplication.Name).Trim().ToLowerInvariant()
-                if (-not $hashtableDevice.ContainsKey($strKey)) {
-                    $hashtableDevice[$strKey] = New-Object -TypeName 'System.Collections.Generic.List[string]'
-                }
-                $hashtableDevice[$strKey].Add([string]$objApplication.Version)
-                $hashtablePublisher[$strKey] = [string]$objApplication.Publisher
-            }
-        }
-        if ($null -ne $Inspection.Site) {
-            foreach ($objApplication in @($Inspection.Site.InstalledApplications)) {
-                $strKey = ([string]$objApplication.Name).Trim().ToLowerInvariant()
-                if (-not $hashtableSite.ContainsKey($strKey)) {
-                    $hashtableSite[$strKey] = New-Object -TypeName 'System.Collections.Generic.List[string]'
-                }
-                $hashtableSite[$strKey].Add([string]$objApplication.Version)
-                if (-not $hashtablePublisher.ContainsKey($strKey)) {
-                    $hashtablePublisher[$strKey] = [string]$objApplication.Publisher
-                }
-            }
-        }
-        $hashtableDisplay = @{}
-        foreach ($objSource in @($Inspection.Device, $Inspection.Site)) {
-            if ($null -eq $objSource) {
-                continue
-            }
-            foreach ($objApplication in @($objSource.InstalledApplications)) {
-                $hashtableDisplay[([string]$objApplication.Name).Trim().ToLowerInvariant()] = ([string]$objApplication.Name).Trim()
-            }
-        }
-        foreach ($strKey in @($hashtableDisplay.Keys | Sort-Object)) {
-            $strDeviceVersion = ''
-            $strSiteVersion = ''
-            $strStatus = 'Match'
-            if ($hashtableDevice.ContainsKey($strKey)) {
-                $strDeviceVersion = (@($hashtableDevice[$strKey] | Sort-Object -Unique) -join ', ')
-            }
-            if ($hashtableSite.ContainsKey($strKey)) {
-                $strSiteVersion = (@($hashtableSite[$strKey] | Sort-Object -Unique) -join ', ')
-            }
-            if (-not $hashtableSite.ContainsKey($strKey)) {
-                $strStatus = 'Device only'
-            } elseif (-not $hashtableDevice.ContainsKey($strKey)) {
-                $strStatus = 'Inventory only'
-            } elseif ($strDeviceVersion -ne $strSiteVersion) {
-                $strStatus = 'Version differs'
-            }
-            $objClientApplication = $null
-            if ($hashtableClient.ContainsKey($strKey)) {
-                $objClientApplication = $hashtableClient[$strKey]
-                $hashtableClientUsed[$strKey] = $true
-            }
-            & $scriptBlockRow $hashtableDisplay[$strKey] $strDeviceVersion $strSiteVersion ([string]$hashtablePublisher[$strKey]) $strStatus $objClientApplication
-        }
-        $listOwnRow = New-Object -TypeName 'System.Collections.Generic.List[object]'
-        foreach ($strKey in @($hashtableClient.Keys | Sort-Object)) {
-            if (-not $hashtableClientUsed.ContainsKey($strKey)) {
-                $listOwnRow.Add($hashtableClient[$strKey])
-            }
-        }
-        foreach ($objExtra in $listClientExtra) {
-            $listOwnRow.Add($objExtra)
-        }
-        foreach ($objClientApplication in @($listOwnRow | Sort-Object -Property Name, Id)) {
-            & $scriptBlockRow ([string]$objClientApplication.Name).Trim() ([string]$objClientApplication.SoftwareVersion) '' ([string]$objClientApplication.Publisher) 'Client application' $objClientApplication
         }
     }
 }
@@ -2270,7 +2316,7 @@ function ConvertTo-DeviceInspectionHtml {
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.0.20261106.0
+    # Version: 1.1.20261110.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
     param (
@@ -2310,7 +2356,7 @@ function ConvertTo-DeviceInspectionHtml {
         $arrFact = @(ConvertTo-DeviceInspectionFactRow -Inspection $Inspection)
         $listLine.Add((& $scriptBlockTable 'Device facts' $arrFact @('Group', 'Name', 'Value')))
         $arrApplication = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $Inspection)
-        $listLine.Add((& $scriptBlockTable 'Installed applications' $arrApplication @('Name', 'DeviceVersion', 'InventoryVersion', 'Publisher', 'Status')))
+        $listLine.Add((& $scriptBlockTable 'Installed applications' $arrApplication @('Name', 'Version', 'Publisher', 'InstallDate', 'Type', 'View', 'KeyName')))
         $arrUpdate = @(ConvertTo-DeviceInspectionUpdateRow -Inspection $Inspection)
         $listLine.Add((& $scriptBlockTable 'Updates' $arrUpdate @('Source', 'Article', 'Severity', 'State', 'Deadline', 'Title')))
         $arrCollection = @(ConvertTo-DeviceInspectionCollectionRow -Inspection $Inspection)

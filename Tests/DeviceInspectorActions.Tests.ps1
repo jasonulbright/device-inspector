@@ -29,6 +29,7 @@ Describe 'Action module surface' {
             $arrCommand = @($objFunction.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() })
             $arrCommand | Should -Not -Contain 'Invoke-CimMethod' -Because $objFunction.Name
             $arrCommand | Should -Not -Contain 'Remove-CimInstance' -Because $objFunction.Name
+            $arrCommand | Should -Not -Contain 'Start-Process' -Because $objFunction.Name
         }
     }
 }
@@ -541,6 +542,31 @@ Describe 'Corrupt-inventory check and repair' {
         $objCheck.Message | Should -Match 'no hardware inventory cycle record'
     }
 
+    It 'compares by name with Compare-DeviceInspectionApplication: Match, Version differs, Device only, Inventory only' {
+        InModuleScope DeviceInspectorCommon {
+            $objInspection = [pscustomobject]@{
+                Site   = [pscustomobject]@{ InstalledApplications = @(
+                        [pscustomobject]@{ Name = 'Same'; Version = '1'; Publisher = '' }
+                        [pscustomobject]@{ Name = 'Changed '; Version = '1'; Publisher = '' }
+                        [pscustomobject]@{ Name = 'Gone'; Version = '1'; Publisher = '' }
+                    ) }
+                Device = [pscustomobject]@{ InstalledApplications = @(
+                        [pscustomobject]@{ Name = 'same'; Version = '1'; Publisher = 'P'; KeyName = 'a'; View = '64-bit' }
+                        [pscustomobject]@{ Name = 'Same'; Version = '1'; Publisher = 'P'; KeyName = 'b'; View = '32-bit' }
+                        [pscustomobject]@{ Name = 'Changed'; Version = '2'; Publisher = '' }
+                        [pscustomobject]@{ Name = 'New'; Version = '1'; Publisher = '' }
+                    ) }
+            }
+            $arrRow = @(Compare-DeviceInspectionApplication -Inspection $objInspection)
+            $arrRow.Count | Should -Be 4
+            @($arrRow | Where-Object { $_.Name -eq 'same' })[0].Status | Should -Be 'Match'
+            @($arrRow | Where-Object { $_.Name -eq 'Changed' })[0].Status | Should -Be 'Version differs'
+            @($arrRow | Where-Object { $_.Name -eq 'Changed' })[0].InventoryVersion | Should -Be '1'
+            @($arrRow | Where-Object { $_.Name -eq 'New' })[0].Status | Should -Be 'Device only'
+            @($arrRow | Where-Object { $_.Name -eq 'Gone' })[0].Status | Should -Be 'Inventory only'
+        }
+    }
+
     It 'adds a Corrupt check to the problems of the inspection' {
         InModuleScope DeviceInspectorCommon {
             Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 's'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
@@ -735,196 +761,405 @@ Describe 'Uninstall and repair an application' {
     BeforeAll {
         $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
         $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
-    }
+        $script:listTestKey = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $script:strUninstallPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+        $script:strUninstallPath32 = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+        $script:strSystem = Join-Path -Path $env:SystemRoot -ChildPath 'System32'
 
-    BeforeEach {
-        InModuleScope DeviceInspectorCommon {
-            $script:arrTestApp = @(
-                [pscustomobject]@{ Id = 'ScopeId_1/Application_7'; Revision = '13'; Name = '7-Zip (x64 edition) - 26.03'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Install'); SupersessionState = 'None'; EvaluationState = 1 }
-            )
-            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
-            Mock Get-CimInstance { $script:arrTestApp } -ParameterFilter { $ClassName -eq 'CCM_Application' }
-            Mock Start-Sleep { }
+        # The inner script blocks of the device block hold the rules. They take no outside
+        # state, so the tests run them alone, found by name in the syntax tree.
+        $script:hashtableBlock = InModuleScope DeviceInspectorCommon {
+            $hashtableFound = @{}
+            foreach ($strName in 'scriptBlockIsMsi', 'scriptBlockSplitCommand', 'scriptBlockMapExitCode') {
+                $strVariable = '$' + $strName
+                $objAssignment = $script:scriptBlockApplicationAction.Ast.Find({ param($objNode) $objNode -is [System.Management.Automation.Language.AssignmentStatementAst] -and $objNode.Left.Extent.Text -eq $strVariable }, $true)
+                $hashtableFound[$strName] = $objAssignment.Right.Expression.ScriptBlock.GetScriptBlock()
+            }
+            $hashtableFound
         }
-    }
 
-    It 'names the action and passes ID and operation after DryRun' {
-        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
-        (Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -ApplicationId 'ScopeId_1/Application_7' -Operation Uninstall -DryRun).Action | Should -Be 'Uninstall application'
-        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript -Times 1 -Exactly -ParameterFilter { $ArgumentList[0] -eq $true -and $ArgumentList[1] -eq 'ScopeId_1/Application_7' -and $ArgumentList[2] -eq 'Uninstall' }
-    }
-
-    It 'refuses an application ID with a quote' {
-        { Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -ApplicationId "x' OR 1=1" -Operation Uninstall } | Should -Throw
-    }
-
-    It 'changes nothing in a dry run' {
-        InModuleScope DeviceInspectorCommon {
-            Mock Invoke-CimMethod { }
-            $objRaw = & $script:scriptBlockApplicationAction $true 'ScopeId_1/Application_7' 'Uninstall'
-            $objRaw.Succeeded | Should -BeTrue
-            ($objRaw.Steps -join "`n") | Should -Match 'Dry run: would call CCM_Application.Uninstall for 7-Zip'
-            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        # A test uninstall key. The key goes away in AfterAll. Dry runs only read it.
+        function New-TestUninstallKey {
+            param([string]$View, [string]$KeyName, [hashtable]$Value)
+            $strParent = $script:strUninstallPath
+            if ($View -eq '32-bit') {
+                $strParent = $script:strUninstallPath32
+            }
+            $strPath = '{0}\{1}' -f $strParent, $KeyName
+            $null = New-Item -Path $strPath -Force
+            foreach ($strName in $Value.Keys) {
+                $strType = 'String'
+                if ($Value[$strName] -is [int]) {
+                    $strType = 'DWord'
+                }
+                $null = New-ItemProperty -LiteralPath $strPath -Name $strName -Value $Value[$strName] -PropertyType $strType -Force
+            }
+            $script:listTestKey.Add($strPath)
         }
-    }
-
-    It 'uninstalls an installed application with the immediate enforce preference' {
-        InModuleScope DeviceInspectorCommon {
-            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 0; JobId = '{JOB}' } }
-            $objRaw = & $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_7' 'Uninstall'
-            $objRaw.Succeeded | Should -BeTrue
-            ($objRaw.Steps -join "`n") | Should -Match 'Uninstall accepted\. Job \{JOB\}'
-            Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter { $ClassName -eq 'CCM_Application' -and $MethodName -eq 'Uninstall' -and $Arguments.Id -eq 'ScopeId_1/Application_7' -and $Arguments.Revision -eq '13' -and $Arguments.EnforcePreference -eq 0 -and $Arguments.IsMachineTarget -eq $true }
+        function New-TestGuid {
+            return ('{' + [guid]::NewGuid().ToString().ToUpperInvariant() + '}')
         }
-    }
-
-    It 'refuses a repair that the client does not allow, and calls no method' {
-        InModuleScope DeviceInspectorCommon {
-            Mock Invoke-CimMethod { }
-            $objRaw = & $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_7' 'Repair'
-            $objRaw.Succeeded | Should -BeFalse
-            $objRaw.Summary | Should -Match 'does not allow Repair'
-            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
-        }
-    }
-
-    It 'picks the highest revision, also with a revision that is not a number' {
-        InModuleScope DeviceInspectorCommon {
-            $script:arrTestApp = @(
-                [pscustomobject]@{ Id = 'A/1'; Revision = '9'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'Superseding'; EvaluationState = 1 }
-                [pscustomobject]@{ Id = 'A/1'; Revision = '12'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'None'; EvaluationState = 1 }
-                [pscustomobject]@{ Id = 'A/1'; Revision = 'x'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'None'; EvaluationState = 1 }
-            )
-            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 0 } }
-            $objRaw = & $script:scriptBlockApplicationAction $false 'A/1' 'Uninstall'
-            $objRaw.Succeeded | Should -BeTrue
-            Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter { $Arguments.Revision -eq '12' }
-        }
-    }
-
-    It 'refuses a user-targeted application, an application that is not installed, and a simulation' -ForEach @(
-        @{ Case = 'user-targeted'; Machine = $false; State = 'Installed'; Preflight = $false; Expected = 'deployed to a user' }
-        @{ Case = 'not installed'; Machine = $true; State = 'NotInstalled'; Preflight = $false; Expected = 'not installed, or the deployment is a simulation' }
-        @{ Case = 'simulation'; Machine = $true; State = 'Installed'; Preflight = $true; Expected = 'not installed, or the deployment is a simulation' }
-    ) {
-        InModuleScope DeviceInspectorCommon -Parameters @{ Machine = $Machine; State = $State; Preflight = $Preflight; Expected = $Expected } {
-            param($Machine, $State, $Preflight, $Expected)
-            $script:arrTestApp = @([pscustomobject]@{ Id = 'A/1'; Revision = '1'; Name = 'App'; InstallState = $State; IsMachineTarget = $Machine; IsPreflightOnly = $Preflight; AllowedActions = @('Install'); SupersessionState = 'None'; EvaluationState = 1 })
-            Mock Invoke-CimMethod { }
-            $objRaw = & $script:scriptBlockApplicationAction $false 'A/1' 'Uninstall'
-            $objRaw.Succeeded | Should -BeFalse
-            $objRaw.Summary | Should -Match $Expected
-            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
-        }
-    }
-
-    It 'says in the log when it sends Uninstall that the allowed actions do not list, and fails without a return value' {
-        InModuleScope DeviceInspectorCommon {
-            Mock Invoke-CimMethod { }
-            $objRaw = & $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_7' 'Uninstall'
-            ($objRaw.Steps -join "`n") | Should -Match 'allowed actions of the client do not list Uninstall'
-            $objRaw.Succeeded | Should -BeFalse
-            $objRaw.Summary | Should -Match 'gave no return value'
-        }
-    }
-
-    It 'leaves out an ID whose highest revision is not installed, as the device acts on that revision' {
-        $objInspection = [pscustomobject]@{
-            Site = $null
-            Device = [pscustomobject]@{
-                InstalledApplications = @()
-                ClientApplications = @(
-                    [pscustomobject]@{ Name = 'App'; Id = 'S/A'; Revision = '9'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SoftwareVersion = '9'; Publisher = '' }
-                    [pscustomobject]@{ Name = 'App'; Id = 'S/A'; Revision = '12'; InstallState = 'NotInstalled'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Install'); SoftwareVersion = '12'; Publisher = '' }
-                )
+        function Invoke-TestApplicationBlock {
+            param([bool]$DryRun, [string]$Operation, [string]$View, [string]$KeyName, [switch]$RealRun)
+            InModuleScope DeviceInspectorCommon -Parameters @{ DryRun = $DryRun; Operation = $Operation; View = $View; KeyName = $KeyName; RealRun = $RealRun.IsPresent } {
+                param($DryRun, $Operation, $View, $KeyName, $RealRun)
+                # A dry run, a refusal and a missing key start nothing. Only a real run in GitHub CI starts the stand-in.
+                if (-not $RealRun) {
+                    Mock Start-Process { }
+                }
+                $objRaw = & $script:scriptBlockApplicationAction $DryRun $Operation $View $KeyName
+                if (-not $RealRun) {
+                    Should -Invoke Start-Process -Times 0 -Exactly
+                }
+                $objRaw
             }
         }
-        @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection).Count | Should -Be 0
+    }
+
+    AfterAll {
+        foreach ($strPath in $script:listTestKey) {
+            Remove-Item -LiteralPath $strPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'takes the view and the key name, and no application ID or command line' {
+        $hashtableParameter = (Get-Command -Name Invoke-DeviceInspectorApplicationAction -Module DeviceInspectorCommon).Parameters
+        foreach ($strName in 'ComputerName', 'Operation', 'View', 'KeyName', 'DryRun', 'Credential') {
+            $hashtableParameter.ContainsKey($strName) | Should -BeTrue -Because $strName
+        }
+        foreach ($strName in 'ApplicationId', 'Command', 'CommandLine', 'UninstallString', 'Arguments') {
+            $hashtableParameter.ContainsKey($strName) | Should -BeFalse -Because $strName
+        }
+    }
+
+    It 'names the action and passes operation, view and key name after DryRun' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+        (Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Uninstall -View '64-bit' -KeyName '{23170F69-40C1-2702-2600-000001000000}' -DryRun).Action | Should -Be 'Uninstall application'
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript -Times 1 -Exactly -ParameterFilter { $ComputerName -eq 'WS01' -and $ArgumentList[0] -eq $true -and $ArgumentList[1] -eq 'Uninstall' -and $ArgumentList[2] -eq '64-bit' -and $ArgumentList[3] -eq '{23170F69-40C1-2702-2600-000001000000}' }
+        (Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Repair -View '32-bit' -KeyName 'Some App' -DryRun).Action | Should -Be 'Repair application'
+    }
+
+    It 'passes a non-dry run to the device script with DryRun false' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+        $objResult = Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Uninstall -View '64-bit' -KeyName 'Some App'
+        $objResult.Mode | Should -Be 'RUN'
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript -Times 1 -Exactly -ParameterFilter { $ArgumentList[0] -eq $false }
+    }
+
+    It 'refuses a key name with a path character, a quote or a wildcard, and a view or operation outside the set' -ForEach @(
+        @{ Key = 'a\b' }, @{ Key = '..\x' }, @{ Key = 'a/b' }, @{ Key = 'a"b' }, @{ Key = 'a*b' }, @{ Key = 'a|b' }, @{ Key = '' }
+    ) {
+        { Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Uninstall -View '64-bit' -KeyName $Key } | Should -Throw
+    }
+
+    It 'refuses a bad view, a bad operation and a bad computer name' {
+        { Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Uninstall -View 'HKCU' -KeyName 'a' } | Should -Throw
+        { Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Remove -View '64-bit' -KeyName 'a' } | Should -Throw
+        { Invoke-DeviceInspectorApplicationAction -ComputerName "WS01'; calc" -Operation Uninstall -View '64-bit' -KeyName 'a' } | Should -Throw
+    }
+
+    It 'accepts a product code and a normal key name' -ForEach @(
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}' }, @{ Key = 'Mozilla Firefox 130.0 (x64 en-US)' }, @{ Key = '{ABC}_is1' }, @{ Key = '7-Zip' }
+    ) {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+        { Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Uninstall -View '64-bit' -KeyName $Key -DryRun } | Should -Not -Throw
+    }
+
+    It 'returns a failed result when the device does not answer, and says that a step can have run' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { throw 'WinRM cannot complete the operation.' }
+        $objResult = Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -Operation Uninstall -View '64-bit' -KeyName 'a'
+        $objResult.Succeeded | Should -BeFalse
+        $objResult.Summary | Should -Match 'Inspect the device to see its state'
+    }
+
+    It 'sends no command line, so the device builds it: the action file calls Start-Process only inside the device block' {
+        $objAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strActionsFile, [ref]$null, [ref]$null)
+        foreach ($objFunction in @($objAst.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true))) {
+            $arrCommand = @($objFunction.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() })
+            $arrCommand | Should -Not -Contain 'Start-Process' -Because $objFunction.Name
+        }
+        $objBlock = $objAst.Find({ param($objNode) $objNode -is [System.Management.Automation.Language.AssignmentStatementAst] -and $objNode.Left.Extent.Text -eq '$script:scriptBlockApplicationAction' }, $true)
+        @($objBlock.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CommandAst] -and $objNode.GetCommandName() -eq 'Start-Process' }, $true)).Count | Should -Be 1
+    }
+
+    It 'detects MSI for the key <Key> with the uninstall string <Uninstall> and WindowsInstaller <Installer>: <Expected>' -ForEach @(
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'MsiExec.exe /I{23170F69-40C1-2702-2600-000001000000}'; Installer = 0; Expected = $true }
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'msiexec /x {23170F69-40C1-2702-2600-000001000000}'; Installer = 0; Expected = $true }
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = '"C:\Windows\System32\MSIEXEC.EXE" /x {23170F69-40C1-2702-2600-000001000000}'; Installer = 0; Expected = $true }
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = '"msiexec.exe" /x {23170F69-40C1-2702-2600-000001000000}'; Installer = 0; Expected = $true }
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'C:\Vendor\setup.exe /remove'; Installer = 1; Expected = $true }
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = ''; Installer = 1; Expected = $true }
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'C:\Vendor\setup.exe /remove'; Installer = 0; Expected = $false }
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'C:\Vendor\msiexec-helper.exe'; Installer = 0; Expected = $false }
+        @{ Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'msiexecfoo.exe /x'; Installer = 0; Expected = $false }
+        @{ Key = 'SomeProduct_is1'; Uninstall = 'MsiExec.exe /X{23170F69-40C1-2702-2600-000001000000}'; Installer = 1; Expected = $false }
+        @{ Key = '23170F69-40C1-2702-2600-000001000000'; Uninstall = 'MsiExec.exe /X{23170F69-40C1-2702-2600-000001000000}'; Installer = 1; Expected = $false }
+        @{ Key = '{23170F69-40C1-2702-2600-00000100000}'; Uninstall = 'MsiExec.exe /X{23170F69-40C1-2702-2600-000001000000}'; Installer = 1; Expected = $false }
+    ) {
+        $scriptBlockIsMsi = $script:hashtableBlock['scriptBlockIsMsi']
+        (& $scriptBlockIsMsi $Key $Uninstall $Installer) | Should -Be $Expected
+    }
+
+    It 'splits the quiet uninstall string <Command> into the path <Path> and the arguments <Arguments>' -ForEach @(
+        @{ Command = '"C:\Program Files\App\unins000.exe" /VERYSILENT /NORESTART'; Path = 'C:\Program Files\App\unins000.exe'; Arguments = '/VERYSILENT /NORESTART' }
+        @{ Command = 'C:\Program Files\App\unins000.exe /S'; Path = 'C:\Program Files\App\unins000.exe'; Arguments = '/S' }
+        @{ Command = 'C:\Program Files\App\unins000.EXE   /S /v"/qn"'; Path = 'C:\Program Files\App\unins000.EXE'; Arguments = '/S /v"/qn"' }
+        @{ Command = '  "C:\App\setup.exe"  '; Path = 'C:\App\setup.exe'; Arguments = '' }
+        @{ Command = 'C:\App\setup.exe'; Path = 'C:\App\setup.exe'; Arguments = '' }
+        @{ Command = 'MsiExec.exe /X{23170F69-40C1-2702-2600-000001000000} /qn'; Path = 'MsiExec.exe'; Arguments = '/X{23170F69-40C1-2702-2600-000001000000} /qn' }
+        @{ Command = 'C:\a.exe.old\b.exe /q'; Path = 'C:\a.exe.old\b.exe'; Arguments = '/q' }
+        @{ Command = '"C:\Program Files\App\x.exe" "C:\Program Files\App\y.exe" /s'; Path = 'C:\Program Files\App\x.exe'; Arguments = '"C:\Program Files\App\y.exe" /s' }
+    ) {
+        $scriptBlockSplit = $script:hashtableBlock['scriptBlockSplitCommand']
+        $objSplit = & $scriptBlockSplit $Command
+        $objSplit.FilePath | Should -Be $Path
+        $objSplit.Arguments | Should -Be $Arguments
+    }
+
+    It 'does not split <Command>, so the device refuses to run it' -ForEach @(
+        @{ Command = '' }, @{ Command = '   ' }, @{ Command = '"unterminated C:\app.exe /s' }, @{ Command = 'C:\App\uninstall.bat /s' }, @{ Command = 'rundll32.dll,Uninstall' }, @{ Command = '""' }
+    ) {
+        $scriptBlockSplit = $script:hashtableBlock['scriptBlockSplitCommand']
+        $objSplit = & $scriptBlockSplit $Command
+        $objSplit | Should -BeNullOrEmpty
+    }
+
+    It 'maps the exit code <Code> of <Operation> with the key gone <Gone>: success <Expected>, restart <Restart>' -ForEach @(
+        @{ Operation = 'Uninstall'; Code = 0; Gone = $true; Expected = $true; Restart = $false; Text = 'exit code 0' }
+        @{ Operation = 'Repair'; Code = 0; Gone = $false; Expected = $true; Restart = $false; Text = 'exit code 0' }
+        @{ Operation = 'Uninstall'; Code = 3010; Gone = $true; Expected = $true; Restart = $true; Text = 'restart of the device is needed.*never restarts' }
+        @{ Operation = 'Repair'; Code = 3010; Gone = $false; Expected = $true; Restart = $true; Text = 'restart of the device is needed' }
+        @{ Operation = 'Uninstall'; Code = 1641; Gone = $true; Expected = $true; Restart = $true; Text = 'restart of the device is needed' }
+        @{ Operation = 'Repair'; Code = 1641; Gone = $false; Expected = $true; Restart = $true; Text = 'restart of the device is needed' }
+        @{ Operation = 'Uninstall'; Code = 1605; Gone = $true; Expected = $true; Restart = $false; Text = 'already removed' }
+        @{ Operation = 'Uninstall'; Code = 1605; Gone = $false; Expected = $false; Restart = $false; Text = 'key is still there' }
+        @{ Operation = 'Repair'; Code = 1605; Gone = $true; Expected = $false; Restart = $false; Text = 'exit code 1605' }
+        @{ Operation = 'Uninstall'; Code = 1618; Gone = $false; Expected = $false; Restart = $false; Text = 'another installation is in progress.*later' }
+        @{ Operation = 'Repair'; Code = 1618; Gone = $false; Expected = $false; Restart = $false; Text = 'another installation is in progress' }
+        @{ Operation = 'Uninstall'; Code = 1603; Gone = $false; Expected = $false; Restart = $false; Text = 'exit code 1603' }
+        @{ Operation = 'Uninstall'; Code = 1; Gone = $true; Expected = $false; Restart = $false; Text = 'exit code 1' }
+        @{ Operation = 'Repair'; Code = -2147024891; Gone = $false; Expected = $false; Restart = $false; Text = 'exit code -2147024891' }
+    ) {
+        $scriptBlockMap = $script:hashtableBlock['scriptBlockMapExitCode']
+        $objMap = & $scriptBlockMap $Operation $Code $Gone
+        $objMap.Succeeded | Should -Be $Expected
+        $objMap.RestartNeeded | Should -Be $Restart
+        $objMap.Text | Should -Match $Text
+    }
+
+    It 'fails with a clear summary when the key is not on the device' -ForEach @(@{ View = '64-bit' }, @{ View = '32-bit' }) {
+        $objRaw = Invoke-TestApplicationBlock -DryRun $false -Operation 'Uninstall' -View $View -KeyName (New-TestGuid)
+        $objRaw.Succeeded | Should -BeFalse
+        $objRaw.Summary | Should -Match 'is not on the device now'
+        $objRaw.Summary | Should -Match ([regex]::Escape($View))
+    }
+
+    It 'lists the msiexec uninstall command in a dry run, and starts nothing' {
+        $strKey = New-TestGuid
+        New-TestUninstallKey -View '64-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test MSI'; UninstallString = ('MsiExec.exe /I{0}' -f $strKey); WindowsInstaller = 1 }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strKey
+        $objRaw.Succeeded | Should -BeTrue
+        $objRaw.Summary | Should -Match 'Nothing changed'
+        $objRaw.Steps | Should -Contain ('Dry run: would run: msiexec.exe /x {0} /qn /norestart REBOOT=ReallySuppress' -f $strKey)
+        ($objRaw.Steps -join "`n") | Should -Match 'type MSI'
+    }
+
+    It 'lists the msiexec repair command with REINSTALL=ALL and REINSTALLMODE=omus in a dry run, not /f' {
+        $strKey = New-TestGuid
+        New-TestUninstallKey -View '32-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test MSI 32'; UninstallString = ('MsiExec.exe /X{0}' -f $strKey) }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $true -Operation 'Repair' -View '32-bit' -KeyName $strKey
+        $objRaw.Succeeded | Should -BeTrue
+        $objRaw.Steps | Should -Contain ('Dry run: would run: msiexec.exe /i {0} REINSTALL=ALL REINSTALLMODE=omus /qn /norestart REBOOT=ReallySuppress' -f $strKey)
+        ($objRaw.Steps -join "`n") | Should -Not -Match ' /f'
+    }
+
+    It 'finds the key in the view that the caller names and not in the other view' {
+        $strKey = New-TestGuid
+        New-TestUninstallKey -View '32-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test view'; UninstallString = ('MsiExec.exe /X{0}' -f $strKey) }
+        (Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '32-bit' -KeyName $strKey).Succeeded | Should -BeTrue
+        (Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strKey).Summary | Should -Match 'is not on the device now'
+    }
+
+    It 'lists the quiet uninstall string as written for an EXE entry in a dry run' {
+        $strCmd = Join-Path -Path $script:strSystem -ChildPath 'cmd.exe'
+        $strQuiet = '"{0}" /c exit 0' -f $strCmd
+        $strKey = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test EXE'; UninstallString = 'C:\nothing\unins.exe'; QuietUninstallString = $strQuiet }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strKey
+        $objRaw.Succeeded | Should -BeTrue
+        $objRaw.Steps | Should -Contain ('Dry run: would run: {0}' -f $strQuiet)
+        ($objRaw.Steps -join "`n") | Should -Match 'type EXE'
+    }
+
+    It 'refuses a repair of an EXE entry, with no command run' {
+        $strKey = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test EXE'; QuietUninstallString = ('"{0}\cmd.exe" /c exit 0' -f $script:strSystem) }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $false -Operation 'Repair' -View '64-bit' -KeyName $strKey
+        $objRaw.Succeeded | Should -BeFalse
+        $objRaw.Summary | Should -Match 'no documented repair command'
+    }
+
+    It 'refuses an EXE entry without a quiet uninstall string and guesses no switches' {
+        $strKey = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test EXE'; UninstallString = ('"{0}\cmd.exe" /c exit 0' -f $script:strSystem) }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $false -Operation 'Uninstall' -View '64-bit' -KeyName $strKey
+        $objRaw.Succeeded | Should -BeFalse
+        $objRaw.Summary | Should -Match 'no quiet uninstall string'
+        $objRaw.Summary | Should -Match 'does not guess silent switches'
+    }
+
+    It 'refuses a system component, also for an MSI product' {
+        $strKey = New-TestGuid
+        New-TestUninstallKey -View '64-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test hidden'; UninstallString = ('MsiExec.exe /X{0}' -f $strKey); SystemComponent = 1 }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $false -Operation 'Uninstall' -View '64-bit' -KeyName $strKey
+        $objRaw.Succeeded | Should -BeFalse
+        $objRaw.Summary | Should -Match 'system component, part of another product'
+        (Invoke-TestApplicationBlock -DryRun $true -Operation 'Repair' -View '64-bit' -KeyName $strKey).Succeeded | Should -BeFalse
+    }
+
+    It 'refuses an EXE entry whose uninstall program is not on the device, and one with no .exe path' {
+        $strKey = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test missing'; QuietUninstallString = '"C:\DiTest-no-such-folder\unins000.exe" /S' }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strKey
+        $objRaw.Succeeded | Should -BeFalse
+        $objRaw.Summary | Should -Match 'is not on the device'
+        $strBat = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strBat -Value @{ DisplayName = 'DI test bat'; QuietUninstallString = 'C:\DiTest\uninstall.bat /s' }
+        $objBat = Invoke-TestApplicationBlock -DryRun $true -Operation 'Uninstall' -View '64-bit' -KeyName $strBat
+        $objBat.Succeeded | Should -BeFalse
+        $objBat.Summary | Should -Match 'no file path that ends in .exe'
+    }
+
+    # These tests run an installer stand-in (cmd.exe and reg.exe). They run in GitHub CI
+    # only. The lab does only dry runs of an uninstall or a repair.
+    It 'runs the quiet uninstall string, waits, and reports that the key is gone' -Skip:($env:GITHUB_ACTIONS -ne 'true') {
+        $strKey = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        $strRegistry = 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{0}' -f $strKey
+        New-TestUninstallKey -View '64-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test remove'; QuietUninstallString = ('"{0}\reg.exe" delete "{1}" /f' -f $script:strSystem, $strRegistry) }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $false -Operation 'Uninstall' -View '64-bit' -KeyName $strKey -RealRun
+        $objRaw.Succeeded | Should -BeTrue
+        ($objRaw.Steps -join "`n") | Should -Match 'exit code 0'
+        ($objRaw.Steps -join "`n") | Should -Match ('the key {0} is gone' -f [regex]::Escape($strKey))
+        Test-Path -LiteralPath ('{0}\{1}' -f $script:strUninstallPath, $strKey) | Should -BeFalse
+    }
+
+    It 'reports the exit code <Code> of a real run: success <Expected>' -Skip:($env:GITHUB_ACTIONS -ne 'true') -ForEach @(
+        @{ Code = 3010; Expected = $true; Text = 'restart of the device is needed' }
+        @{ Code = 1641; Expected = $true; Text = 'restart of the device is needed' }
+        @{ Code = 1618; Expected = $false; Text = 'another installation is in progress' }
+        @{ Code = 1605; Expected = $false; Text = 'key is still there' }
+        @{ Code = 7; Expected = $false; Text = 'exit code 7' }
+    ) {
+        $strKey = 'DiTest-{0}' -f [guid]::NewGuid().ToString('N')
+        New-TestUninstallKey -View '64-bit' -KeyName $strKey -Value @{ DisplayName = 'DI test exit'; QuietUninstallString = ('"{0}\cmd.exe" /c exit {1}' -f $script:strSystem, $Code) }
+        $objRaw = Invoke-TestApplicationBlock -DryRun $false -Operation 'Uninstall' -View '64-bit' -KeyName $strKey -RealRun
+        $objRaw.Succeeded | Should -Be $Expected
+        $objRaw.Summary | Should -Match $Text
+    }
+
+    It 'turns the rows of an MSI entry, an EXE entry with a quiet string, an EXE entry without one and a system component to the rules' -ForEach @(
+        @{ Case = 'MSI'; Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'MsiExec.exe /I{23170F69-40C1-2702-2600-000001000000}'; Quiet = ''; Component = 0; Type = 'MSI'; CanUninstall = $true; CanRepair = $true; UninstallReason = ''; RepairReason = '' }
+        @{ Case = 'EXE with a quiet uninstall string'; Key = 'App_is1'; Uninstall = '"C:\App\unins000.exe"'; Quiet = '"C:\App\unins000.exe" /VERYSILENT'; Component = 0; Type = 'EXE'; CanUninstall = $true; CanRepair = $false; UninstallReason = ''; RepairReason = 'no documented repair command' }
+        @{ Case = 'EXE without a quiet uninstall string'; Key = 'App_is1'; Uninstall = '"C:\App\unins000.exe"'; Quiet = ''; Component = 0; Type = 'EXE'; CanUninstall = $false; CanRepair = $false; UninstallReason = 'does not guess silent switches'; RepairReason = 'does not guess silent switches' }
+        @{ Case = 'system component, MSI'; Key = '{23170F69-40C1-2702-2600-000001000000}'; Uninstall = 'MsiExec.exe /I{23170F69-40C1-2702-2600-000001000000}'; Quiet = ''; Component = 1; Type = 'MSI'; CanUninstall = $false; CanRepair = $false; UninstallReason = 'system component, part of another product'; RepairReason = 'system component, part of another product' }
+        @{ Case = 'system component, EXE with a quiet string'; Key = 'Hidden'; Uninstall = 'C:\x.exe'; Quiet = 'C:\x.exe /S'; Component = 1; Type = 'EXE'; CanUninstall = $false; CanRepair = $false; UninstallReason = 'system component, part of another product'; RepairReason = 'system component, part of another product' }
+    ) {
+        $objInspection = [pscustomobject]@{
+            Site   = $null
+            Device = [pscustomobject]@{ InstalledApplications = @([pscustomobject]@{ Name = 'App'; Version = '1.0'; Publisher = 'P'; InstallDate = '20260101'; KeyName = $Key; View = '64-bit'; UninstallString = $Uninstall; QuietUninstallString = $Quiet; SystemComponent = $Component; WindowsInstaller = 0 }) }
+        }
+        $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection)
+        $arrRow.Count | Should -Be 1
+        $arrRow[0].Type | Should -Be $Type
+        $arrRow[0].CanUninstall | Should -Be $CanUninstall
+        $arrRow[0].CanRepair | Should -Be $CanRepair
+        if ($UninstallReason) { $arrRow[0].UninstallReason | Should -Match $UninstallReason } else { $arrRow[0].UninstallReason | Should -BeNullOrEmpty }
+        if ($RepairReason) { $arrRow[0].RepairReason | Should -Match $RepairReason } else { $arrRow[0].RepairReason | Should -BeNullOrEmpty }
+        if (-not $CanUninstall -or -not $CanRepair) { $arrRow[0].Reason | Should -Not -BeNullOrEmpty } else { $arrRow[0].Reason | Should -BeNullOrEmpty }
+    }
+
+    It 'shows the exact command for display: msiexec for an MSI entry, the quiet string as written for an EXE entry' {
+        $strGuid = '{23170F69-40C1-2702-2600-000001000000}'
+        $objInspection = [pscustomobject]@{
+            Site   = $null
+            Device = [pscustomobject]@{ InstalledApplications = @(
+                    [pscustomobject]@{ Name = 'M'; Version = '1'; Publisher = ''; InstallDate = ''; KeyName = $strGuid; View = '64-bit'; UninstallString = ('MsiExec.exe /I{0}' -f $strGuid); QuietUninstallString = ''; SystemComponent = 0; WindowsInstaller = 1 }
+                    [pscustomobject]@{ Name = 'E'; Version = '1'; Publisher = ''; InstallDate = ''; KeyName = 'E_is1'; View = '32-bit'; UninstallString = '"C:\E\u.exe"'; QuietUninstallString = '  "C:\E\u.exe" /VERYSILENT /NORESTART  '; SystemComponent = 0; WindowsInstaller = 0 }
+                ) }
+        }
+        $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection)
+        $arrRow[0].UninstallCommand | Should -Be ('msiexec.exe /x {0} /qn /norestart REBOOT=ReallySuppress' -f $strGuid)
+        $arrRow[0].RepairCommand | Should -Be ('msiexec.exe /i {0} REINSTALL=ALL REINSTALLMODE=omus /qn /norestart REBOOT=ReallySuppress' -f $strGuid)
+        $arrRow[1].UninstallCommand | Should -Be '"C:\E\u.exe" /VERYSILENT /NORESTART'
+        $arrRow[1].RepairCommand | Should -BeNullOrEmpty
+    }
+
+    It 'makes no row from the client application policy, and keeps two entries that share a name and a version' {
+        $objInspection = [pscustomobject]@{
+            Site   = $null
+            Device = [pscustomobject]@{
+                InstalledApplications = @(
+                    [pscustomobject]@{ Name = 'Same'; Version = '1.0'; Publisher = ''; InstallDate = ''; KeyName = '{11111111-1111-1111-1111-111111111111}'; View = '64-bit'; UninstallString = 'MsiExec.exe /X{11111111-1111-1111-1111-111111111111}'; QuietUninstallString = ''; SystemComponent = 0; WindowsInstaller = 1 }
+                    [pscustomobject]@{ Name = 'Same'; Version = '1.0'; Publisher = ''; InstallDate = ''; KeyName = '{11111111-1111-1111-1111-111111111111}'; View = '32-bit'; UninstallString = 'MsiExec.exe /X{11111111-1111-1111-1111-111111111111}'; QuietUninstallString = ''; SystemComponent = 0; WindowsInstaller = 1 }
+                )
+                ClientApplications    = @([pscustomobject]@{ Name = 'CM App'; Id = 'S/A1'; Revision = '1'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall', 'Repair'); SoftwareVersion = '1'; Publisher = '' })
+            }
+        }
+        $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection)
+        $arrRow.Count | Should -Be 2
+        @($arrRow | Where-Object Name -eq 'CM App').Count | Should -Be 0
+        @($arrRow.View | Sort-Object) | Should -Be @('32-bit', '64-bit')
+    }
+
+    It 'turns both actions off for an entry that has no usable view or key name' {
+        $objInspection = [pscustomobject]@{ Site = $null; Device = [pscustomobject]@{ InstalledApplications = @([pscustomobject]@{ Name = 'Old shape'; Version = '1'; Publisher = '' }) } }
+        $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection)
+        $arrRow[0].CanUninstall | Should -BeFalse
+        $arrRow[0].CanRepair | Should -BeFalse
+        $arrRow[0].Reason | Should -Match 'did not report a usable registry view'
+    }
+
+    It 'returns no row when the device was not read' {
+        @(ConvertTo-DeviceInspectionApplicationRow -Inspection ([pscustomobject]@{ Site = $null; Device = $null })).Count | Should -Be 0
     }
 
     It 'puts the application line into a result that has no steps' {
         $script:strStart | Should -Match 'if \(@\(\$r\.Steps\)\.Count -eq 0 -and @\(\$script:ActionPending\.Detail\)\.Count -gt 0\) \{ \$r\.Steps = \[string\[\]\]@\(\$script:ActionPending\.Detail\) \}'
     }
 
-    It 'turns both entries off for a user-targeted application, and gives each application ID one row' {
-        $objInspection = [pscustomobject]@{
-            Site = $null
-            Device = [pscustomobject]@{
-                InstalledApplications = @()
-                ClientApplications = @(
-                    [pscustomobject]@{ Name = 'Dup'; Id = 'S/B'; Revision = '1'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall', 'Repair'); SoftwareVersion = '1'; Publisher = '' }
-                    [pscustomobject]@{ Name = 'Dup'; Id = 'S/A'; Revision = '3'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SoftwareVersion = '3'; Publisher = '' }
-                    [pscustomobject]@{ Name = 'Dup'; Id = 'S/A'; Revision = '7'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SoftwareVersion = '7'; Publisher = '' }
-                    [pscustomobject]@{ Name = 'User App'; Id = 'S/U'; Revision = '1'; InstallState = 'Installed'; IsMachineTarget = $false; IsPreflightOnly = $false; AllowedActions = @('Uninstall', 'Repair'); SoftwareVersion = '1'; Publisher = '' }
-                )
-            }
-        }
-        $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection)
-        $arrDup = @($arrRow | Where-Object Name -eq 'Dup')
-        $arrDup.Count | Should -Be 2
-        @($arrDup | ForEach-Object { $_.ClientApplicationId } | Sort-Object) | Should -Be @('S/A', 'S/B')
-        @($arrDup | Where-Object ClientApplicationId -eq 'S/A')[0].ClientRevision | Should -Be '7'
-        $objUser = @($arrRow | Where-Object Name -eq 'User App')[0]
-        $objUser.CanUninstall | Should -BeFalse
-        $objUser.CanRepair | Should -BeFalse
-    }
-
-    It 'names the application in the STARTED line and turns the row off after a run' {
-        $script:strStart | Should -Match "-Detail @\(\('Application: \{0\}, ID \{1\}, revision \{2\}\.'"
+    It 'names the application in the STARTED line, sends the view and the key name and no command line, and turns the row off after an uninstall' {
+        $script:strStart | Should -Match "-Detail @\(\('Application: \{0\} \{1\}, \{2\}, \{3\} view, key \{4\}\.'"
         $script:strStart | Should -Match "-Outcome 'STARTED' -Summary 'The run started\.' -Steps \`$Detail"
-        $script:strStart | Should -Match '\$script:ApplicationRowDone\.CanUninstall = \$false; \$script:ApplicationRowDone\.CanRepair = \$false; Update-AppFilter'
+        $script:strStart | Should -Match '-Parameters @\{ Operation = \$Operation; View = \[string\]\$row\.View; KeyName = \[string\]\$row\.KeyName \}'
+        $script:strStart | Should -Not -Match 'ApplicationId'
+        $script:strStart | Should -Match "(?s)\`$r\.Action -like 'Uninstall\*'.*?\`$script:ApplicationRowDone\.CanUninstall = \`$false; \`$script:ApplicationRowDone\.CanRepair = \`$false.*?Update-AppFilter"
         $script:strStart | Should -Match "(?s)function Select-RowUnderPointer \{.*?if \(-not \`$node\) \{\s*\`$Grid\.SelectedItems\.Clear\(\)"
     }
 
-    It 'fails when the application is gone, and when the client refuses' {
-        InModuleScope DeviceInspectorCommon {
-            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 2147749890 } }
-            (& $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_7' 'Uninstall').Summary | Should -Match 'refused the Uninstall request'
-            (& $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_0' 'Uninstall').Summary | Should -Match 'no application with this ID'
-        }
+    It 'shows the exact command in the confirmation text and builds it from the row for display only' {
+        $script:strStart | Should -Match "(?s)function Invoke-ApplicationOperation \{.*?\`$commandName = \('\{0\}Command' -f \`$Operation\).*?runs this command and waits up to 10 minutes.*?\`$command"
     }
 
-    It 'lists an installed client application as its own row, and links it to an uninstall entry of the same name' {
-        $objInspection = [pscustomobject]@{
-            Site = $null
-            Device = [pscustomobject]@{
-                InstalledApplications = @([pscustomobject]@{ Name = '7-Zip 26.03 (x64 edition)'; Version = '26.03'; Publisher = 'Igor Pavlov'; InstallDate = '20261110' }, [pscustomobject]@{ Name = 'Same Name App'; Version = '1.0'; Publisher = 'P'; InstallDate = '' })
-                ClientApplications = @(
-                    [pscustomobject]@{ Name = '7-Zip (x64 edition) - 26.03'; Id = 'S/A1'; Revision = '13'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Install'); SoftwareVersion = '26.03'; Publisher = 'Igor Pavlov' }
-                    [pscustomobject]@{ Name = 'Same Name App'; Id = 'S/A2'; Revision = '2'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall', 'Repair'); SoftwareVersion = '1.0'; Publisher = 'P' }
-                    [pscustomobject]@{ Name = 'Not Installed App'; Id = 'S/A3'; Revision = '1'; InstallState = 'NotInstalled'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Install'); SoftwareVersion = '1.0'; Publisher = 'P' }
-                )
-            }
-        }
-        $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection)
-        $arrRow.Count | Should -Be 3
-        $objClientRow = @($arrRow | Where-Object Status -eq 'Client application')
-        $objClientRow.Count | Should -Be 1
-        $objClientRow[0].ClientApplicationId | Should -Be 'S/A1'
-        $objClientRow[0].CanUninstall | Should -BeTrue
-        $objClientRow[0].CanRepair | Should -BeFalse
-        $objLinked = @($arrRow | Where-Object Name -eq 'Same Name App')[0]
-        $objLinked.ClientApplicationId | Should -Be 'S/A2'
-        $objLinked.CanRepair | Should -BeTrue
-        @($arrRow | Where-Object Name -eq '7-Zip 26.03 (x64 edition)')[0].ClientApplicationId | Should -Be ''
-    }
-
-    It 'does not count a client application row as an inventory difference' {
-        $objInspection = [pscustomobject]@{
-            ComputerName = 'WS01'
-            Site = [pscustomobject]@{ Found = $true; HardwareScanClientTime = '2026-11-10T10:01:00'; InstalledApplications = @() }
-            Device = [pscustomobject]@{ Client = [pscustomobject]@{ HardwareCycleLocalTime = '2026-11-10T10:00:00' }; InstalledApplications = @()
-                ClientApplications = @([pscustomobject]@{ Name = 'CM App'; Id = 'S/A1'; Revision = '1'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @(); SoftwareVersion = '1'; Publisher = '' }) }
-        }
-        (Test-DeviceInspectionInventory -Inspection $objInspection).State | Should -Be 'Current'
+    It 'uses the reason of the row as the tooltip of a turned-off menu entry' {
+        $script:strStart | Should -Match "(?s)\`$gridApps\.ContextMenu\.Add_Opened\(\{\s*\`$gate = Get-ActionGateText.*?Why = 'UninstallReason'.*?Why = 'RepairReason'.*?\`$why = \[string\]\`$row\.\(\`$pair\.Why\).*?Set-MenuItemState -Item \`$pair\.Item -Enabled \`$false -Reason \`$why"
     }
 
     It 'has Uninstall and Repair entries that open the action through the gate' {
         $script:strXaml | Should -Match 'x:Name="menuUninstallApp"[^>]*ToolTipService.ShowOnDisabled="True"'
         $script:strXaml | Should -Match 'x:Name="menuRepairApp"'
-        $script:strXaml | Should -Match '<ComboBoxItem Content="Client application"/>'
         $script:strStart | Should -Match "(?s)\`$gridApps\.ContextMenu\.Add_Opened\(\{\s*\`$gate = Get-ActionGateText"
         $script:strStart | Should -Match "(?s)function Invoke-ApplicationOperation \{.*?Invoke-DeviceAction -Name \('\{0\} application' -f \`$Operation\) -Function 'Invoke-DeviceInspectorApplicationAction'"
+    }
+
+    It 'offers the filter values All, MSI and EXE, and shows no status and no inventory version' {
+        $script:strXaml | Should -Match '(?s)x:Name="cboAppType".*?<ComboBoxItem Content="All" IsSelected="True"/>\s*<ComboBoxItem Content="MSI"/>\s*<ComboBoxItem Content="EXE"/>\s*</ComboBox>'
+        foreach ($strGone in 'Match', 'Version differs', 'Device only', 'Inventory only', 'Client application') {
+            $script:strXaml | Should -Not -Match ('<ComboBoxItem Content="{0}"' -f $strGone) -Because $strGone
+        }
+        $script:strXaml | Should -Not -Match 'Inventory version'
+        $script:strXaml | Should -Not -Match 'Binding="\{Binding (Status|InventoryVersion|DeviceVersion)\}"'
+        $script:strXaml | Should -Match 'Binding="\{Binding Type\}"'
+        $script:strStart | Should -Match "\`$type -ne 'All'.*?\`$_\.Type -eq \`$type"
     }
 }
 

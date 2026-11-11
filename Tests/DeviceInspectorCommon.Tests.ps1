@@ -706,6 +706,51 @@ Describe 'Get-DeviceFact' {
             $script:scriptBlockSeen.ToString() | Should -Not -Match '(Set|Remove|New|Start|Stop|Restart)-(Item|CimInstance|Service|ItemProperty)'
         }
     }
+
+    It 'reads the uninstall keys of HKLM only, and keeps the view, the key name and the uninstall strings of each entry' {
+        InModuleScope DeviceInspectorCommon {
+            $script:scriptBlockSeen = $null
+            Mock Invoke-Command {
+                $script:scriptBlockSeen = $ScriptBlock
+                [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @() }
+            }
+            $null = Get-DeviceFact -ComputerName 'WS01'
+            $strBlock = $script:scriptBlockSeen.ToString()
+            $strBlock | Should -Not -Match 'HKCU|HKU:|HKEY_CURRENT_USER|HKEY_USERS'
+            $strBlock | Should -Match "View = '64-bit'.*?CurrentVersion\\Uninstall\\\*"
+            $strBlock | Should -Match "View = '32-bit'.*?WOW6432Node"
+            foreach ($strName in 'KeyName', 'View', 'UninstallString', 'QuietUninstallString', 'SystemComponent', 'WindowsInstaller') {
+                $strBlock | Should -Match ('{0}\s+=' -f $strName) -Because $strName
+            }
+            $strBlock | Should -Not -Match 'Sort-Object -Property Name, Version -Unique'
+        }
+    }
+
+    # Runs the read block of the device on the computer that runs the tests. The lab and CI only.
+    It 'returns one entry for each uninstall key with a display name, and loses no key to a name and version match' {
+        InModuleScope DeviceInspectorCommon {
+            $script:scriptBlockSeen = $null
+            Mock Invoke-Command {
+                $script:scriptBlockSeen = $ScriptBlock
+                [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @() }
+            }
+            $null = Get-DeviceFact -ComputerName 'WS01'
+            $objRaw = & $script:scriptBlockSeen
+            $arrEntry = @($objRaw.InstalledApplications)
+            $intKeyCount = 0
+            foreach ($strPath in 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*') {
+                $intKeyCount += @(Get-ItemProperty -Path $strPath -ErrorAction SilentlyContinue | Where-Object { $null -ne $_.PSObject.Properties['DisplayName'] -and -not [string]::IsNullOrWhiteSpace([string]$_.DisplayName) }).Count
+            }
+            $arrEntry.Count | Should -BeGreaterThan 0
+            $arrEntry.Count | Should -Be $intKeyCount
+            foreach ($objEntry in $arrEntry) {
+                $objEntry.View | Should -BeIn @('64-bit', '32-bit')
+                $objEntry.KeyName | Should -Not -BeNullOrEmpty
+                $objEntry.SystemComponent | Should -BeIn @(0, 1)
+            }
+            @($arrEntry | ForEach-Object { '{0}|{1}' -f $_.View, $_.KeyName } | Sort-Object -Unique).Count | Should -Be $arrEntry.Count
+        }
+    }
 }
 
 Describe 'ConvertTo-DeviceInspectionReport' {

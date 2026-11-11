@@ -16,7 +16,7 @@ The user guide is in [docs/index.md](docs/index.md). It has one page for each pa
 ## Features
 
 - One window, six panels: Device list, Device, Applications, Updates, Collections, Problems.
-- Compares the applications installed on the device with the site hardware inventory. Each row has a status: Match, Version differs, Device only or Inventory only.
+- Shows the applications that the device lists in its uninstall registry keys now (64-bit and 32-bit). Each row has a type, MSI or EXE. A right-click uninstalls or repairs an entry from its key, behind Enable actions.
 - Lists the updates that the site requires for the device and the updates pending in the client policy on the device.
 - Lists the collections of the device and the deployments that target them.
 - Keeps going when one part fails. A part that fails (a device that is off, a device the site does not know) is listed under Problems. The other parts still run.
