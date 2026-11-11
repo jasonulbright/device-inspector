@@ -184,7 +184,11 @@ $script:scriptBlockUpdateInstall = {
         $listStep.Add(('KB{0} {1}, state {2}.' -f [string]$objUpdate.ArticleID, [string]$objUpdate.Name, (& $scriptBlockState $objUpdate.EvaluationState)))
     }
     if ($arrTarget.Count -eq 0) {
-        return [pscustomobject]@{ Succeeded = $false; Summary = 'No update to install: the client policy has no matching update that is missing on the device.'; Steps = @($listStep) }
+        $strNone = 'No update to install: the client policy has no matching update that is missing on the device.'
+        if ($arrCandidate.Count -gt 0) {
+            $strNone = 'No update to install: each matching update has an install job in progress or complete.'
+        }
+        return [pscustomobject]@{ Succeeded = $false; Summary = $strNone; Steps = @($listStep) }
     }
     if ($DryRun) {
         $listStep.Add(('Dry run: would call CCM_SoftwareUpdatesManager.InstallUpdates for {0} updates.' -f $arrTarget.Count))

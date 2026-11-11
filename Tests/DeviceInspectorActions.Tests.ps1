@@ -674,6 +674,7 @@ Describe 'Install pending updates' {
             $objRaw = & $script:scriptBlockUpdateInstall $false @()
             $objRaw.Succeeded | Should -BeFalse
             ($objRaw.Steps -join "`n") | Should -Match 'Skipped KB5009: an install job is in progress or complete, state Downloading \(5\)'
+            $objRaw.Summary | Should -Match 'each matching update has an install job in progress or complete'
             Should -Invoke Invoke-CimMethod -Times 0 -Exactly
         }
     }
@@ -711,12 +712,14 @@ Describe 'Install pending updates' {
             Device = [pscustomobject]@{ PendingUpdates = @(
                     [pscustomobject]@{ Name = 'A'; ArticleId = '5001'; UpdateId = 'Site_X/SUM_1'; ComplianceState = 0; State = 'None'; Deadline = $null }
                     [pscustomobject]@{ Name = 'B'; ArticleId = '5003'; UpdateId = 'Site_X/SUM_3'; ComplianceState = 1; State = 'None'; Deadline = $null }
+                    [pscustomobject]@{ Name = 'C'; ArticleId = '5004'; UpdateId = 'Site_X/SUM_4'; ComplianceState = 0; EvaluationState = 5; State = 'Downloading'; Deadline = $null }
                 ) }
         }
         $arrRow = @(ConvertTo-DeviceInspectionUpdateRow -Inspection $objInspection)
         $arrRow[0].Required | Should -BeTrue
         $arrRow[0].UpdateId | Should -Be 'Site_X/SUM_1'
         $arrRow[1].Required | Should -BeFalse
+        $arrRow[2].Required | Should -BeFalse
     }
 
     It 'has two Updates menu entries that open the action through the gate' {

@@ -927,7 +927,7 @@ function Select-RowUnderPointer {
         $node.IsSelected = $true
     }
 }
-$gridUpdates.Add_PreviewMouseRightButtonDown({ param($s, $e) Select-RowUnderPointer -Grid $gridUpdates -MouseArgs $e })
+$gridUpdates.Add_PreviewMouseRightButtonDown({ param($s, $e) try { Select-RowUnderPointer -Grid $gridUpdates -MouseArgs $e } catch { $null = $_ } })
 
 $gridUpdates.ContextMenu.Add_Opened({
     $all = Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)

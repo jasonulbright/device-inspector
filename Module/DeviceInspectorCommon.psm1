@@ -1972,7 +1972,11 @@ function ConvertTo-DeviceInspectionUpdateRow {
                 if ($null -ne $objUpdate.PSObject.Properties['UpdateId']) {
                     $strRowUpdateId = [string]$objUpdate.UpdateId
                 }
+                # Installable: missing on the device, and no install job in progress or complete.
                 $boolRequired = $null -ne $objUpdate.PSObject.Properties['ComplianceState'] -and [int]$objUpdate.ComplianceState -eq 0
+                if ($boolRequired -and $null -ne $objUpdate.PSObject.Properties['EvaluationState']) {
+                    $boolRequired = @(0, 1, 13) -contains [int]$objUpdate.EvaluationState
+                }
                 [pscustomobject]@{
                     Source = 'Device'
                     Article = $(if ([string]::IsNullOrEmpty($objUpdate.ArticleId)) { '' } else { 'KB{0}' -f $objUpdate.ArticleId })
