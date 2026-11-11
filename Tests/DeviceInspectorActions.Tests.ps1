@@ -399,14 +399,14 @@ Describe 'Full hardware inventory' {
         }
     }
 
-    It 'lists only the trigger in a dry run with no record, and accepts null dates' {
+    It 'lists only the trigger in a dry run with no record, and accepts a record without dates' {
         InModuleScope DeviceInspectorCommon {
             Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
             Mock Get-CimInstance { } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
             $objRaw = & $script:scriptBlockFullInventory $true
             ($objRaw.Steps -join "`n") | Should -Not -Match 'would delete'
             ($objRaw.Steps -join "`n") | Should -Match 'would trigger'
-            $objNull = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = $null; LastReportDate = $null; LastMajorReportVersion = [uint32]0; LastMinorReportVersion = [uint32]0 }
+            $objNull = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastMajorReportVersion = [uint32]0; LastMinorReportVersion = [uint32]0 }
             Mock Get-CimInstance { $objNull } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
             (& $script:scriptBlockFullInventory $true).Succeeded | Should -BeTrue
         }
