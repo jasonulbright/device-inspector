@@ -3,7 +3,7 @@
     Main window of Device Inspector, a tool that shows the facts of one device from a Configuration Manager site and from the device itself, with optional actions.
 
 .DESCRIPTION
-    Sidebar navigation across five panels (Device, Applications, Updates,
+    Sidebar navigation across six panels (Device list, Device, Applications, Updates,
     Collections, Problems). The action bar holds the device name, the site
     server, the Inspect button and the JSON and HTML exports.
 
@@ -111,6 +111,7 @@ $txtThemeLabel = $window.FindName('txtThemeLabel')
 $toggleTheme   = $window.FindName('toggleTheme')
 $toggleActions = $window.FindName('toggleActions')
 
+$btnViewDeviceList  = $window.FindName('btnViewDeviceList')
 $btnViewDevice      = $window.FindName('btnViewDevice')
 $btnViewApps        = $window.FindName('btnViewApps')
 $btnViewUpdates     = $window.FindName('btnViewUpdates')
@@ -128,7 +129,14 @@ $chkSiteOnly   = $window.FindName('chkSiteOnly')
 $btnExportJson = $window.FindName('btnExportJson')
 $btnExportHtml = $window.FindName('btnExportHtml')
 
+$viewDeviceList  = $window.FindName('viewDeviceList')
 $viewDevice      = $window.FindName('viewDevice')
+$txtListName       = $window.FindName('txtListName')
+$txtListCollection = $window.FindName('txtListCollection')
+$btnListSearch     = $window.FindName('btnListSearch')
+$btnListInspect    = $window.FindName('btnListInspect')
+$txtListSummary    = $window.FindName('txtListSummary')
+$gridDeviceList    = $window.FindName('gridDeviceList')
 $viewApps        = $window.FindName('viewApps')
 $viewUpdates     = $window.FindName('viewUpdates')
 $viewCollections = $window.FindName('viewCollections')
@@ -188,6 +196,7 @@ Install-TitleBarDragFallback -Window $window
 [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($window, 'Dark.Steel')
 
 $script:ViewButtons = @(
+    @{ Name = 'Device list'; Button = $btnViewDeviceList }
     @{ Name = 'Device';      Button = $btnViewDevice }
     @{ Name = 'Applications'; Button = $btnViewApps }
     @{ Name = 'Updates';     Button = $btnViewUpdates }
@@ -283,6 +292,8 @@ function Update-ControlState {
     $idle = -not $script:IsBusy
     $has = [bool]$script:Inspection
     $btnInspect.IsEnabled    = $idle
+    $btnListSearch.IsEnabled = $idle
+    $btnListInspect.IsEnabled = $idle -and $null -ne $gridDeviceList.SelectedItem
     $txtDevice.IsEnabled     = $idle
     $txtSiteServer.IsEnabled = $idle
     $chkSiteOnly.IsEnabled   = $idle
@@ -297,6 +308,7 @@ function Update-ControlState {
 
 # === View switching ===
 $script:ViewMeta = @{
+    'Device list'  = @{ Title = 'Device list';  Subtitle = 'Devices of the site that match a name pattern or a collection. Select one and inspect it.' }
     'Device'       = @{ Title = 'Device';       Subtitle = 'Operating system, client health and site record of the device.' }
     'Applications' = @{ Title = 'Applications'; Subtitle = 'Applications installed on the device compared with the site hardware inventory.' }
     'Updates'      = @{ Title = 'Updates';      Subtitle = 'Updates that the site lists as required for the device, and updates pending on the device.' }
@@ -304,10 +316,11 @@ $script:ViewMeta = @{
     'Problems'     = @{ Title = 'Problems';     Subtitle = 'Parts of the inspection that failed. The other parts still ran.' }
 }
 function Set-ActiveView {
-    param([Parameter(Mandatory)][ValidateSet('Device', 'Applications', 'Updates', 'Collections', 'Problems')][string]$View)
+    param([Parameter(Mandatory)][ValidateSet('Device list', 'Device', 'Applications', 'Updates', 'Collections', 'Problems')][string]$View)
     $script:ActiveView = $View
     $vis = [System.Windows.Visibility]::Visible
     $hid = [System.Windows.Visibility]::Collapsed
+    $viewDeviceList.Visibility  = if ($View -eq 'Device list')  { $vis } else { $hid }
     $viewDevice.Visibility      = if ($View -eq 'Device')       { $vis } else { $hid }
     $viewApps.Visibility        = if ($View -eq 'Applications') { $vis } else { $hid }
     $viewUpdates.Visibility     = if ($View -eq 'Updates')      { $vis } else { $hid }
@@ -321,6 +334,7 @@ function Set-ActiveView {
     Update-SidebarButtonTheme
     Update-StatusBarSummary
 }
+$btnViewDeviceList.Add_Click({  Set-ActiveView -View 'Device list' })
 $btnViewDevice.Add_Click({      Set-ActiveView -View 'Device' })
 $btnViewApps.Add_Click({        Set-ActiveView -View 'Applications' })
 $btnViewUpdates.Add_Click({     Set-ActiveView -View 'Updates' })
@@ -1088,6 +1102,61 @@ function Invoke-AddToCollection {
 $btnAddCollection.Add_Click({ Invoke-AddToCollection })
 $menuAddCollection.Add_Click({ Invoke-AddToCollection })
 
+# === Device list ===
+function Invoke-DeviceListSearch {
+    $pattern = ([string]$txtListName.Text).Trim()
+    $collection = ([string]$txtListCollection.Text).Trim().ToUpperInvariant()
+    $check = Test-DeviceInspectorInput -ComputerName 'name' -SiteServer ([string]$txtSiteServer.Text) -SiteCode ([string]$global:Prefs.SiteCode)
+    $problems = @()
+    if (-not $check.IsValid) { $problems += $check.Errors }
+    if (-not $check.SiteServer) { $problems += 'Enter a site server in the Inspect bar. The device list reads the site.' }
+    if (-not $pattern -and -not $collection) { $problems += 'Enter a name pattern, a collection ID, or both.' }
+    if ($pattern -and $pattern -notmatch '^[A-Za-z0-9_.*?-]{1,63}$') { $problems += 'The name pattern can hold letters, digits, hyphen, underscore, dot, * and ?.' }
+    if ($collection -and $collection -notmatch '^[A-Z0-9]{8}$') { $problems += 'A collection ID has eight letters and digits, for example SMS00001.' }
+    if ($problems.Count -gt 0) {
+        Add-LogLine ('Device list: {0}' -f ($problems -join ' '))
+        [void](Show-ThemedMessage -Owner $window -Title 'Device list' -Message ($problems -join [Environment]::NewLine) -Icon Warn)
+        return
+    }
+    $arguments = @{ Server = $check.SiteServer; Code = $check.SiteCode; Pattern = $pattern; Collection = $collection }
+    Add-LogLine ('Device list: name={0} collection={1}' -f $(if ($pattern) { $pattern } else { '(any)' }), $(if ($collection) { $collection } else { '(any)' }))
+    Start-BackgroundWork -Title 'Reading the device list' -Step 'Connecting to the site...' -Arguments $arguments -Work {
+        param($A, $State)
+        try { $State.Result = Get-DeviceInspectorDeviceList -SiteServer $A.Server -SiteCode $A.Code -NamePattern $A.Pattern -CollectionId $A.Collection }
+        catch { $State.ErrorMsg = $_.Exception.Message }
+        finally { $State.Done = $true }
+    } -OnDone {
+        param($State)
+        Update-StatusBarSummary
+        if ($State.ErrorMsg) {
+            Add-LogLine ('Device list failed: {0}' -f $State.ErrorMsg)
+            $txtListSummary.Text = 'The search failed. See the log.'
+            [void](Show-ThemedMessage -Owner $window -Title 'Device list' -Message ([string]$State.ErrorMsg) -Icon Error)
+            return
+        }
+        $list = $State.Result
+        $gridDeviceList.ItemsSource = @($list.Devices)
+        $txtListSummary.Text = $(if ($list.Truncated) { '{0} devices match. The list shows the first {1}. Narrow the pattern.' -f $list.Total, @($list.Devices).Count } else { '{0} devices match.' -f $list.Total })
+        Add-LogLine ('Device list: {0} devices.' -f $list.Total)
+        Update-ControlState
+    }
+}
+
+function Invoke-ListInspect {
+    $row = $gridDeviceList.SelectedItem
+    if (-not $row -or [string]::IsNullOrEmpty([string]$row.Name)) { Add-LogLine 'Device list: select a device first.'; return }
+    if ($script:IsBusy) { return }
+    $txtDevice.Text = [string]$row.Name
+    Set-ActiveView -View 'Device'
+    Invoke-Inspect
+}
+$btnListSearch.Add_Click({ Invoke-DeviceListSearch })
+$txtListName.Add_KeyDown({ param($s, $e) if ($e.Key -eq [System.Windows.Input.Key]::Return) { Invoke-DeviceListSearch } })
+$txtListCollection.Add_KeyDown({ param($s, $e) if ($e.Key -eq [System.Windows.Input.Key]::Return) { Invoke-DeviceListSearch } })
+$btnListInspect.Add_Click({ Invoke-ListInspect })
+$gridDeviceList.Add_MouseDoubleClick({ Invoke-ListInspect })
+$gridDeviceList.Add_SelectionChanged({ Update-ControlState })
+
 # === Log file ===
 $btnOpenLog.Add_Click({
     if (-not (Test-Path -LiteralPath $script:ToolLogPath)) { Add-LogLine ('The log file does not exist yet: {0}' -f $script:ToolLogPath); return }
@@ -1107,7 +1176,7 @@ $window.Add_Closing({
 $window.Add_Loaded({
     Restore-WindowState -Window $window -Path $global:WindowStatePath -OnStateLoaded {
         param($s)
-        if ($s.ActiveView -in @('Device', 'Applications', 'Updates', 'Collections', 'Problems')) { Set-ActiveView -View ([string]$s.ActiveView) }
+        if ($s.ActiveView -in @('Device list', 'Device', 'Applications', 'Updates', 'Collections', 'Problems')) { Set-ActiveView -View ([string]$s.ActiveView) }
     }
     $isDark = [bool]$global:Prefs['DarkMode']
     if (-not $isDark) { [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($window, 'Light.Blue') }

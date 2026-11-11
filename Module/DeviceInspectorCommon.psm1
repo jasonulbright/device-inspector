@@ -2522,6 +2522,140 @@ function Select-DeviceInspectorAddableCollection {
     }
 }
 
+function Get-DeviceInspectorDeviceList {
+    # .SYNOPSIS
+    # Lists the devices of the site by name pattern, by collection, or both.
+    #
+    # .DESCRIPTION
+    # Read only. Opens the site drive, reads the devices with Get-CMDevice (name
+    # pattern, * and ? as wildcards) or with Get-CMCollectionMember (members of one
+    # collection, optionally filtered by the name pattern), and closes the drive.
+    # Collection members that are not systems (ResourceType 5) are left out. At most
+    # Maximum devices are returned; Truncated says when the site had more.
+    #
+    # .PARAMETER SiteServer
+    # The SMS Provider computer.
+    #
+    # .PARAMETER SiteCode
+    # The site code.
+    #
+    # .PARAMETER NamePattern
+    # Optional. A device name or a pattern with * and ?.
+    #
+    # .PARAMETER CollectionId
+    # Optional. The eight-character collection ID.
+    #
+    # .PARAMETER Maximum
+    # The most devices to return. The default is 500.
+    #
+    # .PARAMETER Credential
+    # An optional credential for the site drive.
+    #
+    # .EXAMPLE
+    # $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*'
+    #
+    # # $objList.Devices holds one row for each device whose name starts with WS.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties Devices (rows with Name, ResourceId, Client, Active,
+    # ClientVersion, OperatingSystem, LastLogonUser, LastActive), Total, Truncated.
+    #
+    # .NOTES
+    # Throws when neither NamePattern nor CollectionId is given, or when the site
+    # cannot be opened or read.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SiteServer,
+
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9]{3}\z')]
+        [string]$SiteCode,
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyString()]
+        [ValidatePattern('^([A-Za-z0-9_.*?-]{1,63})?\z')]
+        [string]$NamePattern = '',
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyString()]
+        [ValidatePattern('^([A-Za-z0-9]{8})?\z')]
+        [string]$CollectionId = '',
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange(1, 100000)]
+        [int]$Maximum = 500,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    process {
+        if ([string]::IsNullOrEmpty($NamePattern) -and [string]::IsNullOrEmpty($CollectionId)) {
+            throw 'Enter a name pattern, a collection ID, or both.'
+        }
+        $scriptBlockValue = {
+            param($objItem, [string]$strName)
+            $objProperty = $objItem.PSObject.Properties[$strName]
+            if ($null -eq $objProperty) {
+                return $null
+            }
+            $objProperty.Value
+        }
+        $hashtableConnect = @{ SiteServer = $SiteServer; SiteCode = $SiteCode }
+        if ($PSBoundParameters.ContainsKey('Credential')) {
+            $hashtableConnect['Credential'] = $Credential
+        }
+        $objConnection = $null
+        try {
+            $objConnection = Connect-InspectorSite @hashtableConnect
+            if ([string]::IsNullOrEmpty($CollectionId)) {
+                $arrRaw = @(Get-CMDevice -Name $NamePattern -Fast -ErrorAction Stop -WarningAction SilentlyContinue)
+            } else {
+                $hashtableMember = @{ CollectionId = $CollectionId; ErrorAction = 'Stop' }
+                if (-not [string]::IsNullOrEmpty($NamePattern)) {
+                    $hashtableMember['Name'] = $NamePattern
+                }
+                $arrRaw = @(Get-CMCollectionMember @hashtableMember | Where-Object {
+                        $objType = & $scriptBlockValue $_ 'ResourceType'
+                        $null -eq $objType -or [int]$objType -eq 5
+                    })
+            }
+            $arrSorted = @($arrRaw | Sort-Object -Property { [string](& $scriptBlockValue $_ 'Name') })
+            $listDevice = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
+            foreach ($objItem in @($arrSorted | Select-Object -First $Maximum)) {
+                $objLastActive = & $scriptBlockValue $objItem 'LastActiveTime'
+                $listDevice.Add([pscustomobject]@{
+                        Name            = [string](& $scriptBlockValue $objItem 'Name')
+                        ResourceId      = [string](& $scriptBlockValue $objItem 'ResourceID')
+                        Client          = [bool](& $scriptBlockValue $objItem 'IsClient')
+                        Active          = [bool](& $scriptBlockValue $objItem 'IsActive')
+                        ClientVersion   = [string](& $scriptBlockValue $objItem 'ClientVersion')
+                        OperatingSystem = [string](& $scriptBlockValue $objItem 'DeviceOS')
+                        LastLogonUser   = [string](& $scriptBlockValue $objItem 'LastLogonUser')
+                        LastActive      = ConvertTo-InspectionTimestamp -Value $objLastActive
+                    })
+            }
+            [pscustomobject]@{
+                Devices   = $listDevice.ToArray()
+                Total     = $arrSorted.Count
+                Truncated = ($arrSorted.Count -gt $Maximum)
+            }
+        } finally {
+            Disconnect-InspectorSite -Connection $objConnection
+        }
+    }
+}
+
 function Get-DeviceInspectorActionBlock {
     # .SYNOPSIS
     # Returns the reason why an action cannot start now, or an empty string.
@@ -2647,4 +2781,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Get-DeviceInspectorCollectionList', 'Select-DeviceInspectorAddableCollection', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Get-DeviceInspectorCollectionList', 'Select-DeviceInspectorAddableCollection', 'Get-DeviceInspectorDeviceList', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'

@@ -235,6 +235,8 @@
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
+                        <Button x:Name="btnViewDeviceList"  Content="Device list"  Style="{StaticResource ViewButtonStyle}"
+                                ToolTip="Search the devices of the site by name or collection, then inspect one"/>
                         <Button x:Name="btnViewDevice"      Content="Device"       Style="{StaticResource ViewButtonStyle}"
                                 ToolTip="Facts of the device: operating system, client health, site record"/>
                         <Button x:Name="btnViewApps"        Content="Applications" Style="{StaticResource ViewButtonStyle}"
@@ -307,6 +309,52 @@
             </Border>
 
             <Grid Grid.Row="2" Margin="8,0,8,0">
+
+                <!-- ============================================================ -->
+                <!-- View: Device list                                            -->
+                <!-- ============================================================ -->
+                <Grid x:Name="viewDeviceList" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="8,0,8,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="220"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="txtListName" Grid.Column="0" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
+                                 Controls:TextBoxHelper.Watermark="Name, * as a wildcard, e.g. WS*"/>
+                        <TextBox x:Name="txtListCollection" Grid.Column="1" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
+                                 Controls:TextBoxHelper.Watermark="Collection ID (optional)"/>
+                        <Button x:Name="btnListSearch" Grid.Column="2" Content="Search"
+                                Style="{StaticResource SquareInlineButtonStyle}"
+                                ToolTip="Read the matching devices from the site. Nothing changes."/>
+                        <Button x:Name="btnListInspect" Grid.Column="3" Content="Inspect selected"
+                                Style="{StaticResource SquareInlineButtonStyle}" MinWidth="130" Margin="0"
+                                ToolTip="Inspect the selected device. A double-click on a row does the same."/>
+                    </Grid>
+                    <TextBlock x:Name="txtListSummary" Grid.Row="1" FontSize="12" TextWrapping="Wrap" Margin="8,0,8,8"
+                               Text="Enter a name pattern or a collection ID, then select Search. The search uses the site server and the site code."/>
+                    <DataGrid x:Name="gridDeviceList" Grid.Row="2" SelectionMode="Single"
+                              Style="{StaticResource ViewDataGrid}"
+                              ColumnHeaderStyle="{StaticResource GridHeaderStyle}"
+                              CellStyle="{StaticResource GridCellStyle}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Device"           Width="2*"  Binding="{Binding Name}"/>
+                            <DataGridTextColumn Header="Resource ID"      Width="100" Binding="{Binding ResourceId}"/>
+                            <DataGridTextColumn Header="Client"           Width="60"  Binding="{Binding Client}"/>
+                            <DataGridTextColumn Header="Active"           Width="60"  Binding="{Binding Active}"/>
+                            <DataGridTextColumn Header="Client version"   Width="120" Binding="{Binding ClientVersion}"/>
+                            <DataGridTextColumn Header="Operating system" Width="3*"  Binding="{Binding OperatingSystem}"/>
+                            <DataGridTextColumn Header="Last logon user"  Width="2*"  Binding="{Binding LastLogonUser}"/>
+                            <DataGridTextColumn Header="Last active (UTC)" Width="150" Binding="{Binding LastActive}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
 
                 <!-- ============================================================ -->
                 <!-- View: Device                                                 -->
