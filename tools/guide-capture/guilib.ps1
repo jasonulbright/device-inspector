@@ -48,9 +48,26 @@ function Size-Win($Win, [int]$W = 1440, [int]$H = 900) {
     $w2 = [Math]::Min($W, $sw.Width); $h2 = [Math]::Min($H, $sw.Height - 40)
     [void][NativeUi]::MoveWindow($hh, 0, 0, $w2, $h2, $true); Start-Sleep -Milliseconds 900
 }
-function Shot($Win, [string]$Name, [switch]$Hover) {
-    if (-not $Hover) { [void][NativeUi]::SetCursorPos(1900, 1060); if ($Win.Current.ClassName -eq 'MetroWindow') { try { (Get-El $Win 'txtLog' -Quiet).SetFocus() } catch { $null = $_ } } }
-    Start-Sleep -Milliseconds 1300
+function Get-PixelColor([int]$x, [int]$y) {
+    $b = New-Object System.Drawing.Bitmap 1, 1; $g = [System.Drawing.Graphics]::FromImage($b)
+    $g.CopyFromScreen($x, $y, 0, 0, $b.Size); $g.Dispose(); $c = $b.GetPixel(0, 0); $b.Dispose(); $c
+}
+function Test-NearColor($c, [int]$r, [int]$g, [int]$b, [int]$tol = 6) { [Math]::Abs($c.R - $r) -le $tol -and [Math]::Abs($c.G - $g) -le $tol -and [Math]::Abs($c.B - $b) -le $tol }
+function Dismiss-RestartPrompt {
+    # Windows can show a restart prompt over the desktop. It is a system dialog that UI Automation cannot see,
+    # and it would be in the image. It sits at the center of a 1920 by 1080 screen. Detect it by the colors of
+    # its three buttons and its frame, then choose Not now. Restart now is never chosen.
+    $isPrompt = (Test-NearColor (Get-PixelColor 1070 598) 0 103 192 12) -and (Test-NearColor (Get-PixelColor 900 598) 251 251 251) -and (Test-NearColor (Get-PixelColor 740 598) 251 251 251) -and (Test-NearColor (Get-PixelColor 800 580) 243 243 243) -and (Test-NearColor (Get-PixelColor 800 540) 255 255 255) -and (Test-NearColor (Get-PixelColor 700 500) 0 0 0 4)
+    if ($isPrompt) { Log 'A restart prompt covered the desktop: chose Not now.'; Click-At 960 609; Start-Sleep -Seconds 1 }
+    $isPrompt
+}
+function Shot($Win, [string]$Name, [switch]$Hover, [switch]$Now) {
+    # -Now takes the image at once: for a window that does not stay (a running action, a result window).
+    if (-not $Now) {
+        [void](Dismiss-RestartPrompt)
+        if (-not $Hover) { [void][NativeUi]::SetCursorPos(1900, 1060); if ($Win.Current.ClassName -eq 'MetroWindow') { try { (Get-El $Win 'txtLog' -Quiet).SetFocus() } catch { $null = $_ } } }
+        Start-Sleep -Milliseconds 1300
+    }
     $r = $Win.Current.BoundingRectangle
     $x = [int][Math]::Max(0, $r.X); $y = [int][Math]::Max(0, $r.Y)
     $w = [int][Math]::Min($r.Width, [System.Windows.Forms.SystemInformation]::VirtualScreen.Width - $x)

@@ -25,6 +25,8 @@ The panel reads the devices of the site with the site server of the Inspect bar 
 3. Select **Search**, or press Enter. The panel reads the site in the background.
 4. Select a row, then select **Inspect selected**, or double-click the row. The tool puts the name in the device box, opens the Device panel and inspects the device.
 
+![The Device list panel after a search for CLIENT*, with one device selected](../images/device-list-results.png)
+
 ### List the devices of a collection
 
 1. Enter the collection ID in the collection box, for example `SMS00001`. Leave the name box empty for all members, or enter a pattern to filter them.

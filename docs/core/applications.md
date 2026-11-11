@@ -55,7 +55,7 @@ The two filters work together.
 
 A right-click on a row opens a menu with **Uninstall...** and **Repair...**. They work from the uninstall key of the row and need **Enable actions**. An entry that is off shows the reason as its tooltip. See [Actions](actions.md#uninstall-or-repair-an-application).
 
-![The right-click menu of the Applications grid](../images/apps-context-menu.png)
+![The right-click menu of the Applications grid on an MSI row, with Uninstall and Repair on](../images/apps-context-menu.png)
 
 ### Applications panel in the light theme
 

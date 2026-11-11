@@ -103,6 +103,13 @@ Describe 'Capture scripts' {
         @($missing) | Should -BeNullOrEmpty
     }
 
+    It 'never presses Run in a confirmation dialog' {
+        # The capture turns on Enable actions. It may choose Dry run or Cancel. Run would change a lab device.
+        foreach ($file in Get-ChildItem -LiteralPath $script:CaptureDir -Filter '*.ps1') {
+            [System.IO.File]::ReadAllText($file.FullName) | Should -Not -Match 'btnActionRun' -Because $file.Name
+        }
+    }
+
     It 'documents the one command that retakes every capture in the guide index' {
         $index = [System.IO.File]::ReadAllText((Join-Path $script:Root 'docs\index.md'))
         $index | Should -Match '(?m)^## Retake the captures'

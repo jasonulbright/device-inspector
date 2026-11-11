@@ -2,6 +2,16 @@
 
 All notable changes to Device Inspector are documented in this file.
 
+## [Unreleased]
+
+## 1 Guide images for the actions and the live Applications panel
+
+### Changed
+
+- Retake every image of the user guide from release 2026.11.11.0008. The Applications panel images show the live columns (type and view) and the All, MSI and EXE filter, the sidebar shows Device list, and the version in the sidebar is current.
+- Add images of the action buttons, the confirmation dialog, the running-actions list, the result window, the close warning, the right-click menus of the Applications, Updates and Collections panels, the uninstall confirmation, the collection browser and the Device list panel.
+- Add the steps of these images to `tools/guide-capture/steps-guide.ps1`. The steps choose Dry run or Cancel and never Run, and a test checks that. The capture scrolls the window log to its first lines before an image that would show the account of an action result.
+
 ## [2026.11.11.0008] - 2026-11-11
 
 ## 1 Device actions that run in the background

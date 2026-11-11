@@ -11,7 +11,7 @@
 
     The lab workstation needs a Configuration Manager console, a reachable SMS
     Provider and PowerShell remoting for the account in the credential script.
-    The app only reads. The capture changes nothing on the site or on the devices.
+    The capture turns on Enable actions for the action images, but it only chooses Dry run or Cancel in a confirmation dialog. It never chooses Run, so it changes nothing on the site or on the devices.
 
 .PARAMETER CredentialScript
     A script that sets $LabCredential (a PSCredential). Keep it outside the repository.

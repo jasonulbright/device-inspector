@@ -40,6 +40,12 @@ Two "last hardware inventory" values exist on purpose. The device value is the s
 
 ![The Device panel of a server](../images/device-server.png)
 
+### The action buttons
+
+Under the summary line, three buttons start actions on the device: **Client policy update...**, **Full hardware inventory...** and **Repair inventory...**. They are off until **Enable actions** is on and an inspection reached the device. **Repair inventory...** is on only when the inventory check says **Corrupt**. A button that is off while an action runs on the device shows the reason as its tooltip. See [Actions](actions.md).
+
+![The Device panel with Enable actions on: the three action buttons are on and the status bar says actions on](../images/actions-device-buttons.png)
+
 ### Device panel in the light theme
 
 ![The Device panel in the light theme](../images/device-light.png)
