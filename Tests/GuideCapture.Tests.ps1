@@ -105,8 +105,13 @@ Describe 'Capture scripts' {
 
     It 'never presses Run in a confirmation dialog' {
         # The capture turns on Enable actions. It may choose Dry run or Cancel. Run would change a lab device.
-        foreach ($file in Get-ChildItem -LiteralPath $script:CaptureDir -Filter '*.ps1') {
-            [System.IO.File]::ReadAllText($file.FullName) | Should -Not -Match 'btnActionRun' -Because $file.Name
+        $files = @(Get-ChildItem -LiteralPath $script:CaptureDir -Filter '*.ps1' -Recurse)
+        $files.Count | Should -BeGreaterThan 0
+        foreach ($file in $files) {
+            $text = [System.IO.File]::ReadAllText($file.FullName)
+            $text | Should -Not -Match 'btnActionRun' -Because $file.Name
+            # A button chosen by its name: Run passed to Find-Role, Find-Item or Click-El.
+            $text | Should -Not -Match '(?i)\b(Find-Role|Find-Item|Click-El)\b[^\r\n]*[''"]Run[''"]' -Because $file.Name
         }
     }
 

@@ -20,6 +20,13 @@ function Wait-RunRow([int]$Seconds = 10) { $end = (Get-Date).AddSeconds($Seconds
 function Wait-NoRun { $null = Wait-Until { @(Get-RunRows).Count -eq 0 } 120 }
 function Close-ResultWindows { foreach ($w in @(Find-All 'Action result') + @(Find-All 'Action failed')) { try { Invoke-El (Get-El $w 'btnPrimary') } catch { $null = $_ } }; Start-Sleep -Milliseconds 400 }
 # The first row of a grid whose UI Automation name matches the pattern, else the first row.
+# Like Find-Item, but with no fallback to the first row: a row that does not match is an error.
+function Find-NamedItem($Grid, [string]$Pattern) {
+    $items = @($Grid.FindAll('Descendants', (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem))))
+    $hit = $items | Where-Object { $_.Current.Name -like $Pattern } | Select-Object -First 1
+    if (-not $hit) { throw ('The grid has no row that matches ' + $Pattern) }
+    $hit
+}
 function Find-Item($Grid, [string]$Pattern) {
     $items = @($Grid.FindAll('Descendants', (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem))))
     $hit = $items | Where-Object { $_.Current.Name -like $Pattern } | Select-Object -First 1
@@ -156,8 +163,13 @@ Section 'actions' {
     # The name filter keeps a lab application with a personal publisher name out of the images (D-05).
     Set-Text (Get-El $win 'txtAppFilter') 'micro'; Start-Sleep -Milliseconds 400
     Select-AppType 'MSI'
-    # A row whose Uninstall entry is on: the name of a row in UI Automation lists its properties.
-    RightClick-El (Find-Item (Get-El $win 'gridApps') '*CanUninstall=True*'); Shot $win 'apps-context-menu' -Hover
+    # A harmless named row with the Uninstall entry on: the name of a row in UI Automation lists its properties.
+    # Never the Configuration Manager console (POLICY 2a): the guard stops the capture before the right click.
+    # This row is a system component on a plain lab device (no Uninstall entry), and then the capture stops with that message.
+    $appRow = Find-NamedItem (Get-El $win 'gridApps') '*Microsoft Visual C++ 2022 X86 Minimum Runtime*'
+    if ($appRow.Current.Name -like '*Configuration Manager*') { throw ('The capture selected a Configuration Manager row: ' + $appRow.Current.Name) }
+    if ($appRow.Current.Name -notlike '*CanUninstall=True*') { throw ('The selected application row has no Uninstall entry: ' + $appRow.Current.Name) }
+    RightClick-El $appRow; Shot $win 'apps-context-menu' -Hover
     # The first entry of the open menu is Uninstall...: the Down key selects it and Enter opens the confirmation dialog.
     Send-Keys '{DOWN}'; Send-Keys '{ENTER}'; $dlg = Find-Top 'Uninstall application' 15
     Shot $dlg 'apps-uninstall-confirm'

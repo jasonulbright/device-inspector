@@ -54,11 +54,20 @@ function Get-PixelColor([int]$x, [int]$y) {
 }
 function Test-NearColor($c, [int]$r, [int]$g, [int]$b, [int]$tol = 6) { [Math]::Abs($c.R - $r) -le $tol -and [Math]::Abs($c.G - $g) -le $tol -and [Math]::Abs($c.B - $b) -le $tol }
 function Dismiss-RestartPrompt {
-    # Windows can show a restart prompt over the desktop. It is a system dialog that UI Automation cannot see,
-    # and it would be in the image. It sits at the center of a 1920 by 1080 screen. Detect it by the colors of
-    # its three buttons and its frame, then choose Not now. Restart now is never chosen.
+    # Windows can show a restart prompt over the desktop. It would be in the image. It sits at the center of a
+    # 1920 by 1080 screen. Detect it by the colors of its three buttons and its frame. Then find the Not now
+    # button by its name with UI Automation and click that button. Restart now is never chosen. When the button
+    # is not found, click nothing, log a warning and stop the capture (the next sections do not run).
     $isPrompt = (Test-NearColor (Get-PixelColor 1070 598) 0 103 192 12) -and (Test-NearColor (Get-PixelColor 900 598) 251 251 251) -and (Test-NearColor (Get-PixelColor 740 598) 251 251 251) -and (Test-NearColor (Get-PixelColor 800 580) 243 243 243) -and (Test-NearColor (Get-PixelColor 800 540) 255 255 255) -and (Test-NearColor (Get-PixelColor 700 500) 0 0 0 4)
-    if ($isPrompt) { Log 'A restart prompt covered the desktop: chose Not now.'; Click-At 960 609; Start-Sleep -Seconds 1 }
+    if ($isPrompt) {
+        $notNow = Find-Role $root 'Button' 'Not now'
+        if (-not $notNow) {
+            Log 'WARNING: A restart prompt covers the desktop and the Not now button was not found by name. Nothing was clicked. The capture stops.'
+            $script:CaptureAborted = $true
+            throw 'A restart prompt covers the desktop and the Not now button was not found.'
+        }
+        Log 'A restart prompt covered the desktop: chose Not now.'; Click-El $notNow; Start-Sleep -Seconds 1
+    }
     $isPrompt
 }
 function Shot($Win, [string]$Name, [switch]$Hover, [switch]$Now) {
@@ -96,7 +105,7 @@ function Start-App([string]$Script, [string]$Title) {
 function Stop-App([string]$Script) {
     Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like "*$Script*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
-function Section([string]$Name, [scriptblock]$Body) { Log ('== ' + $Name); try { & $Body } catch { Log ('ERROR in ' + $Name + ': ' + $_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber) } }
+function Section([string]$Name, [scriptblock]$Body) { if ($script:CaptureAborted) { Log ('== ' + $Name + ' skipped: the capture stopped'); return }; Log ('== ' + $Name); try { & $Body } catch { Log ('ERROR in ' + $Name + ': ' + $_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber) } }
 function Find-All([string]$Name) {
     $cond = New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, $Name)), (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)))
     @($root.FindAll('Descendants', $cond))
