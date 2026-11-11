@@ -9,6 +9,7 @@ Device Inspector reads the facts of one device from a Configuration Manager site
 ## Core
 
 - [Inspect bar](core/inspect.md): the device name, the site server, Site only, Inspect and the checks before a run.
+- [Device list](core/device-list.md): find devices of the site by name or collection, and inspect one.
 - [Device panel](core/device.md): the operating system, the client health and the site record.
 - [Applications panel](core/applications.md): the device list and the site inventory list, merged, with a filter.
 - [Updates panel](core/updates.md): the updates that the site requires and the updates pending on the device.

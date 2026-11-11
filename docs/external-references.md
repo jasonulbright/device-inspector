@@ -13,6 +13,11 @@ This page lists the Microsoft Learn pages for each feature of Device Inspector. 
 
 - [Windows Remote Management](https://learn.microsoft.com/windows/win32/winrm/portal): Describes WinRM, which the tool uses for the device.
 
+### [Device list](core/device-list.md)
+
+- [Get-CMDevice](https://learn.microsoft.com/powershell/module/configurationmanager/get-cmdevice): Describes the device read and its name wildcards.
+- [Get-CMCollectionMember](https://learn.microsoft.com/powershell/module/configurationmanager/get-cmcollectionmember): Describes the member read of a collection.
+
 ### [Device panel](core/device.md)
 
 - [How to monitor clients in Configuration Manager](https://learn.microsoft.com/intune/configmgr/core/clients/manage/monitor-clients): Explains how the site judges client health.

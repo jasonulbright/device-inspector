@@ -1206,3 +1206,94 @@ Describe 'Add to collection' {
         $script:strStart | Should -Match "(?s)function Invoke-AddToCollection \{.*?-OnDone \{\s*param\(\`$State\)\s*Update-StatusBarSummary"
     }
 }
+
+Describe 'Device list' {
+    BeforeAll {
+        $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+    }
+
+    BeforeEach {
+        InModuleScope DeviceInspectorCommon {
+            Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
+            Mock Disconnect-InspectorSite { }
+            Mock Get-CMDevice {
+                [pscustomobject]@{ Name = 'WS02'; ResourceID = 2; IsClient = $true; IsActive = $false; ClientVersion = '5.00'; DeviceOS = 'Windows'; LastLogonUser = 'b'; LastActiveTime = [datetime]'2026-11-10T08:00:00' }
+                [pscustomobject]@{ Name = 'WS01'; ResourceID = 1; IsClient = $true; IsActive = $true; ClientVersion = '5.00'; DeviceOS = 'Windows'; LastLogonUser = 'a'; LastActiveTime = $null }
+            }
+            Mock Get-CMCollectionMember {
+                [pscustomobject]@{ Name = 'WS03'; ResourceID = 3; ResourceType = 5; IsClient = $true; IsActive = $true; DeviceOS = 'Windows' }
+                [pscustomobject]@{ Name = 'user1'; ResourceID = 9; ResourceType = 4 }
+            }
+        }
+    }
+
+    It 'lists devices by name pattern, sorted by name, and closes the site drive' {
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*'
+        $objList.Total | Should -Be 2
+        $objList.Truncated | Should -BeFalse
+        @($objList.Devices | ForEach-Object { $_.Name }) | Should -Be @('WS01', 'WS02')
+        $objList.Devices[1].LastActive | Should -Be '2026-11-10T08:00:00Z'
+        $objList.Devices[0].LastActive | Should -BeNullOrEmpty
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDevice -Times 1 -Exactly -ParameterFilter { $Name -eq 'WS*' -and $Fast }
+        Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 1 -Exactly
+    }
+
+    It 'lists the system members of a collection, with the name pattern as a filter, and leaves out users' {
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'SMS00001' -NamePattern 'WS*'
+        $objList.Total | Should -Be 1
+        $objList.Devices[0].Name | Should -Be 'WS03'
+        $objList.Devices[0].LastLogonUser | Should -Be ''
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 1 -Exactly -ParameterFilter { $CollectionId -eq 'SMS00001' -and $Name -eq 'WS*' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDevice -Times 0 -Exactly
+    }
+
+    It 'returns at most Maximum devices and says that the list is cut' {
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*' -Maximum 1
+        @($objList.Devices).Count | Should -Be 1
+        $objList.Total | Should -Be 2
+        $objList.Truncated | Should -BeTrue
+    }
+
+    It 'refuses an empty search and a pattern or a collection ID outside the rules' {
+        { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' } | Should -Throw '*name pattern, a collection ID, or both*'
+        { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern "WS'; x" } | Should -Throw
+        { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'SMS0001' } | Should -Throw
+        Should -Invoke -ModuleName DeviceInspectorCommon Connect-InspectorSite -Times 0 -Exactly
+    }
+
+    It 'refuses a pattern of wildcards only without a collection, and accepts it with a collection' {
+        { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern '*' } | Should -Throw '*at least one letter or digit*'
+        (Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern '*' -CollectionId 'SMS00001').Total | Should -Be 1
+    }
+
+    It 'returns 500 rows by default and a numeric resource ID' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMDevice { 1..501 | ForEach-Object { [pscustomobject]@{ Name = ('WS{0:d4}' -f $_); ResourceID = $_; IsClient = $true; IsActive = $true } } }
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*'
+        @($objList.Devices).Count | Should -Be 500
+        $objList.Total | Should -Be 501
+        $objList.Truncated | Should -BeTrue
+        $objList.Devices[0].ResourceId | Should -BeOfType [long]
+    }
+
+    It 'ignores a search while work runs, and inspects only on a double-click on a row' {
+        $script:strStart | Should -Match "(?s)function Invoke-DeviceListSearch \{\s*if \(\`$script:IsBusy\) \{ return \}"
+        $script:strStart | Should -Match '\$txtListName\.IsEnabled = \$idle'
+        $script:strStart | Should -Match '\$txtListCollection\.IsEnabled = \$idle'
+        $script:strStart | Should -Match "(?s)\`$gridDeviceList\.Add_MouseDoubleClick\(\{.*?if \(\`$node -is \[System\.Windows\.Controls\.DataGridRow\]\) \{ Invoke-ListInspect \}"
+    }
+
+    It 'closes the site drive when the read fails' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMDevice { throw 'provider error' }
+        { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*' } | Should -Throw '*provider error*'
+        Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 1 -Exactly
+    }
+
+    It 'has a Device list panel that searches the site and inspects the selected device' {
+        $script:strXaml | Should -Match 'x:Name="btnViewDeviceList"[^>]*Content="Device list"'
+        $script:strXaml | Should -Match 'x:Name="viewDeviceList"'
+        $script:strXaml | Should -Match 'x:Name="gridDeviceList"'
+        $script:strStart | Should -Match "(?s)function Invoke-DeviceListSearch \{.*?Get-DeviceInspectorDeviceList -SiteServer \`$A\.Server -SiteCode \`$A\.Code -NamePattern \`$A\.Pattern -CollectionId \`$A\.Collection"
+        $script:strStart | Should -Match "(?s)function Invoke-ListInspect \{.*?\`$txtDevice\.Text = \[string\]\`$row\.Name.*?Set-ActiveView -View 'Device'.*?Invoke-Inspect"
+    }
+}

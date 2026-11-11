@@ -4,7 +4,7 @@ The Inspect bar is the row above every panel. It holds the device name, the site
 
 ## What it does
 
-**Inspect** reads the device and the site and fills the five panels. Nothing changes on the site or on the device.
+**Inspect** reads the device and the site and fills the five panels of the device. Nothing changes on the site or on the device.
 
 ## When to use it
 

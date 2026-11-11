@@ -1,5 +1,5 @@
 # App-specific names for Window.Tests.ps1 and Show-ContrastViolations.ps1.
-# The main window has five view containers. The shell shows one container at a time
+# The main window has six view containers. The shell shows one container at a time
 # (Set-ActiveView). Each view lists the container, its sidebar button and the active
 # view name the theme uses.
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '', Justification = 'The STA runspace hands state to WPF event handlers and theme getters through global variables.')]
@@ -12,6 +12,7 @@ $script:AppConfig = @{
     LogLabel      = 'lblLogOutput'
     Views         = @(
         @{ Name = 'Device';       Container = 'viewDevice';      Button = 'btnViewDevice' }
+        @{ Name = 'Device list';  Container = 'viewDeviceList';  Button = 'btnViewDeviceList' }
         @{ Name = 'Applications'; Container = 'viewApps';        Button = 'btnViewApps' }
         @{ Name = 'Updates';      Container = 'viewUpdates';     Button = 'btnViewUpdates' }
         @{ Name = 'Collections';  Container = 'viewCollections'; Button = 'btnViewCollections' }
@@ -23,6 +24,9 @@ $script:AppConfig = @{
 
 # Rows of the shape that the panel functions of the module return, so the grids show real cell text.
 $script:SampleRows = @{
+    gridDeviceList  = @(
+        [PSCustomObject]@{ Name = 'device-a'; ResourceId = '16777221'; Client = $true; Active = $true; ClientVersion = '5.00.9146.1009'; OperatingSystem = 'Microsoft Windows NT Workstation 10.0'; LastLogonUser = 'user'; LastActive = '2026-11-11T02:08:02Z' }
+    )
     gridFacts       = @(
         [PSCustomObject]@{ Group = 'Operating system (device)'; Name = 'Caption'; Value = 'Windows 11 Enterprise' }
         [PSCustomObject]@{ Group = 'Client health (device)'; Name = 'Service CcmExec'; Value = 'Running (start mode Auto)' }

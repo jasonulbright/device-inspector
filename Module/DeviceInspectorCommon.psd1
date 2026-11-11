@@ -30,6 +30,7 @@
         'Get-DeviceInspectorActionBlock'
         'Get-DeviceInspectorCollectionList'
         'Select-DeviceInspectorAddableCollection'
+        'Get-DeviceInspectorDeviceList'
         'Invoke-DeviceInspectorPolicyUpdate'
         'Invoke-DeviceInspectorFullInventory'
         'Invoke-DeviceInspectorInventoryRepair'
