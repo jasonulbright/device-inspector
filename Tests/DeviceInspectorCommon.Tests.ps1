@@ -232,6 +232,42 @@ Describe 'Get-SiteFact' {
         }
     }
 
+    It 'does not shift the hardware scan time for a zone, a Kind or a DMTF offset' {
+        InModuleScope DeviceInspectorCommon {
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            foreach ($objValue in @(
+                    [datetime]::SpecifyKind([datetime]'2026-11-10T19:22:32', [System.DateTimeKind]::Utc),
+                    [datetime]::SpecifyKind([datetime]'2026-11-10T19:22:32', [System.DateTimeKind]::Local),
+                    '20261110192232.000000-240',
+                    '20261110192232.000000+***')) {
+                $script:objScanValue = $objValue
+                Mock Invoke-SiteQuery { if ($Query -like '*WORKSTATION_STATUS*') { [pscustomobject]@{ LastHardwareScan = $script:objScanValue } } }
+                (Get-SiteFact -ComputerName 'WS01' -Problems $listProblem).HardwareScanClientTime | Should -Be '2026-11-10T19:22:32'
+            }
+        }
+    }
+
+    It 'names the scan time of the class as the source when the class has a row' {
+        InModuleScope DeviceInspectorCommon {
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.LastHardwareInventorySource | Should -Be 'SMS_G_System_WORKSTATION_STATUS'
+            $objSite.LastHardwareInventory | Should -Be '2026-11-02T19:50:00Z'
+            Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_G_System_WORKSTATION_STATUS *' }
+        }
+    }
+
+    It 'falls back to the Get-CMDevice value when the class has no row' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery { }
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            $objSite.HardwareScanClientTime | Should -BeNullOrEmpty
+            $objSite.LastHardwareInventorySource | Should -Be 'Get-CMDevice'
+            $listProblem.Count | Should -Be 0
+        }
+    }
+
     It 'reads IsDirect of each membership as true, false or unknown' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
@@ -894,5 +930,35 @@ Describe 'Module surface' {
     It 'has a valid manifest' {
         $strManifest = Join-Path -Path (Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'Module') -ChildPath 'DeviceInspectorCommon.psd1'
         { Test-ModuleManifest -Path $strManifest } | Should -Not -Throw
+    }
+}
+
+Describe 'Last hardware inventory fact' {
+    BeforeAll {
+        $script:fnInspection = {
+            param($objSite)
+            [pscustomobject]@{
+                ComputerName = 'WS01'; InspectedAt = '2026-11-11T10:00:00Z'; SiteServer = 'sms01'; SiteCode = 'XYZ'
+                Site = $objSite; Device = $null; Problems = @()
+            }
+        }
+    }
+
+    It 'shows the class time with its label in the panel rows, the report and the HTML' {
+        $objSite = [pscustomobject]@{ Found = $true; ResourceId = 5; ClientInstalled = $true; ClientVersion = '5'; Active = $true; OperatingSystem = 'os'; LastLogonUserName = 'u'; LastHardwareInventory = '2026-11-05T17:41:51Z'; HardwareScanClientTime = '2026-11-10T19:22:32'; LastHardwareInventorySource = 'SMS_G_System_WORKSTATION_STATUS'; InstalledApplications = @(); Collections = @(); Deployments = @(); RequiredUpdates = @() }
+        $objInspection = & $script:fnInspection $objSite
+        $objRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection) | Where-Object { $_.Group -eq 'Site record' -and $_.Name -eq 'Last hardware inventory' }
+        $objRow.Value | Should -Be '2026-11-10T19:22:32 (device local time)'
+        ConvertTo-DeviceInspectionReport -Inspection $objInspection | Should -BeLike '*Last hardware inventory:   2026-11-10T19:22:32 (device local time)*'
+        ConvertTo-DeviceInspectionHtml -Inspection $objInspection | Should -BeLike '*2026-11-10T19:22:32 (device local time)*'
+        ConvertTo-DeviceInspectionJson -Inspection $objInspection | Should -BeLike '*"LastHardwareInventorySource": "SMS_G_System_WORKSTATION_STATUS"*'
+    }
+
+    It 'shows the Get-CMDevice value and says it can lag when the class has no row' {
+        $objSite = [pscustomobject]@{ Found = $true; ResourceId = 5; ClientInstalled = $true; ClientVersion = '5'; Active = $true; OperatingSystem = 'os'; LastLogonUserName = 'u'; LastHardwareInventory = '2026-11-05T17:41:51Z'; HardwareScanClientTime = $null; LastHardwareInventorySource = 'Get-CMDevice'; InstalledApplications = @(); Collections = @(); Deployments = @(); RequiredUpdates = @() }
+        $objInspection = & $script:fnInspection $objSite
+        $objRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection) | Where-Object { $_.Group -eq 'Site record' -and $_.Name -eq 'Last hardware inventory' }
+        $objRow.Value | Should -BeLike '2026-11-05T17:41:51Z (UTC, from Get-CMDevice; can lag*'
+        ConvertTo-DeviceInspectionHtml -Inspection $objInspection | Should -BeLike '*can lag a processed report*'
     }
 }

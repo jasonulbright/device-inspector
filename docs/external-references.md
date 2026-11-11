@@ -21,6 +21,8 @@ This page lists the Microsoft Learn pages for each feature of Device Inspector. 
 ### [Device panel](core/device.md)
 
 - [How to monitor clients in Configuration Manager](https://learn.microsoft.com/intune/configmgr/core/clients/manage/monitor-clients): Explains how the site judges client health.
+- [SMS_G_System_WORKSTATION_STATUS Server WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/manage/sms_g_system_workstation_status-server-wmi-class): Describes `LastHardwareScan`, the source of the Last hardware inventory fact. The page does not state the zone of the value.
+- [Get-CMDevice](https://learn.microsoft.com/powershell/module/configurationmanager/get-cmdevice): Describes the device record. The page does not explain why its `LastHardwareScan` can lag.
 
 ### [Applications panel](core/applications.md)
 

@@ -2,6 +2,15 @@
 
 All notable changes to Device Inspector are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Show the hardware scan time of the site inventory record (`SMS_G_System_WORKSTATION_STATUS`) as the **Last hardware inventory** fact of the site record. On the lab on 2026-11-10 the `Get-CMDevice` value kept the date of an older report for hours after the site loaded a new full report. The fact ends with "(device local time)". The site stores this time as the local clock time of the device, with no zone, and the tool does not convert it.
+- Use the same read for the fact and for the inventory check. The tool adds no query.
+- When the class has no row for the device, show the `Get-CMDevice` value in UTC and say in the fact that it can lag a processed report. Microsoft Learn does not document the cause of the lag.
+- Name the source of the fact in the JSON export, in `LastHardwareInventorySource`. The panel, the text report, the HTML export and the JSON export show the same value.
+
 ## [2026.11.11.0009] - 2026-11-11
 
 ## 2 Close with open actions, and two text fixes
