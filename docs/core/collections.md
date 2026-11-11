@@ -28,6 +28,10 @@ An inspection that read the site. A **Site only** inspection and a full inspecti
 
 A right-click on a collection row opens **Remove from collection...** and **Add to collection...**. **Remove from collection...** removes the direct membership rule of the device and needs **Enable actions**. It is off, with the reason as its tooltip, for a membership through a query, include or other rule, and for a built-in collection. See [Actions](actions.md#remove-the-device-from-a-collection). **Add to collection...** (also a button above the grid) opens a collection browser and adds a direct rule. See [Actions](actions.md#add-the-device-to-a-collection).
 
+![The right-click menu of the Collections grid on a row with a query rule: Remove from collection is off, Add to collection is on](../images/collections-context-menu.png)
+
+![The collection browser with the filter All](../images/collections-browser.png)
+
 ## Options and settings of this page
 
 | Column | Content |

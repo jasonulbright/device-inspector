@@ -14,6 +14,10 @@ Each action follows the same steps:
 6. The action runs in the background. **Dry run** reads the current state and lists the steps, and changes nothing.
 7. Before a run, the tool writes a `STARTED` line with the ID to the action log. If it cannot write the line, the run does not start. When the run ends, the result line with the same ID goes to the action log, and the result goes to the window log and to the tool log. A result window shows the result. See [Running actions](#running-actions).
 
+![The Device panel with Enable actions on: the three action buttons are on and the status bar says actions on](../images/actions-device-buttons.png)
+
+![The confirmation dialog of the client policy update, with the Run, Dry run and Cancel buttons](../images/actions-confirm-dialog.png)
+
 ## Running actions
 
 An action on a device runs in its own background task. The window stays free while it runs:
@@ -21,6 +25,8 @@ An action on a device runs in its own background task. The window stays free whi
 - You can inspect other devices and search the device list.
 - You can start actions on other devices. Each device has its own task.
 - A list **RUNNING ACTIONS** appears under the Inspect bar while at least one action runs. Each row shows the device, the action, the mode, the start time and the ID. A row goes away when its run ends. The status bar shows how many actions run.
+
+![The list RUNNING ACTIONS under the Inspect bar with one dry run](../images/actions-running-list.png)
 
 A device runs one action at a time. A run, and a dry run, counts as an action. The tool compares devices by a key: the name in lower case, without the text after the first dot. `WS01`, `ws01` and `WS01.CORP.LOCAL` are one device. An IP address stays as it is, so an IP address and a name are two devices, unless the inspection knows the site resource ID of the device. Two runs with the same resource ID are on the same device. When the device of the inspection on screen has a running action:
 
@@ -32,11 +38,15 @@ You can start the next action on the device after the first one ends.
 
 When a run ends, a result window opens. It does not take the focus, so your typing and clicks stay in the main window. Select **OK** to close it. The tool refreshes the view of the result only when the inspection on screen is of the same device. After a **Full hardware inventory**, for example, the inventory check changes only for the device on screen. When the device is not on screen, the window log says to inspect it again.
 
+![The result window of a dry run](../images/actions-result.png)
+
 The inspection, the device list search and the changes of the site (**Add to collection...** and **Remove from collection...**) keep their own way: they hold the window until they end, and the progress panel shows them. A change of the site runs on the computer of the tool, in the Configuration Manager console module, so it cannot go on without the window. The tool refuses a change of the site while the device has a running action. These changes have an ID in the action log too.
 
 ### Close the window while actions run
 
 When you close the window while actions run on devices, the tool shows a warning. It says: "N actions are still running. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete. Wait for the running actions to end before you close." The text names each running action and its ID. The default button is **Wait**, so Enter and Esc do not close the tool. Select **Close anyway** to close.
+
+![The warning that actions are still running, with Wait as the default button](../images/actions-close-warning.png)
 
 - Before it closes, the tool reads the runs that ended since its last check. Those runs get their real result line.
 - The tool does not stop the other runs. It stops waiting for them. It cannot write their result lines. A run on a device can stop before it is complete, so the result is not known.
@@ -87,6 +97,8 @@ The Updates panel has two entries in its right-click menu:
 - **Install selected pending updates...** installs the selected rows.
 - **Install all pending updates...** installs all rows that can be installed.
 
+![The right-click menu of the Updates grid. Both entries are off, because the device lists no missing update](../images/updates-context-menu.png)
+
 A row can be installed when its source is `Device`, the client lists the update as missing on the device (`ComplianceState` 0), and no install job is in progress or complete for it (state None, Available or Error). A row with the source `Site` is the view of the site and cannot be installed from here. An entry that is off shows the reason as its tooltip. A right-click selects the row under the pointer when that row is not selected.
 
 Both entries send the IDs of the rows in the confirmation, so an update that arrives after the inspection is not installed without a confirmation. The device skips an update that has an install job in progress or complete (state other than None, Available or Error) and says so in the log.
@@ -118,6 +130,10 @@ Repair uses `/i` with `REINSTALL=ALL` and `REINSTALLMODE=omus`, not `/f`, becaus
 4. The dialog shows the exact command. Select **Dry run**. The log shows the key, its type and the command that the run would use. Nothing changes.
 5. Repeat, and select **Run**.
 
+![The right-click menu of the Applications grid on an MSI row, with Uninstall and Repair on](../images/apps-context-menu.png)
+
+![The confirmation dialog of an MSI uninstall, with the exact command](../images/apps-uninstall-confirm.png)
+
 The device waits up to 10 minutes for the installer. If the installer is still running then, the result says that the outcome is not known. The exit codes map as follows:
 
 | Exit code | Result |
@@ -140,6 +156,8 @@ The entry is off, with the reason as its tooltip:
 - after a removal, until the next inspection;
 - for a built-in collection (ID that starts with `SMS`): it has no direct membership rules.
 
+![The right-click menu of the Collections grid on a row with a query rule: Remove from collection is off, Add to collection is on](../images/collections-context-menu.png)
+
 1. Turn on **Enable actions**.
 2. Inspect the device with the site.
 3. On the Collections panel, right-click the row, then select **Remove from collection...**.
@@ -159,6 +177,8 @@ The Collections panel has the button **Add to collection...** above the grid, an
 5. Select **Dry run**, then repeat and select **Run**.
 
 The tool checks the device record (exactly one, with the resource ID of the inspection), the collection, that no direct rule exists, and that the device is a member of the limiting collection of the collection. A direct rule cannot add a device that the limiting collection does not hold. It runs `Add-CMDeviceCollectionDirectMembershipRule -CollectionId <ID> -ResourceId <ID>`, then `Invoke-CMCollectionUpdate`, waits up to 60 seconds for the new membership, and then sends the client notification. Deployments to the collection start to apply to the device. The browser shows a flat list: it does not show the console folders.
+
+![The collection browser with the filter All](../images/collections-browser.png)
 
 ### Repair a corrupt inventory
 

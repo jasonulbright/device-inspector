@@ -29,6 +29,12 @@ A **Device** row has the evaluation state of the client, for example `None`. The
 
 ![The Updates panel of a server](../images/updates-server.png)
 
+### The right-click menu
+
+A right-click on a row opens **Install selected pending updates...** and **Install all pending updates...**. They need **Enable actions**. An entry that is off shows the reason as its tooltip. See [Actions](actions.md#install-pending-updates).
+
+![The right-click menu of the Updates grid. Both entries are off, because the device lists no missing update](../images/updates-context-menu.png)
+
 ### Updates panel in the light theme
 
 ![The Updates panel in the light theme](../images/updates-light.png)
