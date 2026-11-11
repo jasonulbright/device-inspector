@@ -65,7 +65,7 @@ These stay on the device. `Invoke-Command` runs one script block on the device o
 | Last hardware and discovery inventory cycle | `root\ccm\invagt` `InventoryActionStatus` |
 | Installed applications | The machine-wide uninstall registry keys (`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` and the `WOW6432Node` key). An entry with no display name is left out. Entries with `SystemComponent` set to 1 are kept, because the Add Remove Programs inventory of the site keeps them. The install date (`InstallDate`) is read for the inventory check. |
 | Client application policy | `root\ccm\ClientSDK` `CCM_Application` |
-| Pending updates in the client policy | `root\ccm\ClientSDK` `CCM_SoftwareUpdate` |
+| Pending updates in the client policy (with `UpdateID` and `ComplianceState` for the install action) | `root\ccm\ClientSDK` `CCM_SoftwareUpdate` |
 
 ## Site against device
 

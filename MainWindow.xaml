@@ -396,7 +396,8 @@
                               CellStyle="{StaticResource GridCellStyle}">
                         <DataGrid.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Install pending updates" IsEnabled="False" ToolTip="Planned for a later release. This release is read only."/>
+                                <MenuItem x:Name="menuInstallSelected" Header="Install selected pending updates..." IsEnabled="False" ToolTipService.ShowOnDisabled="True"/>
+                                <MenuItem x:Name="menuInstallAll"      Header="Install all pending updates..."      IsEnabled="False" ToolTipService.ShowOnDisabled="True"/>
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>

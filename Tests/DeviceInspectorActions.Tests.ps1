@@ -586,3 +586,147 @@ Describe 'Corrupt-inventory check and repair' {
         $script:strStart | Should -Match "(?s)\`$btnRepairInventory\.Add_Click\(\{\s*if \(-not \(Test-InventoryCorrupt\)\).*?Invoke-DeviceAction -Name 'Corrupt-inventory repair' -Function 'Invoke-DeviceInspectorInventoryRepair'"
     }
 }
+
+Describe 'Install pending updates' {
+    BeforeAll {
+        $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+    }
+
+    BeforeEach {
+        InModuleScope DeviceInspectorCommon {
+            function New-TestUpdate {
+                param([string]$Id, [string]$Kb, [uint32]$Compliance, [uint32]$State = 0)
+                New-CimInstance -ClassName 'CCM_SoftwareUpdate' -Namespace 'root/ccm/ClientSDK' -ClientOnly -Property @{
+                    UpdateID = $Id; ArticleID = $Kb; Name = ('Update KB{0}' -f $Kb); ComplianceState = $Compliance; EvaluationState = $State; PercentComplete = [uint32]0
+                }
+            }
+            $script:arrTestUpdate = @(
+                New-TestUpdate -Id 'Site_X/SUM_1' -Kb '5001' -Compliance 0
+                New-TestUpdate -Id 'Site_X/SUM_2' -Kb '5002' -Compliance 0
+                New-TestUpdate -Id 'Site_X/SUM_3' -Kb '5003' -Compliance 1
+            )
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { $script:arrTestUpdate } -ParameterFilter { $ClassName -eq 'CCM_SoftwareUpdate' }
+            Mock Start-Sleep { }
+        }
+    }
+
+    It 'passes the update IDs and names the action by the scope' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+        (Invoke-DeviceInspectorUpdateInstall -ComputerName 'WS01' -UpdateId @('Site_X/SUM_1') -DryRun).Action | Should -Be 'Install selected pending updates'
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript -Times 1 -Exactly -ParameterFilter { $ArgumentList[0] -eq $true -and @($ArgumentList[1]) -contains 'Site_X/SUM_1' }
+        (Invoke-DeviceInspectorUpdateInstall -ComputerName 'WS01').Action | Should -Be 'Install all pending updates'
+    }
+
+    It 'refuses an update ID with characters outside the pattern' {
+        { Invoke-DeviceInspectorUpdateInstall -ComputerName 'WS01' -UpdateId @("a'; Remove-Item") } | Should -Throw
+    }
+
+    It 'lists only the missing updates and changes nothing in a dry run' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockUpdateInstall $true @()
+            $objRaw.Succeeded | Should -BeTrue
+            ($objRaw.Steps -join "`n") | Should -Match 'Missing on the device \(ComplianceState 0\): 2\. To install: 2\.'
+            ($objRaw.Steps -join "`n") | Should -Not -Match 'KB5003'
+            ($objRaw.Steps -join "`n") | Should -Match 'Dry run: would call CCM_SoftwareUpdatesManager.InstallUpdates for 2 updates'
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'installs only the selected missing updates' {
+        InModuleScope DeviceInspectorCommon {
+            $script:arrSent = @()
+            Mock Invoke-CimMethod { $script:arrSent = @($Arguments.CCMUpdates | ForEach-Object { $_.UpdateID }); [pscustomobject]@{ ReturnValue = 0 } }
+            $objRaw = & $script:scriptBlockUpdateInstall $false @('Site_X/SUM_2', 'Site_X/SUM_3')
+            $objRaw.Succeeded | Should -BeTrue
+            @($script:arrSent) | Should -Be @('Site_X/SUM_2')
+            Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter { $Namespace -eq 'root\ccm\ClientSDK' -and $ClassName -eq 'CCM_SoftwareUpdatesManager' -and $MethodName -eq 'InstallUpdates' }
+            ($objRaw.Steps -join "`n") | Should -Match 'After the request: KB5002'
+        }
+    }
+
+    It 'fails and calls no method when no selected update is missing' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockUpdateInstall $false @('Site_X/SUM_3')
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'No update to install'
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'reports a refused or failed install request' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 2147749890 } }
+            (& $script:scriptBlockUpdateInstall $false @()).Summary | Should -Match 'refused the install request \(return value 2147749890\)'
+            Mock Invoke-CimMethod { throw 'Generic failure' }
+            (& $script:scriptBlockUpdateInstall $false @()).Summary | Should -Match 'did not accept the install request'
+        }
+    }
+
+    It 'skips an update with an install job in progress and says so' {
+        InModuleScope DeviceInspectorCommon {
+            $script:arrTestUpdate = @(New-CimInstance -ClassName 'CCM_SoftwareUpdate' -Namespace 'root/ccm/ClientSDK' -ClientOnly -Property @{
+                    UpdateID = 'Site_X/SUM_9'; ArticleID = '5009'; Name = 'Update KB5009'; ComplianceState = [uint32]0; EvaluationState = [uint32]5; PercentComplete = [uint32]10 })
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockUpdateInstall $false @()
+            $objRaw.Succeeded | Should -BeFalse
+            ($objRaw.Steps -join "`n") | Should -Match 'Skipped KB5009: an install job is in progress or complete, state Downloading \(5\)'
+            $objRaw.Summary | Should -Match 'each matching update has an install job in progress or complete'
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'binds the ID list to the device script for <Case> IDs, as Invoke-ActionOnDevice builds it' -ForEach @(
+        @{ Case = 'zero'; Ids = @(); Expected = 2 }, @{ Case = 'one'; Ids = @('Site_X/SUM_1'); Expected = 1 }, @{ Case = 'many'; Ids = @('Site_X/SUM_1', 'Site_X/SUM_2'); Expected = 2 }
+    ) {
+        InModuleScope DeviceInspectorCommon -Parameters @{ Ids = $Ids; Expected = $Expected } {
+            param($Ids, $Expected)
+            $script:intSent = -1
+            Mock Invoke-CimMethod { $script:intSent = @($Arguments.CCMUpdates).Count; [pscustomobject]@{ ReturnValue = 0 } }
+            $arrArgument = @(, $false) + @(@(, [string[]]@($Ids)))
+            $objRaw = & $script:scriptBlockUpdateInstall @arrArgument
+            $objRaw.Succeeded | Should -BeTrue
+            $script:intSent | Should -Be $Expected
+        }
+    }
+
+    It 'notes a missing return value of the install request' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { }
+            ((& $script:scriptBlockUpdateInstall $false @()).Steps -join "`n") | Should -Match 'gave no return value'
+        }
+    }
+
+    It 'sends the confirmed IDs also for all, and selects the row under the pointer' {
+        $script:strStart | Should -Match "(?s)function Invoke-UpdateInstall \{.*?UpdateId = \[string\[\]\]@\(\`$Rows \| ForEach-Object"
+        $script:strStart | Should -Match '\$gridUpdates\.Add_PreviewMouseRightButtonDown\(\{ param\(\$s, \$e\) try \{ Select-RowUnderPointer -Grid \$gridUpdates'
+        $script:strStart | Should -Match "Wait for the running task to end"
+    }
+
+    It 'marks only device rows that the client lists as missing as installable' {
+        $objInspection = [pscustomobject]@{
+            Site = $null
+            Device = [pscustomobject]@{ PendingUpdates = @(
+                    [pscustomobject]@{ Name = 'A'; ArticleId = '5001'; UpdateId = 'Site_X/SUM_1'; ComplianceState = 0; State = 'None'; Deadline = $null }
+                    [pscustomobject]@{ Name = 'B'; ArticleId = '5003'; UpdateId = 'Site_X/SUM_3'; ComplianceState = 1; State = 'None'; Deadline = $null }
+                    [pscustomobject]@{ Name = 'C'; ArticleId = '5004'; UpdateId = 'Site_X/SUM_4'; ComplianceState = 0; EvaluationState = 5; State = 'Downloading'; Deadline = $null }
+                ) }
+        }
+        $arrRow = @(ConvertTo-DeviceInspectionUpdateRow -Inspection $objInspection)
+        $arrRow[0].Required | Should -BeTrue
+        $arrRow[0].UpdateId | Should -Be 'Site_X/SUM_1'
+        $arrRow[1].Required | Should -BeFalse
+        $arrRow[2].Required | Should -BeFalse
+    }
+
+    It 'has two Updates menu entries that open the action through the gate' {
+        $script:strXaml | Should -Match 'x:Name="menuInstallSelected"[^>]*ToolTipService.ShowOnDisabled="True"'
+        $script:strXaml | Should -Match 'x:Name="menuInstallAll"'
+        $script:strStart | Should -Match "(?s)\`$gridUpdates\.ContextMenu\.Add_Opened\(\{.*?Turn on Enable actions first"
+        $script:strStart | Should -Match "(?s)function Invoke-UpdateInstall \{.*?Invoke-DeviceAction -Name \`$name -Function 'Invoke-DeviceInspectorUpdateInstall'"
+        $script:strStart | Should -Match "(?s)function Get-InstallableUpdateRow \{.*?Source -eq 'Device' -and \`$_\.Required"
+    }
+}

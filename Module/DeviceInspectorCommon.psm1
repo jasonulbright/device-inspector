@@ -1153,6 +1153,8 @@ function Get-DeviceFact {
                     $listPendingUpdate.Add([pscustomobject]@{
                             Name            = [string]$objUpdate.Name
                             ArticleId       = [string]$objUpdate.ArticleID
+                            UpdateId        = [string]$objUpdate.UpdateID
+                            ComplianceState = [int]$objUpdate.ComplianceState
                             EvaluationState = [int]$objUpdate.EvaluationState
                             Deadline        = $strDeadline
                         })
@@ -1183,9 +1185,19 @@ function Get-DeviceFact {
         $arrPendingUpdate = @()
         if ($null -ne $objRaw.PSObject.Properties['PendingUpdates']) {
             $arrPendingUpdate = @($objRaw.PendingUpdates | ForEach-Object {
+                    $intCompliance = -1
+                    if ($null -ne $_.PSObject.Properties['ComplianceState']) {
+                        $intCompliance = [int]$_.ComplianceState
+                    }
+                    $strUpdateId = ''
+                    if ($null -ne $_.PSObject.Properties['UpdateId']) {
+                        $strUpdateId = [string]$_.UpdateId
+                    }
                     [pscustomobject]@{
                         Name            = [string]$_.Name
                         ArticleId       = [string]$_.ArticleId
+                        UpdateId        = $strUpdateId
+                        ComplianceState = $intCompliance
                         EvaluationState = [int]$_.EvaluationState
                         State           = ConvertTo-UpdateStateName -EvaluationState ([int]$_.EvaluationState)
                         Deadline        = $_.Deadline
@@ -1949,11 +1961,22 @@ function ConvertTo-DeviceInspectionUpdateRow {
                     State = $strState
                     Deadline = ''
                     Title = [string]$objUpdate.Title
+                    UpdateId = ''
+                    Required = $false
                 }
             }
         }
         if ($null -ne $Inspection.Device -and $null -ne $Inspection.Device.PSObject.Properties['PendingUpdates']) {
             foreach ($objUpdate in @($Inspection.Device.PendingUpdates)) {
+                $strRowUpdateId = ''
+                if ($null -ne $objUpdate.PSObject.Properties['UpdateId']) {
+                    $strRowUpdateId = [string]$objUpdate.UpdateId
+                }
+                # Installable: missing on the device, and no install job in progress or complete.
+                $boolRequired = $null -ne $objUpdate.PSObject.Properties['ComplianceState'] -and [int]$objUpdate.ComplianceState -eq 0
+                if ($boolRequired -and $null -ne $objUpdate.PSObject.Properties['EvaluationState']) {
+                    $boolRequired = @(0, 1, 13) -contains [int]$objUpdate.EvaluationState
+                }
                 [pscustomobject]@{
                     Source = 'Device'
                     Article = $(if ([string]::IsNullOrEmpty($objUpdate.ArticleId)) { '' } else { 'KB{0}' -f $objUpdate.ArticleId })
@@ -1961,6 +1984,8 @@ function ConvertTo-DeviceInspectionUpdateRow {
                     State = [string]$objUpdate.State
                     Deadline = [string]$objUpdate.Deadline
                     Title = [string]$objUpdate.Name
+                    UpdateId = $strRowUpdateId
+                    Required = $boolRequired
                 }
             }
         }
@@ -2285,4 +2310,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'

@@ -52,7 +52,7 @@ The actions are the only code that changes the device or the site. They live in 
 - Each run and each dry run goes to the action log. See [Actions](../core/actions.md).
 - Calls that change state (`Invoke-CimMethod`) appear only in the device scripts of the actions file. A test checks this.
 
-The right-click menus of the Applications, Updates and Collections grids hold disabled entries for later actions: Uninstall, Repair, Install pending updates, Remove from collection, Add to collection.
+The right-click menus of the Applications, Updates and Collections grids hold disabled entries for later actions: Uninstall, Repair, Remove from collection, Add to collection. The Updates menu installs pending updates (see [Actions](../core/actions.md)).
 
 ## Known limits
 

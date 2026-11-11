@@ -44,7 +44,7 @@ A **Device** row has the evaluation state of the client, for example `None`. The
 | **Deadline (UTC)** | The deadline, when one exists. |
 | **Title** | The update title. |
 
-The grid is read only. The panel has no right-click menu that works. The entry **Install pending updates** in the grid menu is off in this release.
+The grid is read only. A right-click opens a menu with **Install selected pending updates...** and **Install all pending updates...**. They install updates on the device and need **Enable actions**. See [Actions](actions.md#install-pending-updates).
 
 ## Limits
 
