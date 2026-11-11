@@ -52,7 +52,7 @@ The actions are the only code that changes the device or the site. They live in 
 - Each run and each dry run goes to the action log. See [Actions](../core/actions.md).
 - Calls that change state (`Invoke-CimMethod`) appear only in the device scripts of the actions file. A test checks this.
 
-The right-click menus of the Applications, Updates and Collections grids hold a disabled entry for a later action: Add to collection. The Updates menu installs pending updates, the Applications menu uninstalls and repairs applications, and the Collections menu removes a direct membership rule (see [Actions](../core/actions.md)).
+The right-click menus of the Applications, Updates and Collections grids hold the action entries: the Updates menu installs pending updates, the Applications menu uninstalls and repairs applications, and the Collections menu removes and adds a direct membership rule (see [Actions](../core/actions.md)). The collection browser reads the device collections with one `Get-CMDeviceCollection` call.
 
 The site actions use the ConfigurationManager cmdlets with the site drive, as the site read does. The cmdlets that change the site (`Add-CMDeviceCollectionDirectMembershipRule`, `Remove-CMDeviceCollectionDirectMembershipRule`, `Invoke-CMCollectionUpdate`, `Invoke-CMClientAction`) appear only in the collection change function. A test checks this.
 
