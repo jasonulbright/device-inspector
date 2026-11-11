@@ -868,11 +868,14 @@ function Get-SiteFact {
         }
 
         $listCollectionId = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $hashtableDirect = @{}
         try {
-            $strMembershipQuery = 'SELECT CollectionID FROM SMS_FullCollectionMembership WHERE ResourceID = {0}' -f $intResourceId
+            $strMembershipQuery = 'SELECT CollectionID, IsDirect FROM SMS_FullCollectionMembership WHERE ResourceID = {0}' -f $intResourceId
             foreach ($objRow in @(Invoke-SiteQuery -Query $strMembershipQuery)) {
                 if (([string]$objRow.CollectionID) -match '^[A-Za-z0-9]{8}$') {
                     $listCollectionId.Add([string]$objRow.CollectionID)
+                    $objDirect = $objRow.PSObject.Properties['IsDirect']
+                    $hashtableDirect[[string]$objRow.CollectionID] = ($null -ne $objDirect -and $true -eq $objDirect.Value)
                 }
             }
         } catch {
@@ -902,6 +905,7 @@ function Get-SiteFact {
             $listCollection.Add([pscustomobject]@{
                     CollectionId = $strCollectionId
                     Name         = $strCollectionName
+                    IsDirect     = [bool]$hashtableDirect[$strCollectionId]
                 })
         }
 
@@ -2136,9 +2140,17 @@ function ConvertTo-DeviceInspectionCollectionRow {
             return
         }
         foreach ($objCollection in @($Inspection.Site.Collections)) {
+            $boolDirect = $null -ne $objCollection.PSObject.Properties['IsDirect'] -and [bool]$objCollection.IsDirect
+            $strMembership = 'Query or other rule'
+            if ($boolDirect) {
+                $strMembership = 'Direct rule'
+            }
             [pscustomobject]@{
                 CollectionId = [string]$objCollection.CollectionId
                 Name = [string]$objCollection.Name
+                Membership = $strMembership
+                IsDirect = $boolDirect
+                IsBuiltIn = ([string]$objCollection.CollectionId).StartsWith('SMS', [System.StringComparison]::OrdinalIgnoreCase)
             }
         }
     }
@@ -2420,4 +2432,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'

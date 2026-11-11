@@ -19,20 +19,21 @@ An inspection that read the site. A **Site only** inspection and a full inspecti
 ### Read the memberships and the deployments
 
 1. Select **Collections** in the sidebar.
-2. Read the upper grid: **Collection ID** and **Collection**.
+2. Read the upper grid: **Collection ID**, **Collection** and **Membership**.
 3. Read the lower grid: **Deployment**, **Type**, **Intent**, **Collection** and **Deadline (UTC)**. The **Collection** column names the collection that brings the deployment to the device.
 
 ![The Collections panel of a server that is in two collections](../images/collections-server.png)
 
 ### The right-click menus
 
-A right-click on a collection row opens **Remove from collection** and **Add to collection...**. Both entries are off in this release.
+A right-click on a collection row opens **Remove from collection...** and **Add to collection...**. **Remove from collection...** removes the direct membership rule of the device and needs **Enable actions**. It is off, with the reason as its tooltip, for a membership through a query, include or other rule, and for a built-in collection. See [Actions](actions.md#remove-the-device-from-a-collection). **Add to collection...** is off in this release.
 
 ## Options and settings of this page
 
 | Column | Content |
 |---|---|
 | **Collection ID** | The ID of the collection, for example `SMS00001`. |
+| **Membership** | `Direct rule` when a direct membership rule adds the device (`IsDirect` of `SMS_FullCollectionMembership`), else `Query or other rule`. A device can have a direct rule and another rule in the same collection. |
 | **Collection** | The name of the collection. |
 | **Deployment** | The name of the deployment. |
 | **Type** | `Application`, `Software update`, `Program`, `Configuration baseline` or another type that the site reports. |

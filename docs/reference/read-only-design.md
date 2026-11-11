@@ -22,7 +22,7 @@ None.
 | Site | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | Device record (resource ID, client installed, client version, active, operating system, last logon user). Last hardware inventory date. |
 | Site | `Invoke-CMWmiQuery` on `SMS_G_System_WORKSTATION_STATUS` | The hardware scan time, as the local clock time of the client, for the inventory check. |
 | Site | `Invoke-CMWmiQuery` on `SMS_G_System_ADD_REMOVE_PROGRAMS` and `SMS_G_System_ADD_REMOVE_PROGRAMS_64` | Installed applications from hardware inventory (32-bit and 64-bit). |
-| Site | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | Collection memberships (collection IDs). |
+| Site | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | Collection memberships (collection IDs, and `IsDirect` for the membership rule). |
 | Site | `Get-CMDeviceCollection` | Collection names. One call, then a filter. |
 | Site | `Get-CMDeployment` | Deployments targeted at those collections. One call, then a filter. |
 | Site | `Invoke-CMWmiQuery` on `SMS_UpdateComplianceStatus` (status 2), then `Get-CMSoftwareUpdate -Fast -IncludeUpgrade` | Updates that the site lists as required for the device. Expired updates are left out. |
@@ -52,7 +52,9 @@ The actions are the only code that changes the device or the site. They live in 
 - Each run and each dry run goes to the action log. See [Actions](../core/actions.md).
 - Calls that change state (`Invoke-CimMethod`) appear only in the device scripts of the actions file. A test checks this.
 
-The right-click menus of the Applications, Updates and Collections grids hold disabled entries for later actions: Remove from collection, Add to collection. The Updates menu installs pending updates, and the Applications menu uninstalls and repairs applications (see [Actions](../core/actions.md)).
+The right-click menus of the Applications, Updates and Collections grids hold a disabled entry for a later action: Add to collection. The Updates menu installs pending updates, the Applications menu uninstalls and repairs applications, and the Collections menu removes a direct membership rule (see [Actions](../core/actions.md)).
+
+The site actions use the ConfigurationManager cmdlets with the site drive, as the site read does. The cmdlets that change the site (`Add-CMDeviceCollectionDirectMembershipRule`, `Remove-CMDeviceCollectionDirectMembershipRule`, `Invoke-CMCollectionUpdate`, `Invoke-CMClientAction`) appear only in the collection change function. A test checks this.
 
 ## Known limits
 

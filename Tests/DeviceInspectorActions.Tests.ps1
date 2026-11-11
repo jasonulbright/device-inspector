@@ -927,3 +927,120 @@ Describe 'Uninstall and repair an application' {
         $script:strStart | Should -Match "(?s)function Invoke-ApplicationOperation \{.*?Invoke-DeviceAction -Name \('\{0\} application' -f \`$Operation\) -Function 'Invoke-DeviceInspectorApplicationAction'"
     }
 }
+
+Describe 'Remove from collection' {
+    BeforeAll {
+        $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+    }
+
+    BeforeEach {
+        InModuleScope DeviceInspectorCommon {
+            Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
+            Mock Disconnect-InspectorSite { }
+            Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 16777221; Name = 'WS01' } }
+            Mock Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot' } }
+            Mock Get-CMDeviceCollectionDirectMembershipRule { [pscustomobject]@{ ResourceID = 16777221; RuleName = 'WS01' } }
+            Mock Remove-CMDeviceCollectionDirectMembershipRule { }
+            Mock Add-CMDeviceCollectionDirectMembershipRule { }
+            Mock Invoke-CMCollectionUpdate { }
+            Mock Invoke-CMClientAction { }
+        }
+    }
+
+    It 'changes nothing in a dry run and disconnects' {
+        $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01.example.com' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove -DryRun
+        $objResult.Succeeded | Should -BeTrue
+        $objResult.Action | Should -Be 'Remove from collection'
+        ($objResult.Steps -join "`n") | Should -Match 'Dry run: would remove the direct rule of resource 16777221 from XYZ0001F'
+        Should -Invoke -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule -Times 0 -Exactly
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMCollectionUpdate -Times 0 -Exactly
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMClientAction -Times 0 -Exactly
+        Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 1 -Exactly
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDevice -Times 1 -Exactly -ParameterFilter { $Name -eq 'WS01' }
+    }
+
+    It 'removes the direct rule, updates the collection and requests machine policy' {
+        $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+        $objResult.Succeeded | Should -BeTrue
+        Should -Invoke -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule -Times 1 -Exactly -ParameterFilter { $CollectionId -eq 'XYZ0001F' -and $ResourceId -eq '16777221' -and $Force }
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMCollectionUpdate -Times 1 -Exactly -ParameterFilter { $CollectionId -eq 'XYZ0001F' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMClientAction -Times 1 -Exactly -ParameterFilter { $DeviceName -eq 'WS01' -and $NotificationType -eq 'RequestMachinePolicyNow' }
+    }
+
+    It 'refuses a removal when the device has no direct rule' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollectionDirectMembershipRule { }
+        $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+        $objResult.Succeeded | Should -BeFalse
+        $objResult.Summary | Should -Match 'member through a query, include or other rule'
+        Should -Invoke -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule -Times 0 -Exactly
+    }
+
+    It 'refuses a built-in collection without a site connection' {
+        $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'SMS00001' -Operation Remove
+        $objResult.Succeeded | Should -BeFalse
+        $objResult.Summary | Should -Match 'built-in collection'
+        Should -Invoke -ModuleName DeviceInspectorCommon Connect-InspectorSite -Times 0 -Exactly
+    }
+
+    It 'refuses when the site has no device record or two records with the name' {
+        Mock -ModuleName DeviceInspectorCommon Get-CMDevice { }
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Match 'has 0 device records'
+        Mock -ModuleName DeviceInspectorCommon Get-CMDevice { [pscustomobject]@{ ResourceID = 1 }; [pscustomobject]@{ ResourceID = 2 } }
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Match 'has 2 device records'
+        Should -Invoke -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule -Times 0 -Exactly
+    }
+
+    It 'reports a refused change and a failed connection, and always disconnects' {
+        Mock -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule { throw 'Access denied' }
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Match 'did not change the rule'
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMCollectionUpdate -Times 0 -Exactly
+        Mock -ModuleName DeviceInspectorCommon Connect-InspectorSite { throw 'Cannot open site' }
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Match 'Cannot run the action on site XYZ'
+    }
+
+    It 'keeps the change when the membership update or the notification fails, and says so' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-CMCollectionUpdate { throw 'busy' }
+        Mock -ModuleName DeviceInspectorCommon Invoke-CMClientAction { throw 'offline' }
+        $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+        $objResult.Succeeded | Should -BeTrue
+        ($objResult.Steps -join "`n") | Should -Match 'membership update did not start'
+        ($objResult.Steps -join "`n") | Should -Match 'client notification failed'
+    }
+
+    It 'refuses a collection ID with a quote' {
+        { Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId "XYZ'0001" -Operation Remove } | Should -Throw
+    }
+
+    It 'calls the site write cmdlets only in the collection change function' {
+        $objAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strActionsFile, [ref]$null, [ref]$null)
+        $arrWrite = @('Add-CMDeviceCollectionDirectMembershipRule', 'Remove-CMDeviceCollectionDirectMembershipRule', 'Invoke-CMCollectionUpdate', 'Invoke-CMClientAction')
+        foreach ($objFunction in @($objAst.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true))) {
+            if ($objFunction.Name -eq 'Invoke-DeviceInspectorCollectionChange') {
+                continue
+            }
+            $arrCommand = @($objFunction.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() })
+            @($arrCommand | Where-Object { $arrWrite -contains $_ }) | Should -BeNullOrEmpty -Because $objFunction.Name
+        }
+    }
+
+    It 'marks direct and built-in memberships in the collection rows' {
+        $objInspection = [pscustomobject]@{ Site = [pscustomobject]@{ Collections = @(
+                    [pscustomobject]@{ CollectionId = 'SMS00001'; Name = 'All Systems'; IsDirect = $false }
+                    [pscustomobject]@{ CollectionId = 'XYZ0001F'; Name = 'Pilot'; IsDirect = $true }
+                ) } }
+        $arrRow = @(ConvertTo-DeviceInspectionCollectionRow -Inspection $objInspection)
+        $arrRow[0].IsBuiltIn | Should -BeTrue
+        $arrRow[0].Membership | Should -Be 'Query or other rule'
+        $arrRow[1].IsDirect | Should -BeTrue
+        $arrRow[1].Membership | Should -Be 'Direct rule'
+    }
+
+    It 'has a Remove entry with reasons, through the site gate' {
+        $script:strXaml | Should -Match 'x:Name="menuRemoveCollection"[^>]*ToolTipService.ShowOnDisabled="True"'
+        $script:strXaml | Should -Match 'Header="Membership"'
+        $script:strStart | Should -Match "Only a direct rule can be removed here"
+        $script:strStart | Should -Match "(?s)\`$menuRemoveCollection\.Add_Click\(\{.*?Invoke-DeviceAction -SiteAction -Name 'Remove from collection' -Function 'Invoke-DeviceInspectorCollectionChange'"
+        $script:strStart | Should -Match "(?s)function Test-SiteActionReady \{.*?Site\.Found"
+    }
+}

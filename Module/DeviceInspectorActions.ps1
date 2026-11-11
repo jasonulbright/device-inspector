@@ -971,6 +971,171 @@ function Invoke-DeviceInspectorApplicationAction {
     }
 }
 
+function Invoke-DeviceInspectorCollectionChange {
+    # .SYNOPSIS
+    # Adds or removes the direct membership rule of a device in a device collection.
+    #
+    # .DESCRIPTION
+    # Runs on the site with the ConfigurationManager cmdlets. Remove deletes the
+    # direct rule of the device; a membership through a query, include or other
+    # rule cannot be removed this way, so the function refuses it. Add creates a
+    # direct rule. After a change, the function starts a membership update of the
+    # collection and asks the client for machine policy. With DryRun it checks the
+    # device, the collection and the rule, and changes nothing. Built-in
+    # collections (ID that starts with SMS) have no direct rules and are refused.
+    #
+    # .PARAMETER ComputerName
+    # The device name. The part before the first dot is the site name of the device.
+    #
+    # .PARAMETER SiteServer
+    # The SMS Provider computer.
+    #
+    # .PARAMETER SiteCode
+    # The site code.
+    #
+    # .PARAMETER CollectionId
+    # The eight-character collection ID.
+    #
+    # .PARAMETER Operation
+    # Add or Remove.
+    #
+    # .PARAMETER DryRun
+    # Check and list the steps only.
+    #
+    # .PARAMETER Credential
+    # An optional credential for the site drive.
+    #
+    # .EXAMPLE
+    # Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove -DryRun
+    #
+    # # Checks that WS01 has a direct rule in XYZ0001F. Nothing changes.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] See New-DeviceInspectorActionRecord.
+    #
+    # .NOTES
+    # Non-throwing contract: a failure gives Succeeded $false and a Summary. A
+    # parameter outside its pattern throws before the function runs.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9_.-]{1,255}\z')]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SiteServer,
+
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9]{3}\z')]
+        [string]$SiteCode,
+
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9]{8}\z')]
+        [string]$CollectionId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Add', 'Remove')]
+        [string]$Operation,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$DryRun,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    process {
+        $boolDryRun = $DryRun.IsPresent
+        $strAction = 'Remove from collection'
+        if ($Operation -eq 'Add') {
+            $strAction = 'Add to collection'
+        }
+        $strShortName = $ComputerName.Split('.')[0]
+        $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $scriptBlockEnd = {
+            param([bool]$boolSucceeded, [string]$strSummary)
+            New-DeviceInspectorActionRecord -Action $strAction -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $boolSucceeded -Summary $strSummary -Steps ([string[]]$listStep.ToArray())
+        }
+        if ($CollectionId.StartsWith('SMS', [System.StringComparison]::OrdinalIgnoreCase)) {
+            return (& $scriptBlockEnd $false ('{0} is a built-in collection. Built-in collections have no direct membership rules.' -f $CollectionId))
+        }
+        $objConnection = $null
+        try {
+            $hashtableConnect = @{ SiteServer = $SiteServer; SiteCode = $SiteCode }
+            if ($PSBoundParameters.ContainsKey('Credential')) {
+                $hashtableConnect['Credential'] = $Credential
+            }
+            $objConnection = Connect-InspectorSite @hashtableConnect
+            $listStep.Add(('Site {0} on {1} answers.' -f $SiteCode, $SiteServer))
+            $arrDevice = @(Get-CMDevice -Name $strShortName -Fast -DisableWildcardHandling -ErrorAction Stop -WarningAction SilentlyContinue)
+            if ($arrDevice.Count -ne 1) {
+                return (& $scriptBlockEnd $false ('The site has {0} device records named {1}. The change needs exactly one.' -f $arrDevice.Count, $strShortName))
+            }
+            $strResourceId = [string]$arrDevice[0].ResourceID
+            $listStep.Add(('Device {0}, resource ID {1}.' -f $strShortName, $strResourceId))
+            $objCollection = Get-CMDeviceCollection -Id $CollectionId -ErrorAction Stop
+            if ($null -eq $objCollection) {
+                return (& $scriptBlockEnd $false ('The site has no device collection {0}.' -f $CollectionId))
+            }
+            $listStep.Add(('Collection {0} {1}.' -f $CollectionId, [string]$objCollection.Name))
+            $arrRule = @(Get-CMDeviceCollectionDirectMembershipRule -CollectionId $CollectionId -ResourceId $strResourceId -ErrorAction Stop)
+            if ($Operation -eq 'Remove' -and $arrRule.Count -eq 0) {
+                return (& $scriptBlockEnd $false ('The device has no direct rule in {0}. It is a member through a query, include or other rule, which this tool does not change.' -f $CollectionId))
+            }
+            if ($Operation -eq 'Add' -and $arrRule.Count -gt 0) {
+                return (& $scriptBlockEnd $false ('The device already has a direct rule in {0}.' -f $CollectionId))
+            }
+            if ($boolDryRun) {
+                if ($Operation -eq 'Remove') {
+                    $listStep.Add(('Dry run: would remove the direct rule of resource {0} from {1}, update the collection membership, and request machine policy on the device.' -f $strResourceId, $CollectionId))
+                } else {
+                    $listStep.Add(('Dry run: would add a direct rule for resource {0} to {1}, update the collection membership, and request machine policy on the device.' -f $strResourceId, $CollectionId))
+                }
+                return (& $scriptBlockEnd $true 'Dry run: the site answers. Nothing changed.')
+            }
+            try {
+                if ($Operation -eq 'Remove') {
+                    Remove-CMDeviceCollectionDirectMembershipRule -CollectionId $CollectionId -ResourceId $strResourceId -Force -ErrorAction Stop
+                    $listStep.Add(('Removed the direct rule of resource {0} from {1}.' -f $strResourceId, $CollectionId))
+                } else {
+                    Add-CMDeviceCollectionDirectMembershipRule -CollectionId $CollectionId -ResourceId $strResourceId -ErrorAction Stop
+                    $listStep.Add(('Added a direct rule for resource {0} to {1}.' -f $strResourceId, $CollectionId))
+                }
+            } catch {
+                $listStep.Add(('{0} failed: {1}' -f $strAction, $_.Exception.Message))
+                return (& $scriptBlockEnd $false ('The site did not change the rule. {0}' -f $_.Exception.Message))
+            }
+            try {
+                Invoke-CMCollectionUpdate -CollectionId $CollectionId -ErrorAction Stop
+                $listStep.Add(('Started a membership update of {0}.' -f $CollectionId))
+            } catch {
+                $listStep.Add(('The membership update did not start: {0}. The site updates the collection on its schedule.' -f $_.Exception.Message))
+            }
+            try {
+                Invoke-CMClientAction -DeviceName $strShortName -NotificationType 'RequestMachinePolicyNow' -ErrorAction Stop
+                $listStep.Add('Sent the client notification Request machine policy now.')
+            } catch {
+                $listStep.Add(('The client notification failed: {0}. The client gets the change at its next policy cycle.' -f $_.Exception.Message))
+            }
+            return (& $scriptBlockEnd $true ('The site changed the direct rule of {0} in {1}. Inspect the device again after the membership update.' -f $strShortName, $CollectionId))
+        } catch {
+            Write-Debug -Message $_.Exception.Message
+            return (& $scriptBlockEnd $false ('Cannot run the action on site {0}: {1}' -f $SiteCode, $_.Exception.Message))
+        } finally {
+            Disconnect-InspectorSite -Connection $objConnection
+        }
+    }
+}
+
 function ConvertTo-DeviceInspectorActionText {
     # .SYNOPSIS
     # Formats an action result as text lines.

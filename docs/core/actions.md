@@ -87,6 +87,23 @@ The name of the uninstall entry and the name of the application often differ (on
 
 The tool calls the `Uninstall` or `Repair` method of `CCM_Application` on the device with the immediate enforce preference. When the client holds several revisions, the tool picks the highest. The `STARTED` line of the action log names the application, its ID and its revision. After a run, both entries are off for that row until the next inspection. When the client gives no return value, the result is `FAILED` with the text that the request is not confirmed. The log shows the job ID and the state ten seconds later. `AppEnforce.log` on the device shows the run. A required deployment of the application can install it again at the next evaluation.
 
+### Remove the device from a collection
+
+The Collections panel has **Remove from collection...** in its right-click menu. It removes the direct membership rule of the device from the selected collection. The **Membership** column shows the rule: `Direct rule` or `Query or other rule`.
+
+The entry is off, with the reason as its tooltip:
+
+- for a membership through a query, include or other rule: those rules belong to the collection, not to the device;
+- for a built-in collection (ID that starts with `SMS`): it has no direct membership rules.
+
+1. Turn on **Enable actions**.
+2. Inspect the device with the site.
+3. On the Collections panel, right-click the row, then select **Remove from collection...**.
+4. Select **Dry run**. The log shows the resource ID and the collection.
+5. Repeat, and select **Run**.
+
+The tool opens the site drive and checks the device record (exactly one), the collection and the direct rule. It runs `Remove-CMDeviceCollectionDirectMembershipRule -CollectionId <ID> -ResourceId <ID> -Force`, then `Invoke-CMCollectionUpdate` for the collection, then `Invoke-CMClientAction -NotificationType RequestMachinePolicyNow` for the device. When the membership update or the notification fails, the rule stays removed and the log says so. If another rule also adds the device, the device stays a member. Deployments to the collection stop applying to the device. Inspect the device again after the membership update.
+
 ### Repair a corrupt inventory
 
 Each inspection with the site and the device runs an inventory check. The Device panel shows it in the group **Inventory check**.
@@ -151,6 +168,10 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 | The client does not allow Uninstall for this application now. ... | The application is not installed, or the deployment is a simulation. | Inspect the device again. |
 | The application is deployed to a user. ... | A user-targeted deployment. | Use the deployment in the Configuration Manager console. |
 | The client policy has no application with this ID now. | The deployment was removed after the inspection. | Inspect the device again. |
+| The device has no direct rule in <ID>. ... | The membership comes from a query, include or other rule. | Change the rule of the collection in the Configuration Manager console. |
+| <ID> is a built-in collection. ... | Built-in collections have no direct rules. | None. |
+| The site has <n> device records named <name>. ... | The change needs exactly one device record. | Remove the duplicate record in the console. |
+| The site did not change the rule. ... | The account has no right to modify the collection. | Check the role and the scope of the account. |
 | No update to install: ... | No selected update is missing on the device. | Inspect again. The update can be installed already. |
 | The client refused the install request (return value <n>). | The client did not accept the job. | Read `UpdatesDeployment.log` on the device. |
 | The cycle did not start (return value <n>). | The client refused the trigger after the delete. | Read `InventoryAgent.log` on the device. The next scheduled cycle sends a full report. |
@@ -166,4 +187,7 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 - [CCM_SoftwareUpdate Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/ccm_softwareupdate-client-wmi-class): Lists ComplianceState and EvaluationState.
 - [Uninstall Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/uninstall-method-in-class-ccm_application): Describes the uninstall request.
 - [Repair Method in Class CCM_Application](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/repair-method-in-class-ccm_application): Describes the repair request.
+- [Remove-CMDeviceCollectionDirectMembershipRule](https://learn.microsoft.com/powershell/module/configurationmanager/remove-cmdevicecollectiondirectmembershiprule): Describes the removal of a direct rule.
+- [Invoke-CMClientAction](https://learn.microsoft.com/powershell/module/configurationmanager/invoke-cmclientaction): Describes the client notification.
+- [SMS_FullCollectionMembership Server WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/collections/sms_fullcollectionmembership-server-wmi-class): Describes `IsDirect`.
 - [Hardware inventory views in Configuration Manager](https://learn.microsoft.com/intune/configmgr/develop/core/understand/sqlviews/hardware-inventory-views-configuration-manager): Describes the Add Remove Programs inventory that the check compares.

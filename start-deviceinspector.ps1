@@ -149,6 +149,7 @@ $gridUpdates     = $window.FindName('gridUpdates')
 $menuInstallSelected = @($gridUpdates.ContextMenu.Items | Where-Object { $_.Name -eq 'menuInstallSelected' })[0]
 $menuInstallAll      = @($gridUpdates.ContextMenu.Items | Where-Object { $_.Name -eq 'menuInstallAll' })[0]
 $gridCollections = $window.FindName('gridCollections')
+$menuRemoveCollection = @($gridCollections.ContextMenu.Items | Where-Object { $_.Name -eq 'menuRemoveCollection' })[0]
 $gridDeployments = $window.FindName('gridDeployments')
 $txtProblems     = $window.FindName('txtProblems')
 
@@ -247,6 +248,11 @@ $script:IsBusy     = $false
 # Actions are off at each start. The switch is not saved.
 $script:ActionsEnabled = $false
 $script:ActionLogPath  = Join-Path $__txDir 'DeviceInspector-actions.log'
+
+function Test-SiteActionReady {
+    # A site action needs the switch, an idle window and an inspection that found the device on the site.
+    return [bool]($script:ActionsEnabled -and -not $script:IsBusy -and $script:Inspection -and $script:Inspection.SiteServer -and $null -ne $script:Inspection.Site -and $script:Inspection.Site.Found)
+}
 
 function Test-DeviceActionReady {
     # A device action needs the switch, an idle window and an inspection that reached the device.
@@ -387,6 +393,7 @@ $script:ActionChoice   = 'Cancel'
 $script:ActionAfterRun = $null
 $script:ActionPending  = $null
 $script:ApplicationRowDone = $null
+$script:CollectionRowDone  = $null
 
 function Initialize-BgRunspace {
     if ($script:BgRunspace -and $script:BgRunspace.RunspaceStateInfo.State -eq 'Opened') { return }
@@ -820,9 +827,16 @@ function Invoke-DeviceAction {
         [Parameter(Mandatory)][string]$Function,
         [hashtable]$Parameters = @{},
         [scriptblock]$AfterRun,
-        [string[]]$Detail = @()
+        [string[]]$Detail = @(),
+        [switch]$SiteAction
     )
-    if (-not (Test-DeviceActionReady)) {
+    if ($SiteAction) {
+        if (-not (Test-SiteActionReady)) {
+            Add-LogLine ('{0}: turn on Enable actions and inspect a device that the site knows first.' -f $Name)
+            return
+        }
+        $Parameters = @{ SiteServer = [string]$script:Inspection.SiteServer; SiteCode = [string]$script:Inspection.SiteCode } + $Parameters
+    } elseif (-not (Test-DeviceActionReady)) {
         Add-LogLine ('{0}: turn on Enable actions and inspect a device that answers first.' -f $Name)
         return
     }
@@ -1009,6 +1023,33 @@ function Invoke-ApplicationOperation {
 }
 $menuUninstallApp.Add_Click({ Invoke-ApplicationOperation -Operation 'Uninstall' })
 $menuRepairApp.Add_Click({ Invoke-ApplicationOperation -Operation 'Repair' })
+
+# Remove from collection: one selected row whose membership comes from a direct rule.
+$gridCollections.Add_PreviewMouseRightButtonDown({ param($s, $e) try { Select-RowUnderPointer -Grid $gridCollections -MouseArgs $e } catch { $null = $_ } })
+$gridCollections.ContextMenu.Add_Opened({
+    $rows = @($gridCollections.SelectedItems)
+    $row = $(if ($rows.Count -eq 1) { $rows[0] } else { $null })
+    $reason = $(if (-not $script:ActionsEnabled) { 'Turn on Enable actions first.' }
+        elseif ($script:IsBusy) { 'Wait for the running task to end.' }
+        elseif (-not (Test-SiteActionReady)) { 'Inspect a device that the site knows first.' }
+        elseif (-not $row) { 'Select one row.' }
+        elseif ($row.IsBuiltIn) { 'This is a built-in collection. Built-in collections have no direct membership rules.' }
+        elseif (-not $row.IsDirect) { 'The device is a member through a query, include or other rule. Only a direct rule can be removed here.' }
+        else { '' })
+    if ($reason) { Set-MenuItemState -Item $menuRemoveCollection -Enabled $false -Reason $reason }
+    else { Set-MenuItemState -Item $menuRemoveCollection -Enabled $true -Reason ('Remove the direct rule of the device from {0}.' -f $row.Name) }
+})
+$menuRemoveCollection.Add_Click({
+    $rows = @($gridCollections.SelectedItems)
+    if ($rows.Count -ne 1 -or -not $rows[0].IsDirect -or $rows[0].IsBuiltIn) { Add-LogLine 'Remove from collection: select one row with a direct rule.'; return }
+    $row = $rows[0]
+    $script:CollectionRowDone = $row
+    Invoke-DeviceAction -SiteAction -Name 'Remove from collection' -Function 'Invoke-DeviceInspectorCollectionChange' `
+        -Parameters @{ CollectionId = [string]$row.CollectionId; Operation = 'Remove' } `
+        -Message ('The site removes the direct membership rule of the device from {0} ({1}), starts a membership update of the collection, and asks the client for machine policy. If another rule also adds the device, the device stays a member. Deployments to this collection stop applying to the device.' -f $row.Name, $row.CollectionId) `
+        -Detail @(('Collection: {0} ({1}).' -f $row.Name, $row.CollectionId)) `
+        -AfterRun { param($r) if ($script:CollectionRowDone) { $script:CollectionRowDone.IsDirect = $false; $script:CollectionRowDone.Membership = 'Rule removed: inspect again' }; $gridCollections.Items.Refresh(); Add-LogLine ('{0}: inspect {1} again after the membership update.' -f $r.Action, $r.ComputerName) }
+})
 
 # === Log file ===
 $btnOpenLog.Add_Click({

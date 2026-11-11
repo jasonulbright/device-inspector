@@ -820,7 +820,7 @@ Describe 'Module surface' {
                 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionHtml', 'ConvertTo-DeviceInspectionJson',
                 'ConvertTo-DeviceInspectionReport', 'ConvertTo-DeviceInspectionUpdateRow', 'Get-DeviceInspection',
                 'Test-DeviceInspectorConsole', 'Test-DeviceInspectorInput', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory',
-                'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+                'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
             ) | Sort-Object)
     }
 

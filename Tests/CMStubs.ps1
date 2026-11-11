@@ -14,7 +14,7 @@
 #
 # Version: 2026.11.06.0001
 
-$script:arrSwitchName = @('Fast', 'DisableWildcardHandling', 'IncludeUpgrade')
+$script:arrSwitchName = @('Fast', 'DisableWildcardHandling', 'IncludeUpgrade', 'Force')
 $script:hashtableStub = [ordered]@{
     'Get-CMSite' = @('SiteCode')
     'Get-CMDevice' = @('Name', 'Fast', 'DisableWildcardHandling')
@@ -22,6 +22,11 @@ $script:hashtableStub = [ordered]@{
     'Get-CMDeployment' = @()
     'Get-CMSoftwareUpdate' = @('Fast', 'IncludeUpgrade')
     'Invoke-CMWmiQuery' = @('Query', 'Option')
+    'Get-CMDeviceCollectionDirectMembershipRule' = @('CollectionId', 'ResourceId')
+    'Add-CMDeviceCollectionDirectMembershipRule' = @('CollectionId', 'ResourceId')
+    'Remove-CMDeviceCollectionDirectMembershipRule' = @('CollectionId', 'ResourceId', 'Force')
+    'Invoke-CMCollectionUpdate' = @('CollectionId')
+    'Invoke-CMClientAction' = @('DeviceName', 'NotificationType')
 }
 foreach ($strStubName in $script:hashtableStub.Keys) {
     $arrParameter = @(foreach ($strParameter in $script:hashtableStub[$strStubName]) {
