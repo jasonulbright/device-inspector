@@ -134,6 +134,85 @@ $script:scriptBlockFullInventory = {
     [pscustomobject]@{ Succeeded = $true; Summary = 'The client started a hardware inventory cycle with no status record, so it sends a full report. InventoryAgent.log on the device shows the report.'; Steps = @($listStep) }
 }
 
+# Runs on the device. Installs the updates of the client policy that the client
+# reports as missing (ComplianceState 0). An empty UpdateId list means all of them.
+# The new evaluation state of each update is read back after the request, because
+# InstallUpdates returns when the client accepts the job, not when it ends.
+$script:scriptBlockUpdateInstall = {
+    param (
+        [Parameter(Mandatory = $true)][bool]$DryRun,
+        [Parameter(Mandatory = $false)][string[]]$UpdateId = @()
+    )
+
+    $ErrorActionPreference = 'Stop'
+    $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $arrStateName = @('None', 'Available', 'Submitted', 'Detecting', 'PreDownload', 'Downloading', 'WaitInstall', 'Installing', 'PendingSoftReboot', 'PendingHardReboot', 'WaitReboot', 'Verifying', 'InstallComplete', 'Error', 'WaitServiceWindow', 'WaitUserLogon', 'WaitUserLogoff', 'WaitJobUserLogon', 'WaitUserReconnect', 'PendingUserLogoff', 'PendingUpdate', 'WaitingRetry', 'WaitPresModeOff', 'WaitForOrchestration')
+    $scriptBlockState = {
+        param($objValue)
+        $intValue = [int]$objValue
+        if ($intValue -ge 0 -and $intValue -lt $arrStateName.Count) {
+            return ('{0} ({1})' -f $arrStateName[$intValue], $intValue)
+        }
+        return ('{0}' -f $intValue)
+    }
+    try {
+        $objClient = Get-CimInstance -Namespace 'root\ccm' -ClassName 'SMS_Client'
+    } catch {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The Configuration Manager client does not answer: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+    }
+    if ($null -eq $objClient) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client is not installed on the device.'; Steps = @($listStep) }
+    }
+    $listStep.Add(('Client version {0} answers.' -f [string]$objClient.ClientVersion))
+    try {
+        $arrAll = @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_SoftwareUpdate')
+    } catch {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The updates of the client policy cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+    }
+    $arrRequired = @($arrAll | Where-Object { [int]$_.ComplianceState -eq 0 })
+    $arrTarget = $arrRequired
+    if (@($UpdateId).Count -gt 0) {
+        $arrTarget = @($arrRequired | Where-Object { @($UpdateId) -contains [string]$_.UpdateID })
+    }
+    $listStep.Add(('Updates in the client policy: {0}. Missing on the device (ComplianceState 0): {1}. To install: {2}.' -f $arrAll.Count, $arrRequired.Count, $arrTarget.Count))
+    foreach ($objUpdate in $arrTarget) {
+        $listStep.Add(('KB{0} {1}, state {2}.' -f [string]$objUpdate.ArticleID, [string]$objUpdate.Name, (& $scriptBlockState $objUpdate.EvaluationState)))
+    }
+    if ($arrTarget.Count -eq 0) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'No update to install: the client policy has no matching update that is missing on the device.'; Steps = @($listStep) }
+    }
+    if ($DryRun) {
+        $listStep.Add(('Dry run: would call CCM_SoftwareUpdatesManager.InstallUpdates for {0} updates.' -f $arrTarget.Count))
+        return [pscustomobject]@{ Succeeded = $true; Summary = 'Dry run: the client answers. Nothing changed.'; Steps = @($listStep) }
+    }
+    try {
+        $objReturn = Invoke-CimMethod -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_SoftwareUpdatesManager' -MethodName 'InstallUpdates' -Arguments @{ CCMUpdates = [CimInstance[]]$arrTarget }
+        $objReturnValue = $null
+        if ($null -ne $objReturn -and $null -ne $objReturn.PSObject.Properties['ReturnValue']) {
+            $objReturnValue = $objReturn.ReturnValue
+        }
+        $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
+    } catch {
+        $listStep.Add(('InstallUpdates failed: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The client did not accept the install request.'; Steps = @($listStep) }
+    }
+    if ($boolRefused) {
+        $listStep.Add(('InstallUpdates returned {0}.' -f $objReturnValue))
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client refused the install request (return value {0}).' -f $objReturnValue); Steps = @($listStep) }
+    }
+    $listStep.Add(('InstallUpdates accepted {0} updates.' -f $arrTarget.Count))
+    Start-Sleep -Seconds 5
+    try {
+        $arrTargetId = @($arrTarget | ForEach-Object { [string]$_.UpdateID })
+        foreach ($objUpdate in @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_SoftwareUpdate' | Where-Object { $arrTargetId -contains [string]$_.UpdateID })) {
+            $listStep.Add(('After the request: KB{0}, state {1}, percent complete {2}.' -f [string]$objUpdate.ArticleID, (& $scriptBlockState $objUpdate.EvaluationState), [int]$objUpdate.PercentComplete))
+        }
+    } catch {
+        $listStep.Add(('The state after the request cannot be read: {0}' -f $_.Exception.Message))
+    }
+    [pscustomobject]@{ Succeeded = $true; Summary = ('The client accepted the install of {0} updates. It downloads and installs them now. A restart can follow, as the deployment sets.' -f $arrTarget.Count); Steps = @($listStep) }
+}
+
 #endregion Remote script blocks
 
 #region Private helpers
@@ -592,6 +671,84 @@ function Invoke-DeviceInspectorInventoryRepair {
             Action       = 'Corrupt-inventory repair'
             ComputerName = $ComputerName
             ScriptBlock  = $script:scriptBlockFullInventory
+            DryRun       = $DryRun
+        }
+        if ($PSBoundParameters.ContainsKey('Credential')) {
+            $hashtableAction['Credential'] = $Credential
+        }
+        Invoke-ActionOnDevice @hashtableAction
+    }
+}
+
+function Invoke-DeviceInspectorUpdateInstall {
+    # .SYNOPSIS
+    # Installs the pending software updates of the client policy on a device.
+    #
+    # .DESCRIPTION
+    # Runs on the device over WinRM. It reads CCM_SoftwareUpdate, keeps the updates
+    # that are missing on the device (ComplianceState 0), and passes them to
+    # CCM_SoftwareUpdatesManager.InstallUpdates. UpdateId limits the list. With
+    # DryRun it lists the updates and changes nothing.
+    #
+    # .PARAMETER ComputerName
+    # The device name.
+    #
+    # .PARAMETER UpdateId
+    # Optional. The UpdateID values of the updates to install. Omit it for all
+    # updates that are missing on the device.
+    #
+    # .PARAMETER DryRun
+    # List the updates only.
+    #
+    # .PARAMETER Credential
+    # An optional credential for the WinRM connection.
+    #
+    # .EXAMPLE
+    # Invoke-DeviceInspectorUpdateInstall -ComputerName 'WS01' -DryRun
+    #
+    # # Lists the updates that the run would install. Nothing changes.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] See New-DeviceInspectorActionRecord.
+    #
+    # .NOTES
+    # Non-throwing contract: a failure gives Succeeded $false and a Summary.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9_.-]{1,255}\z')]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyCollection()]
+        [ValidatePattern('^[A-Za-z0-9_{}/.-]{1,200}\z')]
+        [string[]]$UpdateId = @(),
+
+        [Parameter(Mandatory = $false)]
+        [switch]$DryRun,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    process {
+        $strAction = 'Install all pending updates'
+        if (@($UpdateId).Count -gt 0) {
+            $strAction = 'Install selected pending updates'
+        }
+        $hashtableAction = @{
+            Action       = $strAction
+            ComputerName = $ComputerName
+            ScriptBlock  = $script:scriptBlockUpdateInstall
+            ArgumentList = @(, [string[]]@($UpdateId))
             DryRun       = $DryRun
         }
         if ($PSBoundParameters.ContainsKey('Credential')) {

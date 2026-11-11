@@ -49,6 +49,23 @@ The **Full hardware inventory...** button is on the Device panel. Use it when th
 
 The tool deletes the `InventoryActionStatus` record of hardware inventory (`{00000000-0000-0000-0000-000000000001}`) in `root\ccm\invagt` on the device. Then it triggers the Hardware Inventory schedule. Without the record, the client sends a full report instead of a delta report, and the site replaces all hardware inventory of the device. When no record exists, the tool only triggers the schedule. When the delete fails, the tool does not trigger the schedule. The client log `InventoryAgent.log` shows the full report. The site shows the new inventory date after it processes the report. When hardware inventory is off in the client settings, the client sends no report.
 
+### Install pending updates
+
+The Updates panel has two entries in its right-click menu:
+
+- **Install selected pending updates...** installs the selected rows.
+- **Install all pending updates...** installs all rows that can be installed.
+
+A row can be installed when its source is `Device` and the client lists the update as missing on the device (`ComplianceState` 0). A row with the source `Site` is the view of the site and cannot be installed from here. An entry that is off shows the reason as its tooltip.
+
+1. Turn on **Enable actions**.
+2. Inspect the device.
+3. On the Updates panel, select the rows, then right-click and select an entry.
+4. Select **Dry run**. The log lists the updates that the run would install.
+5. Repeat, and select **Run**.
+
+The tool calls `CCM_SoftwareUpdatesManager.InstallUpdates` on the device with the updates. The client accepts the job and returns. It then downloads and installs the updates. The log shows the state of each update five seconds after the request. A restart can follow, as the deployment sets. Inspect the device again to see the new states. `UpdatesDeployment.log` on the device shows the install.
+
 ### Repair a corrupt inventory
 
 Each inspection with the site and the device runs an inventory check. The Device panel shows it in the group **Inventory check**.
@@ -109,6 +126,8 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 | ... failed with return value <n>. | The client refused the request. | Read `PolicyAgent.log` on the device. |
 | The hardware inventory status cannot be read: ... | WMI refused the read of `root\ccm\invagt`. | Check the rights on `root\ccm\invagt`. Repair the client. |
 | The hardware inventory status record cannot be deleted. The schedule was not triggered. | WMI refused the delete. | Check the rights on `root\ccm\invagt`. Read `InventoryAgent.log`. |
+| No update to install: ... | No selected update is missing on the device. | Inspect again. The update can be installed already. |
+| The client refused the install request (return value <n>). | The client did not accept the job. | Read `UpdatesDeployment.log` on the device. |
 | The cycle did not start (return value <n>). | The client refused the trigger after the delete. | Read `InventoryAgent.log` on the device. The next scheduled cycle sends a full report. |
 | The status record is deleted, but the cycle did not start. | The trigger failed after the delete. | Wait for the next scheduled cycle. It sends a full report. Or run the action again. |
 
@@ -118,4 +137,6 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 - [How to manage clients in Configuration Manager](https://learn.microsoft.com/intune/configmgr/core/clients/manage/manage-clients#start-policy-retrieval): Describes policy retrieval.
 - [How to Reset the Hardware Inventory Cache](https://learn.microsoft.com/intune/configmgr/develop/core/clients/inventory/how-to-reset-the-hardware-inventory-cache): Describes the delete of the status record.
 - [InventoryActionStatus Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/client-classes/inventoryactionstatus-client-wmi-class): Lists the properties of the status record.
+- [InstallUpdates Method in Class CCM_SoftwareUpdatesManager](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/installupdates-method-in-class-ccm_softwareupdatesmanager): Describes the install request.
+- [CCM_SoftwareUpdate Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/sdk/ccm_softwareupdate-client-wmi-class): Lists ComplianceState and EvaluationState.
 - [Hardware inventory views in Configuration Manager](https://learn.microsoft.com/intune/configmgr/develop/core/understand/sqlviews/hardware-inventory-views-configuration-manager): Describes the Add Remove Programs inventory that the check compares.

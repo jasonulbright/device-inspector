@@ -143,6 +143,9 @@ $txtAppFilter    = $window.FindName('txtAppFilter')
 $cboAppStatus    = $window.FindName('cboAppStatus')
 $gridApps        = $window.FindName('gridApps')
 $gridUpdates     = $window.FindName('gridUpdates')
+# Context menu items are outside the name scope of the window.
+$menuInstallSelected = @($gridUpdates.ContextMenu.Items | Where-Object { $_.Name -eq 'menuInstallSelected' })[0]
+$menuInstallAll      = @($gridUpdates.ContextMenu.Items | Where-Object { $_.Name -eq 'menuInstallAll' })[0]
 $gridCollections = $window.FindName('gridCollections')
 $gridDeployments = $window.FindName('gridDeployments')
 $txtProblems     = $window.FindName('txtProblems')
@@ -897,6 +900,47 @@ $btnRepairInventory.Add_Click({
         -Message ('{0} The tool deletes the hardware inventory status record on the device and starts a hardware inventory. The client sends a full report, and the site replaces the hardware inventory of the device. Inspect again after the site processes the report.' -f $check.Message) `
         -AfterRun { param($r) Clear-InventoryCheck; Add-LogLine ('{0}: inspect {1} again after the site processes the full report.' -f $r.Action, $r.ComputerName) }
 })
+
+# Update install: only device rows that the client reports as missing (ComplianceState 0) can be installed.
+function Get-InstallableUpdateRow {
+    param([object[]]$Rows)
+    return @($Rows | Where-Object { $_ -and $_.Source -eq 'Device' -and $_.Required -and -not [string]::IsNullOrEmpty([string]$_.UpdateId) })
+}
+
+function Set-MenuItemState {
+    param([Parameter(Mandatory)]$Item, [Parameter(Mandatory)][bool]$Enabled, [Parameter(Mandatory)][string]$Reason)
+    $Item.IsEnabled = $Enabled
+    $Item.ToolTip = $Reason
+}
+
+$gridUpdates.ContextMenu.Add_Opened({
+    $all = Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)
+    $selected = Get-InstallableUpdateRow -Rows @($gridUpdates.SelectedItems)
+    $gate = $(if (-not $script:ActionsEnabled) { 'Turn on Enable actions first.' } elseif (-not (Test-DeviceActionReady)) { 'Inspect a device that answers first.' } else { '' })
+    if ($gate) {
+        Set-MenuItemState -Item $menuInstallSelected -Enabled $false -Reason $gate
+        Set-MenuItemState -Item $menuInstallAll -Enabled $false -Reason $gate
+        return
+    }
+    if ($selected.Count -gt 0) { Set-MenuItemState -Item $menuInstallSelected -Enabled $true -Reason ('Install {0} selected updates that the device lists as missing.' -f $selected.Count) }
+    else { Set-MenuItemState -Item $menuInstallSelected -Enabled $false -Reason 'Select rows with the source Device that the client lists as missing.' }
+    if ($all.Count -gt 0) { Set-MenuItemState -Item $menuInstallAll -Enabled $true -Reason ('Install all {0} updates that the device lists as missing.' -f $all.Count) }
+    else { Set-MenuItemState -Item $menuInstallAll -Enabled $false -Reason 'The device lists no missing update in its client policy.' }
+})
+
+function Invoke-UpdateInstall {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Rows, [Parameter(Mandatory)][bool]$All)
+    if ($Rows.Count -eq 0) { Add-LogLine 'Install updates: no row with a missing update.'; return }
+    $list = ($Rows | ForEach-Object { '{0} {1}' -f $_.Article, $_.Title }) -join [Environment]::NewLine
+    $parameters = @{}
+    if (-not $All) { $parameters['UpdateId'] = [string[]]@($Rows | ForEach-Object { [string]$_.UpdateId }) }
+    $name = $(if ($All) { 'Install all pending updates' } else { 'Install selected pending updates' })
+    Invoke-DeviceAction -Name $name -Function 'Invoke-DeviceInspectorUpdateInstall' -Parameters $parameters `
+        -Message ('The client on the device downloads and installs these {0} updates now (CCM_SoftwareUpdatesManager.InstallUpdates). The device can restart, as the deployment sets.{1}{1}{2}' -f $Rows.Count, [Environment]::NewLine, $list) `
+        -AfterRun { param($r) Add-LogLine ('{0}: inspect {1} again to see the update states.' -f $r.Action, $r.ComputerName) }
+}
+$menuInstallSelected.Add_Click({ Invoke-UpdateInstall -Rows (Get-InstallableUpdateRow -Rows @($gridUpdates.SelectedItems)) -All $false })
+$menuInstallAll.Add_Click({ Invoke-UpdateInstall -Rows (Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)) -All $true })
 
 # === Log file ===
 $btnOpenLog.Add_Click({
