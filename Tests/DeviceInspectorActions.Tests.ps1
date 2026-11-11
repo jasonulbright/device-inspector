@@ -317,7 +317,7 @@ Describe 'Full hardware inventory' {
     It 'deletes the status record first, then triggers hardware inventory' {
         InModuleScope DeviceInspectorCommon {
             $script:listCall = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}' }
+            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = [datetime]'2026-11-10T10:00:00Z'; LastReportDate = [datetime]'2026-11-10T10:01:00Z'; LastMajorReportVersion = [uint32]1; LastMinorReportVersion = [uint32]0 }
             Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
             Mock Get-CimInstance { $objStatus } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
             Mock Remove-CimInstance { $script:listCall.Add('remove') }
@@ -344,7 +344,7 @@ Describe 'Full hardware inventory' {
 
     It 'does not trigger when the delete fails' {
         InModuleScope DeviceInspectorCommon {
-            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}' }
+            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = [datetime]'2026-11-10T10:00:00Z'; LastReportDate = [datetime]'2026-11-10T10:01:00Z'; LastMajorReportVersion = [uint32]1; LastMinorReportVersion = [uint32]0 }
             Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
             Mock Get-CimInstance { $objStatus } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
             Mock Remove-CimInstance { throw 'Access denied' }
@@ -358,7 +358,7 @@ Describe 'Full hardware inventory' {
 
     It 'says that the record is deleted when the trigger fails' {
         InModuleScope DeviceInspectorCommon {
-            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}' }
+            $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastCycleStartedDate = [datetime]'2026-11-10T10:00:00Z'; LastReportDate = [datetime]'2026-11-10T10:01:00Z'; LastMajorReportVersion = [uint32]1; LastMinorReportVersion = [uint32]0 }
             Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
             Mock Get-CimInstance { $objStatus } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
             Mock Remove-CimInstance { }
