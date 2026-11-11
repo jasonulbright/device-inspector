@@ -1555,6 +1555,115 @@ function Write-DeviceInspectorCloseLog {
     }
 }
 
+function Get-DeviceInspectorCloseWarningText {
+    # .SYNOPSIS
+    # Returns the text of the close warning for the runs that are still open.
+    #
+    # .DESCRIPTION
+    # The text uses the singular for one run and the plural for more runs. It ends with one
+    # line for each run, with the action, the device and the action ID.
+    #
+    # .PARAMETER Run
+    # The runs that are still open. Each run comes from New-DeviceInspectorActionRun.
+    #
+    # .PARAMETER NewLine
+    # The line break. The default is the line break of the system.
+    #
+    # .EXAMPLE
+    # Get-DeviceInspectorCloseWarningText -Run $arrOpenRun
+    #
+    # # Returns "1 action is still running. ..." for one open run.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] The text of the warning.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [object[]]$Run,
+
+        [Parameter(Mandatory = $false)]
+        [string]$NewLine = [Environment]::NewLine
+    )
+
+    process {
+        $arrRun = @(@($Run) | Where-Object { $null -ne $_ })
+        $intCount = $arrRun.Count
+        if ($intCount -eq 1) {
+            $strHead = '1 action is still running. If you close the tool, it stops waiting for it, and the run on the device can stop before it is complete. Wait for the running action to end before you close.'
+        }
+        else {
+            $strHead = ('{0} actions are still running. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete. Wait for the running actions to end before you close.' -f $intCount)
+        }
+        $arrName = @($arrRun | ForEach-Object { '{0} on {1} (ID {2})' -f $_.Action, $_.ComputerName, $_.ActionId })
+        '{0}{1}{1}{2}' -f $strHead, $NewLine, ($arrName -join $NewLine)
+    }
+}
+
+function Get-DeviceInspectorApplicationLabel {
+    # .SYNOPSIS
+    # Returns the name of an application with its version, without a repeated version.
+    #
+    # .DESCRIPTION
+    # Many display names already hold the version, for example "Microsoft Visual C++ 2022 X86
+    # Minimum Runtime - 14.51.36247". The function adds the version only when the name does
+    # not hold it yet. An empty version adds nothing.
+    #
+    # .PARAMETER Name
+    # The display name of the application.
+    #
+    # .PARAMETER Version
+    # The display version of the application.
+    #
+    # .EXAMPLE
+    # Get-DeviceInspectorApplicationLabel -Name 'Contoso Tool' -Version '1.2.3'
+    #
+    # # Returns "Contoso Tool 1.2.3".
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] The name, and the version when the name does not hold it.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Name,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Version
+    )
+
+    process {
+        $strName = ([string]$Name).Trim()
+        $strVersion = ([string]$Version).Trim()
+        if ($strVersion.Length -eq 0 -or $strName.IndexOf($strVersion, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            return $strName
+        }
+        '{0} {1}' -f $strName, $strVersion
+    }
+}
+
 function Add-DeviceInspectorActionId {
     # .SYNOPSIS
     # Sets the action ID on the result that an action function returned.

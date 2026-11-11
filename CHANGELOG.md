@@ -4,6 +4,14 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+## 2 Close ends the process at once when actions are open
+
+### Fixed
+
+- End the process within a few seconds after Close anyway with a run open. Before, the process stayed until the held remote call returned (measured on the lab: 70 s and more). The end of Windows PowerShell waits for an open remoting call. The tool now ends with an explicit exit after the window closed, the log lines were written and the transcript was stopped. The `CLOSED` line still says that the result of the run is not known. The tool does not claim that the run stopped.
+- Write "1 action is still running" in the close warning for one run. Write "2 actions are still running" for more runs.
+- Show the version once in the Uninstall and Repair confirmation and in the log detail. The tool adds the version only when the display name does not hold it.
+
 ## 1 Guide images for the actions and the live Applications panel
 
 ### Changed
