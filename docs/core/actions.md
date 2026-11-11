@@ -71,7 +71,7 @@ The **Repair inventory...** button is on the Device panel. It is on only when th
 3. Select **Repair inventory...**. The dialog shows the result of the check.
 4. Select **Dry run**, then select **Repair inventory...** again and select **Run**.
 
-The repair runs the same device steps as **Full hardware inventory**, under the action name `Corrupt-inventory repair`. After the repair, and after **Full hardware inventory**, the button is off until the next inspection. Inspect the device again after the site processes the full report. The state is then **Current**.
+The repair runs the same device steps as **Full hardware inventory**, under the action name `Corrupt-inventory repair`. After the repair, and after **Full hardware inventory**, the state is **Unknown** with the text "inspect again", the problem line goes away, and the button is off until the next inspection. Inspect the device again after the site processes the full report. The state is then **Current**.
 
 ## Options and settings of this page
 

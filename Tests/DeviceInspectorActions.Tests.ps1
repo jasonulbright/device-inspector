@@ -554,7 +554,7 @@ Describe 'Corrupt-inventory check and repair' {
     }
 
     It 'clears the check after a repair or a full inventory, so the button turns off' {
-        $script:strStart | Should -Match "(?s)function Clear-InventoryCheck \{.*?InventoryCheck = \`$null.*?Update-ControlState"
+        $script:strStart | Should -Match "(?s)function Clear-InventoryCheck \{.*?State = 'Unknown'.*?-notlike 'Inventory: \*'.*?Show-Inspection -Inspection \`$script:Inspection.*?Update-ControlState"
         $script:strStart | Should -Match "-Function 'Invoke-DeviceInspectorFullInventory' -AfterRun \{ param\(\`$r\) Clear-InventoryCheck \}"
         $script:strStart | Should -Match '-AfterRun \{ param\(\$r\) Clear-InventoryCheck;'
     }

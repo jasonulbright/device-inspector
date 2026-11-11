@@ -249,8 +249,16 @@ function Test-DeviceActionReady {
 }
 
 # After a full inventory or a repair the check is out of date until the next inspection.
+# The panels and an export then show that state, not the old result.
 function Clear-InventoryCheck {
-    if ($script:Inspection -and $null -ne $script:Inspection.PSObject.Properties['InventoryCheck']) { $script:Inspection.InventoryCheck = $null }
+    if ($script:Inspection -and $null -ne $script:Inspection.PSObject.Properties['InventoryCheck']) {
+        $script:Inspection.InventoryCheck = [pscustomobject]@{
+            State = 'Unknown'; SiteInventory = $null; DeviceCycle = $null; Differences = 0; Applications = @()
+            Message = 'A full hardware inventory ran after this inspection. Inspect the device again after the site processes the report.'
+        }
+        $script:Inspection.Problems = @($script:Inspection.Problems | Where-Object { ([string]$_) -notlike 'Inventory: *' })
+        Show-Inspection -Inspection $script:Inspection
+    }
     Update-ControlState
 }
 

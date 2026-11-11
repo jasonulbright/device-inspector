@@ -1464,7 +1464,7 @@ function Test-DeviceInspectionInventory {
         if ($null -ne $objClassRows -and $null -ne $objClassRows.Value -and @($objDevice.InstalledApplications).Count -gt 0) {
             foreach ($objClass in $objClassRows.Value.PSObject.Properties) {
                 if ([int]$objClass.Value -eq 0) {
-                    return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() ('The site inventory has no rows in {0}. The hardware inventory class can be off in the client settings.' -f $objClass.Name))
+                    return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() ('The site inventory has no rows in {0}. The hardware inventory class can be off in the client settings, or the device has no entries of that kind (for example no 64-bit entries on 32-bit Windows).' -f $objClass.Name))
                 }
             }
         }
