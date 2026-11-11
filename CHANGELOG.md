@@ -9,14 +9,15 @@ All notable changes to Device Inspector are documented in this file.
 ### Added
 
 - Run an action on a device in its own background task. The window stays free: inspect other devices, search the device list and start actions on other devices while an action runs.
-- Allow one running action for each device. The tool refuses a second action on a device that has a running action, with the reason as tooltip or message.
+- Allow one running action for each device. The device key is the lower-case name without the text after the first dot, an IP address as it is, and the site resource ID when the inspection knows it. The tool refuses a second action on a device that has a running action, with the reason as tooltip or message.
 - Give each run and each dry run an action ID, and write it on the `STARTED` line and on the result line of the action log.
 - Show the running actions in a list under the Inspect bar, with the device, the action, the mode, the start time and the ID.
 - Show the result of a run in a window that does not take the focus. Refresh the view only when it shows the device of the run.
-- Ask for a confirmation when the window closes while actions run. Write a `CLOSED` line with the ID for each open run.
+- Warn when the window closes while actions run: the tool stops waiting, and a run on a device can stop before it is complete. The default button is Wait. Write a `CLOSED` line with the ID for each open run.
 
 ### Changed
 
+- Write exactly one result line for each run, before the window updates. A run that returns no result or more than one result gets a `FAILED` line that says so. A run whose work ended without the Done flag counts as ended.
 - Write the action ID as the second field of each action log line, after the time.
 - Keep the changes of the site (add to and remove from a collection) on the exclusive path with the progress panel.
 

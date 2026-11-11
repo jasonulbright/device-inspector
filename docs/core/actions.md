@@ -22,7 +22,7 @@ An action on a device runs in its own background task. The window stays free whi
 - You can start actions on other devices. Each device has its own task.
 - A list **RUNNING ACTIONS** appears under the Inspect bar while at least one action runs. Each row shows the device, the action, the mode, the start time and the ID. A row goes away when its run ends. The status bar shows how many actions run.
 
-A device runs one action at a time. A run, and a dry run, counts as an action. The device name is compared without regard to case. When the device of the inspection on screen has a running action:
+A device runs one action at a time. A run, and a dry run, counts as an action. The tool compares devices by a key: the name in lower case, without the text after the first dot. `WS01`, `ws01` and `WS01.CORP.LOCAL` are one device. An IP address stays as it is, so an IP address and a name are two devices, unless the inspection knows the site resource ID of the device. Two runs with the same resource ID are on the same device. When the device of the inspection on screen has a running action:
 
 - the action buttons are off, and their tooltip names the running action, its ID and its start time;
 - the right-click menu entries of the actions are off, with the same reason as the tooltip;
@@ -36,11 +36,11 @@ The inspection, the device list search and the changes of the site (**Add to col
 
 ### Close the window while actions run
 
-When you close the window while actions run on devices, the tool asks for a confirmation. The text names each running action and its ID. If you select **Yes**:
+When you close the window while actions run on devices, the tool shows a warning. It says: "N actions are still running. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete. Wait for the running actions to end before you close." The text names each running action and its ID. The default button is **Wait**, so Enter and Esc do not close the tool. Select **Close anyway** to close.
 
-- The runs on the devices continue. The tool does not stop them.
-- The tool does not write the result lines of these runs.
-- The tool writes one line with the outcome `CLOSED` and the ID of the run for each action that was open. The line of a real run goes with the `STARTED` line of the same ID.
+- Before it closes, the tool reads the runs that ended since its last check. Those runs get their real result line.
+- The tool does not stop the other runs. It stops waiting for them. It cannot write their result lines. A run on a device can stop before it is complete, so the result is not known.
+- The tool writes one line with the outcome `CLOSED` and the ID of the run for each action that was still open. A real run has the `STARTED` line with the same ID.
 
 Inspect the device later to see its state.
 
@@ -204,7 +204,9 @@ The outcomes are:
 | `STARTED` | A real run started. The tool writes the line before the run. A dry run has no `STARTED` line. |
 | `OK` | The run ended and did what it had to do. |
 | `FAILED` | The run ended and did not do what it had to do. The summary names the reason, and the exit code when the installer gave one. |
-| `CLOSED` | The window closed while the run was open. The run on the device continues. The tool does not write its result. |
+| `CLOSED` | The window closed while the run was open. The tool stopped waiting for it. The run can stop before it is complete. The result is not known. |
+
+Each run has exactly one result line. If the background work returns no result, more than one result, or an object that is not an action result, the line has the outcome `FAILED` and says so. If the work ends with an error, the line has the outcome `FAILED` with the error. The tool writes the result line before it updates the window.
 
 The ID joins the lines of one run: the `STARTED` line and the `OK` or `FAILED` line have the same ID. A dry run has one line with an ID. A line from an older version of the tool has no ID field, and one from a result without an ID shows a hyphen.
 
@@ -230,7 +232,7 @@ The ID joins the lines of one run: the `STARTED` line and the `OK` or `FAILED` l
 | <step> failed. The earlier steps, if any, ran. | A method call on the client failed. | Read the step lines in the log. Read `PolicyAgent.log` on the device. |
 | The action log cannot be written, so the run does not start. | The `Logs` folder is not writable. | Make the folder of the script writable. |
 | <action> (ID <id>) is running on <device> since <time>. A device runs one action at a time. Wait until it ends. | The device has a running action. | Wait until the row of the device leaves the list **RUNNING ACTIONS**, or act on another device. |
-| A line with the outcome `CLOSED` and no result line for the ID. | You closed the window while the run was open. | Inspect the device to see its state. |
+| A line with the outcome `CLOSED` and no result line for the ID. | You closed the window while the run was open. The tool stopped waiting, and the run can have stopped before it was complete. | Inspect the device to see its state. Run the action again if the state is not what you want. |
 | The Configuration Manager client does not answer: ... | The client is not installed or its WMI namespace is broken. | Install or repair the client. |
 | ... failed with return value <n>. | The client refused the request. | Read `PolicyAgent.log` on the device. |
 | The hardware inventory status cannot be read: ... | WMI refused the read of `root\ccm\invagt`. | Check the rights on `root\ccm\invagt`. Repair the client. |

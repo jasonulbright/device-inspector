@@ -216,7 +216,7 @@ Describe 'Action gate in the window' {
     It 'writes every run and every dry run to the action log' {
         $script:strStart | Should -Match '(?s)function Write-ActionResult \{.*?Write-DeviceInspectorActionLog -Path \$script:ActionLogPath'
         $script:strStart | Should -Match '(?s)-OnDone \{.*?Write-ActionResult -Result \$r'
-        $script:strStart | Should -Match '(?s)function Complete-DeviceActionRun \{.*?Add-DeviceInspectorActionId -Result \$r.*?Write-ActionResult -Result \$r'
+        $script:strStart | Should -Match '(?s)function Complete-DeviceActionRun \{.*?Resolve-DeviceInspectorRunResult -Run \$run.*?Write-ActionResult -Result \$record'
         $script:strStart | Should -Match '(?s)if \(\$State\.ErrorMsg\) \{\s*\$failed = New-DeviceInspectorActionRecord.*?Write-ActionResult -Result \$failed'
     }
 
@@ -1683,7 +1683,7 @@ Describe 'Background device actions' {
 
         It 'makes the window write an ID on the start line, on the result line and on the failure lines' {
             $script:strStart | Should -Match "(?s)function Invoke-DeviceAction \{.*?\`$actionId = New-DeviceInspectorActionId.*?-Outcome 'STARTED' -ActionId \`$actionId"
-            $script:strStart | Should -Match '(?s)function Complete-DeviceActionRun \{.*?New-DeviceInspectorActionRecord .*?-ActionId \(\[string\]\$run\.ActionId\).*?Add-DeviceInspectorActionId -Result \$r -ActionId'
+            $script:strStart | Should -Match '(?s)function Complete-DeviceActionRun \{.*?Resolve-DeviceInspectorRunResult -Run \$run'
         }
     }
 
@@ -1750,8 +1750,8 @@ Describe 'Background device actions' {
             $strText = Get-TestFunctionText -Name 'Invoke-DeviceAction'
             $strText.IndexOf('Register-DeviceInspectorActionRun') | Should -BeGreaterThan 0
             $strText.IndexOf('Register-DeviceInspectorActionRun') | Should -BeLessThan $strText.IndexOf("-Outcome 'STARTED'")
-            $strText | Should -Match "(?s)the run does not start.*?Unregister-DeviceInspectorActionRun"
-            $strText | Should -Match "(?s)Start-DeviceActionRun -Run \`$run.*?catch \{\s*\[void\]\(Unregister-DeviceInspectorActionRun"
+            $strText | Should -Match "(?s)catch \{\s*\`$logProblem.*?Unregister-DeviceInspectorActionRun.*?the run does not start"
+            $strText | Should -Match "(?s)Start-DeviceActionRun -Run \`$run.*?catch \{.*?Unregister-DeviceInspectorActionRun.*?return\s*\}\s*# From here the work executes"
         }
     }
 
@@ -1793,7 +1793,7 @@ Describe 'Background device actions' {
         It 'takes the run off the list, writes the result and refreshes the view only when it shows the device of the run' {
             $strText = Get-TestFunctionText -Name 'Complete-DeviceActionRun'
             $strText | Should -Match 'Unregister-DeviceInspectorActionRun -Runs \$script:RunList'
-            $strText | Should -Match '(?s)\$onScreen = .*?-ieq|\$onScreen = .*?OrdinalIgnoreCase'
+            $strText | Should -Match '\$onScreen = .*?Get-DeviceInspectorRunningAction -Run @\(\$run\) -ComputerName \(Get-ActionTargetName\) -ResourceId \(Get-ActionTargetResourceId\)'
             $strText.IndexOf('$onScreen') | Should -BeLessThan $strText.IndexOf('& $Job.AfterRun')
             $strText | Should -Match 'is not the device on screen'
         }
@@ -1840,7 +1840,8 @@ Describe 'Background device actions' {
             $arrHeader.Count | Should -Be 2
             $arrHeader[0] | Should -Match ('^\S+ \| {0} \| \S+ \| WS01 \| Application uninstall \| RUN \| CLOSED \| ' -f $arrRun[0].ActionId)
             $arrHeader[1] | Should -Match ('^\S+ \| {0} \| \S+ \| WS02 \| Full hardware inventory \| DRY RUN \| CLOSED \| ' -f $arrRun[1].ActionId)
-            $arrHeader[0] | Should -Match 'The run on the device continues\. The tool does not write its result\.$'
+            $arrHeader[0] | Should -Match 'The tool stopped waiting for it\. The run can stop before it is complete\. The result is not known\.$'
+            $arrHeader[0] | Should -Not -Match 'continues'
         }
 
         It 'writes no line and no file when no run is open' {
@@ -1852,11 +1853,148 @@ Describe 'Background device actions' {
         It 'asks for a confirmation that names the runs, cancels the close on No, and writes the close lines on Yes' {
             $strClosing = [regex]::Match($script:strStart, '(?s)\$window\.Add_Closing\(\{.*?\r?\n\}\)').Value
             $strClosing | Should -Match 'if \(\$script:RunList\.Count -gt 0\)'
-            $strClosing | Should -Match "Show-ThemedMessage -Owner \`$window -Title 'Actions still running'.*?-Buttons YesNo"
-            $strClosing | Should -Match 'the runs on the devices continue\. The tool does not write their result lines'
-            $strClosing | Should -Match "if \(\`$answer -ne 'Yes'\) \{ \`$e\.Cancel = \`$true; return \}"
+            $strClosing | Should -Match 'Show-CloseWarningDialog -Runs @\(\$script:RunList\)'
+            $strClosing | Should -Match "if \(\`$answer -ne 'Close'\) \{ \`$e\.Cancel = \`$true; return \}"
             $strClosing | Should -Match 'Write-DeviceInspectorCloseLog -Path \$script:ActionLogPath -Run \$open'
             $strClosing.IndexOf('Write-DeviceInspectorCloseLog') | Should -BeLessThan $strClosing.IndexOf('Stop-DeviceActionRun')
+            # One pass over the runs after the confirmation and before the snapshot of the open runs.
+            $strClosing.IndexOf('Update-DeviceActionRun') | Should -BeGreaterThan $strClosing.IndexOf('Show-CloseWarningDialog')
+            $strClosing.IndexOf('Update-DeviceActionRun') | Should -BeLessThan $strClosing.IndexOf('$open = ')
         }
+
+        It 'uses the owner text in the close dialog, with Wait as the default button, and never stops an open run' {
+            $strDialog = Get-TestFunctionText -Name 'Show-CloseWarningDialog'
+            $strDialog | Should -Match 'actions are still running\. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete\. Wait for the running actions to end before you close\.'
+            $strDialog | Should -Match 'x:Name="btnWait"[^>]*IsDefault="True" IsCancel="True"'
+            $strDialog | Should -Not -Match 'x:Name="btnCloseAnyway"[^>]*IsDefault'
+            $strStop = Get-TestFunctionText -Name 'Stop-DeviceActionRun'
+            $strStop | Should -Not -Match 'BeginStop|\$job'
+            $script:strStart | Should -Not -Match 'runs on the devices continue'
+        }
+    }
+}
+
+Describe 'Device key for the one-action-for-each-device check' {
+    It 'gives the key <Key> for the name <Name>' -ForEach @(
+        @{ Name = 'WS01'; Key = 'ws01' }
+        @{ Name = 'ws01'; Key = 'ws01' }
+        @{ Name = 'ws01.corp.local'; Key = 'ws01' }
+        @{ Name = 'WS01.CORP.LOCAL'; Key = 'ws01' }
+        @{ Name = '  Ws01.Corp  '; Key = 'ws01' }
+        @{ Name = '10.0.0.5'; Key = '10.0.0.5' }
+        @{ Name = '2001:DB8::1'; Key = '2001:db8::1' }
+        @{ Name = ''; Key = '' }
+    ) {
+        Get-DeviceInspectorDeviceKey -ComputerName $Name | Should -Be $Key
+    }
+
+    It 'treats WS01, ws01.corp.local and WS01.CORP.LOCAL as one device, for a run and for a dry run' {
+        $listRun = New-Object -TypeName 'System.Collections.ObjectModel.ObservableCollection[object]'
+        $objFirst = New-DeviceInspectorActionRun -ActionId 'aaaaaaaa' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false
+        Register-DeviceInspectorActionRun -Runs $listRun -Run $objFirst
+        foreach ($strName in 'ws01.corp.local', 'WS01.CORP.LOCAL', 'Ws01') {
+            { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-DeviceInspectorActionRun -ActionId 'bbbbbbbb' -Action 'Full hardware inventory' -ComputerName $strName -DryRun $true) } | Should -Throw -Because $strName
+        }
+        $listRun.Count | Should -Be 1
+        { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-DeviceInspectorActionRun -ActionId 'cccccccc' -Action 'Full hardware inventory' -ComputerName 'WS02.corp.local' -DryRun $false) } | Should -Not -Throw
+    }
+
+    It 'gives the same reason to the gate of a device action and of a site action for each spelling of the name' -ForEach @(@{ Kind = 'Device' }, @{ Kind = 'Site' }) {
+        $objInspection = [pscustomobject]@{ SiteServer = 's'; Site = [pscustomobject]@{ Found = $true }; Device = [pscustomobject]@{} }
+        $objRun = New-DeviceInspectorActionRun -ActionId 'aaaaaaaa' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false
+        foreach ($strName in 'WS01', 'ws01.corp.local', 'WS01.CORP.LOCAL') {
+            Get-DeviceInspectorActionBlock -Inspection $objInspection -ActionsEnabled $true -Busy $false -Kind $Kind -Run @($objRun) -ComputerName $strName | Should -Match '^Client policy update \(ID aaaaaaaa\) is running on WS01 since ' -Because $strName
+        }
+        Get-DeviceInspectorActionBlock -Inspection $objInspection -ActionsEnabled $true -Busy $false -Kind $Kind -Run @($objRun) -ComputerName 'WS02.corp.local' | Should -Be ''
+    }
+
+    It 'treats two names with the same site resource ID as one device, and an IP address without a resource ID as another' {
+        $objRun = New-DeviceInspectorActionRun -ActionId 'aaaaaaaa' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -ResourceId 16777300
+        Get-DeviceInspectorRunningAction -Run @($objRun) -ComputerName '10.0.0.5' | Should -BeNullOrEmpty
+        Get-DeviceInspectorRunningAction -Run @($objRun) -ComputerName '10.0.0.5' -ResourceId 16777300 | Should -Not -BeNullOrEmpty
+        Get-DeviceInspectorRunningAction -Run @($objRun) -ComputerName '10.0.0.5' -ResourceId 16777301 | Should -BeNullOrEmpty
+        Get-DeviceInspectorRunBlock -Run @($objRun) -ComputerName 'ws01.corp.local' -ResourceId 0 | Should -Match 'is running on WS01'
+        $listRun = New-Object -TypeName 'System.Collections.ObjectModel.ObservableCollection[object]'
+        Register-DeviceInspectorActionRun -Runs $listRun -Run $objRun
+        { Register-DeviceInspectorActionRun -Runs $listRun -Run (New-DeviceInspectorActionRun -ActionId 'bbbbbbbb' -Action 'Full hardware inventory' -ComputerName '10.0.0.5' -DryRun $false -ResourceId 16777300) } | Should -Throw
+    }
+}
+
+Describe 'End of a run' {
+    BeforeAll {
+        $script:objRun = New-DeviceInspectorActionRun -ActionId 'a1b2c3d4' -Action 'Corrupt-inventory repair' -ComputerName 'WS01' -DryRun $false
+        function Get-TestHeaderLine {
+            param([object]$Record)
+            $strPath = Join-Path -Path $TestDrive -ChildPath ('Logs\{0}.log' -f [guid]::NewGuid().ToString('N'))
+            $null = Write-DeviceInspectorActionLog -Path $strPath -Result $Record
+            return @([System.IO.File]::ReadAllLines($strPath) | Where-Object { $_ -notmatch '^\s' })
+        }
+    }
+
+    It 'says that a run has ended when Done is set, or when the asynchronous call is completed, and not before' {
+        Test-DeviceInspectorRunFinished -State @{ Done = $true } -Handle $null | Should -BeTrue
+        Test-DeviceInspectorRunFinished -State ([hashtable]::Synchronized(@{ Done = $false })) -Handle ([pscustomobject]@{ IsCompleted = $true }) | Should -BeTrue
+        Test-DeviceInspectorRunFinished -State ([pscustomobject]@{ Done = $false }) -Handle ([pscustomobject]@{ IsCompleted = $false }) | Should -BeFalse
+        Test-DeviceInspectorRunFinished -State @{ Done = $false } -Handle $null | Should -BeFalse
+        Test-DeviceInspectorRunFinished -State $null -Handle ([pscustomobject]@{ IsCompleted = $true }) | Should -BeTrue
+    }
+
+    It 'sees a pipeline that ends without the Done flag as ended, and the failure path gives a FAILED record' {
+        $objPs = [powershell]::Create()
+        try {
+            [void]$objPs.AddScript({ throw 'The pipeline stopped.' })
+            $objHandle = $objPs.BeginInvoke()
+            $null = $objHandle.AsyncWaitHandle.WaitOne(30000)
+            $hashtableState = [hashtable]::Synchronized(@{ Done = $false; Result = $null; ErrorMsg = $null })
+            Test-DeviceInspectorRunFinished -State $hashtableState -Handle $objHandle | Should -BeTrue
+            $strProblem = ''
+            try { [void]$objPs.EndInvoke($objHandle) } catch { $strProblem = $_.Exception.Message }
+            $strProblem | Should -Match 'The pipeline stopped\.'
+            $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result $hashtableState.Result -ErrorMessage $strProblem -Detail @()
+            $objRecord.Outcome | Should -Be 'FAILED'
+            $objRecord.Summary | Should -Match 'The pipeline stopped\.'
+        } finally {
+            $objPs.Dispose()
+        }
+    }
+
+    It 'returns the result with the ID and the detail lines when the work returned exactly one result' {
+        $objResult = [pscustomobject]@{ Action = 'Corrupt-inventory repair'; ComputerName = 'WS01'; DryRun = $false; Mode = 'RUN'; StartedAt = '2026-11-11T08:00:00Z'; Account = 'EXAMPLE\admin'; Succeeded = $true; Outcome = 'OK'; Summary = 'Done.'; Steps = @() }
+        $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result @($objResult) -ErrorMessage '' -Detail @('Application: X.')
+        $objRecord.ActionId | Should -Be 'a1b2c3d4'
+        $objRecord.Steps | Should -Be @('Application: X.')
+        $arrLine = Get-TestHeaderLine -Record $objRecord
+        $arrLine.Count | Should -Be 1
+        $arrLine[0] | Should -Match '\| a1b2c3d4 \| \S+ \| WS01 \| Corrupt-inventory repair \| RUN \| OK \| Done\.$'
+    }
+
+    It 'writes exactly one FAILED line that says so for <Case>' -ForEach @(
+        @{ Case = 'no result'; Result = $null; Message = ''; Expected = 'The action returned no result.' }
+        @{ Case = 'an empty array'; Result = @(); Message = ''; Expected = 'The action returned no result.' }
+        @{ Case = 'two results'; Result = @([pscustomobject]@{ Succeeded = $true }, [pscustomobject]@{ Succeeded = $true }); Message = ''; Expected = 'The action returned 2 results instead of one.' }
+        @{ Case = 'an object that is not an action result'; Result = 'text'; Message = ''; Expected = 'The action returned an object that is not an action result.' }
+        @{ Case = 'an error'; Result = $null; Message = 'WinRM cannot complete the operation.'; Expected = 'WinRM cannot complete the operation.' }
+    ) {
+        $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result $Result -ErrorMessage $Message -Detail @('Application: X.')
+        @($objRecord).Count | Should -Be 1
+        $objRecord.Outcome | Should -Be 'FAILED'
+        $objRecord.Summary | Should -Be $Expected
+        $arrLine = Get-TestHeaderLine -Record $objRecord
+        $arrLine.Count | Should -Be 1
+        $arrLine[0] | Should -Match ('\| a1b2c3d4 \| \S+ \| WS01 \| Corrupt-inventory repair \| RUN \| FAILED \| {0}$' -f [regex]::Escape($Expected))
+    }
+
+    It 'writes the result line first and runs the window updates after it, each in its own try' {
+        $strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $objAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strStartPath, [ref]$null, [ref]$null)
+        $strText = $objAst.Find({ param($objNode) $objNode -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $objNode.Name -eq 'Complete-DeviceActionRun' }, $true).Extent.Text
+        $intWrite = $strText.IndexOf('Write-ActionResult -Result $record')
+        $intWrite | Should -BeGreaterThan 0
+        foreach ($strLater in 'Update-ControlState', 'Update-StatusBarSummary', 'Show-ActionResultNotice', '& $Job.AfterRun') {
+            $strText.IndexOf($strLater) | Should -BeGreaterThan $intWrite -Because $strLater
+        }
+        $strText | Should -Match '(?s)try \{ Update-ControlState \} catch.*?try \{ Update-StatusBarSummary \} catch'
+        $strStart | Should -Match '(?s)function Write-ActionResult \{.*?Write-DeviceInspectorActionLog.*?foreach \(\$line in .*?Add-LogLine'
+        $strStart | Should -Match '(?s)function Update-DeviceActionRun \{.*?Test-DeviceInspectorRunFinished -State \$job\.State -Handle \$job\.Handle'
     }
 }
