@@ -1106,7 +1106,8 @@ $menuAddCollection.Add_Click({ Invoke-AddToCollection })
 function Invoke-DeviceListSearch {
     $pattern = ([string]$txtListName.Text).Trim()
     $collection = ([string]$txtListCollection.Text).Trim().ToUpperInvariant()
-    $check = Test-DeviceInspectorInput -ComputerName 'name' -SiteServer ([string]$txtSiteServer.Text) -SiteCode ([string]$global:Prefs.SiteCode)
+    $neutralName = 'name'
+    $check = Test-DeviceInspectorInput -ComputerName $neutralName -SiteServer ([string]$txtSiteServer.Text) -SiteCode ([string]$global:Prefs.SiteCode)
     $problems = @()
     if (-not $check.IsValid) { $problems += $check.Errors }
     if (-not $check.SiteServer) { $problems += 'Enter a site server in the Inspect bar. The device list reads the site.' }
