@@ -2,7 +2,7 @@
 
 All notable changes to Device Inspector are documented in this file.
 
-## [Unreleased]
+## [2026.11.11.0010] - 2026-11-11
 
 ### Fixed
 
