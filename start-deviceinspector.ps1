@@ -142,6 +142,8 @@ $gridFacts       = $window.FindName('gridFacts')
 $txtAppFilter    = $window.FindName('txtAppFilter')
 $cboAppStatus    = $window.FindName('cboAppStatus')
 $gridApps        = $window.FindName('gridApps')
+$menuUninstallApp = @($gridApps.ContextMenu.Items | Where-Object { $_.Name -eq 'menuUninstallApp' })[0]
+$menuRepairApp    = @($gridApps.ContextMenu.Items | Where-Object { $_.Name -eq 'menuRepairApp' })[0]
 $gridUpdates     = $window.FindName('gridUpdates')
 # Context menu items are outside the name scope of the window.
 $menuInstallSelected = @($gridUpdates.ContextMenu.Items | Where-Object { $_.Name -eq 'menuInstallSelected' })[0]
@@ -958,6 +960,46 @@ function Invoke-UpdateInstall {
 }
 $menuInstallSelected.Add_Click({ Invoke-UpdateInstall -Rows (Get-InstallableUpdateRow -Rows @($gridUpdates.SelectedItems)) -All $false })
 $menuInstallAll.Add_Click({ Invoke-UpdateInstall -Rows (Get-InstallableUpdateRow -Rows @($gridUpdates.ItemsSource)) -All $true })
+
+# Uninstall and repair: one selected row that carries a Configuration Manager application.
+function Get-ActionGateText {
+    if (-not $script:ActionsEnabled) { return 'Turn on Enable actions first.' }
+    if ($script:IsBusy) { return 'Wait for the running task to end.' }
+    if (-not (Test-DeviceActionReady)) { return 'Inspect a device that answers first.' }
+    return ''
+}
+
+$gridApps.Add_PreviewMouseRightButtonDown({ param($s, $e) try { Select-RowUnderPointer -Grid $gridApps -MouseArgs $e } catch { $null = $_ } })
+$gridApps.ContextMenu.Add_Opened({
+    $gate = Get-ActionGateText
+    $rows = @($gridApps.SelectedItems)
+    $row = $(if ($rows.Count -eq 1) { $rows[0] } else { $null })
+    foreach ($pair in @(@{ Item = $menuUninstallApp; Op = 'Uninstall'; Flag = 'CanUninstall' }, @{ Item = $menuRepairApp; Op = 'Repair'; Flag = 'CanRepair' })) {
+        if ($gate) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason $gate; continue }
+        if (-not $row) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason 'Select one row.'; continue }
+        if ([string]::IsNullOrEmpty([string]$row.ClientApplicationId)) { Set-MenuItemState -Item $pair.Item -Enabled $false -Reason 'This entry is not a Configuration Manager application on the device. Uninstall and Repair work on rows with the status Client application, or on entries with the same name.'; continue }
+        if (-not [bool]$row.($pair.Flag)) {
+            $why = $(if ($pair.Op -eq 'Repair') { 'The client does not allow Repair for this application. The deployment type needs a repair command.' } else { 'The client does not allow Uninstall for this application now.' })
+            Set-MenuItemState -Item $pair.Item -Enabled $false -Reason $why
+            continue
+        }
+        Set-MenuItemState -Item $pair.Item -Enabled $true -Reason ('{0} {1} with the Configuration Manager client.' -f $pair.Op, $row.ClientApplication)
+    }
+})
+
+function Invoke-ApplicationOperation {
+    param([Parameter(Mandatory)][ValidateSet('Uninstall', 'Repair')][string]$Operation)
+    $rows = @($gridApps.SelectedItems)
+    if ($rows.Count -ne 1 -or [string]::IsNullOrEmpty([string]$rows[0].ClientApplicationId)) { Add-LogLine ('{0}: select one row with a Configuration Manager application.' -f $Operation); return }
+    $row = $rows[0]
+    $text = $(if ($Operation -eq 'Uninstall') { 'The Configuration Manager client on the device uninstalls {0} (revision {1}) now, with the uninstall command of its deployment type.' } else { 'The Configuration Manager client on the device repairs {0} (revision {1}) now, with the repair command of its deployment type.' })
+    Invoke-DeviceAction -Name ('{0} application' -f $Operation) -Function 'Invoke-DeviceInspectorApplicationAction' `
+        -Parameters @{ ApplicationId = [string]$row.ClientApplicationId; Operation = $Operation } `
+        -Message ($text -f $row.ClientApplication, $row.ClientRevision) `
+        -AfterRun { param($r) Add-LogLine ('{0}: inspect {1} again to see the new state.' -f $r.Action, $r.ComputerName) }
+}
+$menuUninstallApp.Add_Click({ Invoke-ApplicationOperation -Operation 'Uninstall' })
+$menuRepairApp.Add_Click({ Invoke-ApplicationOperation -Operation 'Repair' })
 
 # === Log file ===
 $btnOpenLog.Add_Click({

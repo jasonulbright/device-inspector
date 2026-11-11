@@ -225,6 +225,101 @@ $script:scriptBlockUpdateInstall = {
     [pscustomobject]@{ Succeeded = $true; Summary = ('The client accepted the install of {0} updates. It downloads and installs them now. A restart can follow, as the deployment sets.' -f $arrTarget.Count); Steps = @($listStep) }
 }
 
+# Runs on the device. Uninstalls or repairs one Configuration Manager application
+# with the CCM_Application method of the same name. When the client holds several
+# revisions of the application, it picks the superseding one, else the highest.
+$script:scriptBlockApplicationAction = {
+    param (
+        [Parameter(Mandatory = $true)][bool]$DryRun,
+        [Parameter(Mandatory = $true)][string]$ApplicationId,
+        [Parameter(Mandatory = $true)][ValidateSet('Uninstall', 'Repair')][string]$Operation
+    )
+
+    $ErrorActionPreference = 'Stop'
+    $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    try {
+        $objClient = Get-CimInstance -Namespace 'root\ccm' -ClassName 'SMS_Client'
+    } catch {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The Configuration Manager client does not answer: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+    }
+    if ($null -eq $objClient) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client is not installed on the device.'; Steps = @($listStep) }
+    }
+    $listStep.Add(('Client version {0} answers.' -f [string]$objClient.ClientVersion))
+    try {
+        $arrMatch = @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_Application' | Where-Object { [string]$_.Id -eq $ApplicationId })
+    } catch {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The applications of the client policy cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+    }
+    if ($arrMatch.Count -eq 0) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The client policy has no application with this ID now. Inspect the device again.'; Steps = @($listStep) }
+    }
+    $objApplication = $arrMatch[0]
+    if ($arrMatch.Count -gt 1) {
+        $arrSuperseding = @($arrMatch | Where-Object { ([string]$_.SupersessionState) -eq 'Superseding' -or ([string]$_.SupersessionState) -eq '1' })
+        $arrPick = $arrMatch
+        if ($arrSuperseding.Count -gt 0) {
+            $arrPick = $arrSuperseding
+        }
+        $objApplication = @($arrPick | Sort-Object -Property { [int]$_.Revision } -Descending)[0]
+        $listStep.Add(('The client holds {0} revisions. Picked revision {1}.' -f $arrMatch.Count, [string]$objApplication.Revision))
+    }
+    $arrAllowed = @($objApplication.AllowedActions | ForEach-Object { [string]$_ })
+    $listStep.Add(('{0}, revision {1}, install state {2}, allowed actions: {3}.' -f [string]$objApplication.Name, [string]$objApplication.Revision, [string]$objApplication.InstallState, ($arrAllowed -join ', ')))
+    $boolAllowed = $arrAllowed -contains $Operation
+    if ($Operation -eq 'Uninstall' -and -not $boolAllowed) {
+        $boolAllowed = ([string]$objApplication.InstallState) -eq 'Installed' -and -not [bool]$objApplication.IsPreflightOnly
+    }
+    if (-not $boolAllowed) {
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client does not allow {0} for this application now. For Repair, the deployment type needs a repair command.' -f $Operation); Steps = @($listStep) }
+    }
+    if ($DryRun) {
+        $listStep.Add(('Dry run: would call CCM_Application.{0} for {1}, revision {2}.' -f $Operation, [string]$objApplication.Name, [string]$objApplication.Revision))
+        return [pscustomobject]@{ Succeeded = $true; Summary = 'Dry run: the client answers. Nothing changed.'; Steps = @($listStep) }
+    }
+    $hashtableArgument = @{
+        Id                = [string]$objApplication.Id
+        Revision          = [string]$objApplication.Revision
+        IsMachineTarget   = [bool]$objApplication.IsMachineTarget
+        EnforcePreference = [uint32]0
+        Priority          = 'High'
+        IsRebootIfNeeded  = $false
+    }
+    try {
+        $objReturn = Invoke-CimMethod -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_Application' -MethodName $Operation -Arguments $hashtableArgument
+        $objReturnValue = $null
+        $strJobId = ''
+        if ($null -ne $objReturn -and $null -ne $objReturn.PSObject.Properties['ReturnValue']) {
+            $objReturnValue = $objReturn.ReturnValue
+        }
+        if ($null -ne $objReturn -and $null -ne $objReturn.PSObject.Properties['JobId']) {
+            $strJobId = [string]$objReturn.JobId
+        }
+        $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
+    } catch {
+        $listStep.Add(('{0} failed: {1}' -f $Operation, $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client did not accept the {0} request.' -f $Operation); Steps = @($listStep) }
+    }
+    if ($boolRefused) {
+        $listStep.Add(('{0} returned {1}.' -f $Operation, $objReturnValue))
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The client refused the {0} request (return value {1}).' -f $Operation, $objReturnValue); Steps = @($listStep) }
+    }
+    if ($null -eq $objReturnValue) {
+        $listStep.Add(('{0} gave no return value. The state read below shows the outcome.' -f $Operation))
+    }
+    $listStep.Add(('{0} accepted. Job {1}.' -f $Operation, $strJobId))
+    Start-Sleep -Seconds 10
+    try {
+        $objAfter = @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_Application' | Where-Object { [string]$_.Id -eq $ApplicationId -and [string]$_.Revision -eq [string]$objApplication.Revision })[0]
+        if ($null -ne $objAfter) {
+            $listStep.Add(('After the request: install state {0}, evaluation state {1}.' -f [string]$objAfter.InstallState, [int]$objAfter.EvaluationState))
+        }
+    } catch {
+        $listStep.Add(('The state after the request cannot be read: {0}' -f $_.Exception.Message))
+    }
+    [pscustomobject]@{ Succeeded = $true; Summary = ('The client accepted the {0} of {1}. AppEnforce.log on the device shows the run.' -f $Operation, [string]$objApplication.Name); Steps = @($listStep) }
+}
+
 #endregion Remote script blocks
 
 #region Private helpers
@@ -771,6 +866,86 @@ function Invoke-DeviceInspectorUpdateInstall {
             ComputerName = $ComputerName
             ScriptBlock  = $script:scriptBlockUpdateInstall
             ArgumentList = @(, [string[]]@($UpdateId))
+            DryRun       = $DryRun
+        }
+        if ($PSBoundParameters.ContainsKey('Credential')) {
+            $hashtableAction['Credential'] = $Credential
+        }
+        Invoke-ActionOnDevice @hashtableAction
+    }
+}
+
+function Invoke-DeviceInspectorApplicationAction {
+    # .SYNOPSIS
+    # Uninstalls or repairs one Configuration Manager application on a device.
+    #
+    # .DESCRIPTION
+    # Runs on the device over WinRM. It finds the application in CCM_Application by
+    # its ID, checks that the client allows the operation, and calls the Uninstall
+    # or the Repair method with the immediate enforce preference. With DryRun it
+    # reads the application and lists the step, and changes nothing.
+    #
+    # .PARAMETER ComputerName
+    # The device name.
+    #
+    # .PARAMETER ApplicationId
+    # The Id of the application in CCM_Application.
+    #
+    # .PARAMETER Operation
+    # Uninstall or Repair.
+    #
+    # .PARAMETER DryRun
+    # Read the application and list the step only.
+    #
+    # .PARAMETER Credential
+    # An optional credential for the WinRM connection.
+    #
+    # .EXAMPLE
+    # Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -ApplicationId 'ScopeId_1/Application_2' -Operation Uninstall -DryRun
+    #
+    # # Shows the application and its allowed actions. Nothing changes.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] See New-DeviceInspectorActionRecord.
+    #
+    # .NOTES
+    # Non-throwing contract: a failure on the device gives Succeeded $false and a
+    # Summary. A parameter outside its pattern throws before the function runs.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9_.-]{1,255}\z')]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9_{}/.-]{1,300}\z')]
+        [string]$ApplicationId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Uninstall', 'Repair')]
+        [string]$Operation,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$DryRun,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    process {
+        $hashtableAction = @{
+            Action       = ('{0} application' -f $Operation)
+            ComputerName = $ComputerName
+            ScriptBlock  = $script:scriptBlockApplicationAction
+            ArgumentList = @($ApplicationId, $Operation)
             DryRun       = $DryRun
         }
         if ($PSBoundParameters.ContainsKey('Credential')) {

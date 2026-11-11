@@ -45,9 +45,9 @@ The two filters work together.
 
 ### The right-click menu
 
-A right-click on a row opens a menu with **Uninstall...** and **Repair...**. Both entries are off. They are planned for a later release. This release is read only.
+A right-click on a row opens a menu with **Uninstall...** and **Repair...**. They work on a row that carries a Configuration Manager application, and need **Enable actions**. An entry that is off shows the reason as its tooltip. See [Actions](actions.md#uninstall-or-repair-an-application).
 
-![The right-click menu with the two entries off](../images/apps-context-menu.png)
+![The right-click menu of the Applications grid](../images/apps-context-menu.png)
 
 ### Applications panel in the light theme
 
@@ -63,6 +63,7 @@ A right-click on a row opens a menu with **Uninstall...** and **Repair...**. Bot
 | **Version differs** | The name is equal and the version differs. |
 | **Device only** | The device list has the application and the inventory does not. |
 | **Inventory only** | The inventory has the application and the device does not. |
+| **Client application** | A Configuration Manager application that the client on the device lists as installed, and that has no uninstall entry with the same name. The device version is the software version of the application. |
 
 A row shows the status as text. It has no color.
 

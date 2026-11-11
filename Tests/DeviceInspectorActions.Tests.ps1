@@ -730,3 +730,127 @@ Describe 'Install pending updates' {
         $script:strStart | Should -Match "(?s)function Get-InstallableUpdateRow \{.*?Source -eq 'Device' -and \`$_\.Required"
     }
 }
+
+Describe 'Uninstall and repair an application' {
+    BeforeAll {
+        $script:strStart = Get-Content -LiteralPath $script:strStartPath -Raw
+        $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
+    }
+
+    BeforeEach {
+        InModuleScope DeviceInspectorCommon {
+            $script:arrTestApp = @(
+                [pscustomobject]@{ Id = 'ScopeId_1/Application_7'; Revision = '13'; Name = '7-Zip (x64 edition) - 26.03'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Install'); SupersessionState = 'None'; EvaluationState = 1 }
+            )
+            Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+            Mock Get-CimInstance { $script:arrTestApp } -ParameterFilter { $ClassName -eq 'CCM_Application' }
+            Mock Start-Sleep { }
+        }
+    }
+
+    It 'names the action and passes ID and operation after DryRun' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+        (Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -ApplicationId 'ScopeId_1/Application_7' -Operation Uninstall -DryRun).Action | Should -Be 'Uninstall application'
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript -Times 1 -Exactly -ParameterFilter { $ArgumentList[0] -eq $true -and $ArgumentList[1] -eq 'ScopeId_1/Application_7' -and $ArgumentList[2] -eq 'Uninstall' }
+    }
+
+    It 'refuses an application ID with a quote' {
+        { Invoke-DeviceInspectorApplicationAction -ComputerName 'WS01' -ApplicationId "x' OR 1=1" -Operation Uninstall } | Should -Throw
+    }
+
+    It 'changes nothing in a dry run' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockApplicationAction $true 'ScopeId_1/Application_7' 'Uninstall'
+            $objRaw.Succeeded | Should -BeTrue
+            ($objRaw.Steps -join "`n") | Should -Match 'Dry run: would call CCM_Application.Uninstall for 7-Zip'
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'uninstalls an installed application with the immediate enforce preference' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 0; JobId = '{JOB}' } }
+            $objRaw = & $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_7' 'Uninstall'
+            $objRaw.Succeeded | Should -BeTrue
+            ($objRaw.Steps -join "`n") | Should -Match 'Uninstall accepted\. Job \{JOB\}'
+            Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter { $ClassName -eq 'CCM_Application' -and $MethodName -eq 'Uninstall' -and $Arguments.Id -eq 'ScopeId_1/Application_7' -and $Arguments.Revision -eq '13' -and $Arguments.EnforcePreference -eq 0 -and $Arguments.IsMachineTarget -eq $true }
+        }
+    }
+
+    It 'refuses a repair that the client does not allow, and calls no method' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { }
+            $objRaw = & $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_7' 'Repair'
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'does not allow Repair'
+            Should -Invoke Invoke-CimMethod -Times 0 -Exactly
+        }
+    }
+
+    It 'picks the superseding revision, else the highest' {
+        InModuleScope DeviceInspectorCommon {
+            $script:arrTestApp = @(
+                [pscustomobject]@{ Id = 'A/1'; Revision = '9'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'None'; EvaluationState = 1 }
+                [pscustomobject]@{ Id = 'A/1'; Revision = '12'; Name = 'App'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall'); SupersessionState = 'None'; EvaluationState = 1 }
+            )
+            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 0 } }
+            $null = & $script:scriptBlockApplicationAction $false 'A/1' 'Uninstall'
+            Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter { $Arguments.Revision -eq '12' }
+            $script:arrTestApp[0].SupersessionState = 'Superseding'
+            $null = & $script:scriptBlockApplicationAction $false 'A/1' 'Uninstall'
+            Should -Invoke Invoke-CimMethod -Times 1 -Exactly -ParameterFilter { $Arguments.Revision -eq '9' }
+        }
+    }
+
+    It 'fails when the application is gone, and when the client refuses' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 2147749890 } }
+            (& $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_7' 'Uninstall').Summary | Should -Match 'refused the Uninstall request'
+            (& $script:scriptBlockApplicationAction $false 'ScopeId_1/Application_0' 'Uninstall').Summary | Should -Match 'no application with this ID'
+        }
+    }
+
+    It 'lists an installed client application as its own row, and links it to an uninstall entry of the same name' {
+        $objInspection = [pscustomobject]@{
+            Site = $null
+            Device = [pscustomobject]@{
+                InstalledApplications = @([pscustomobject]@{ Name = '7-Zip 26.03 (x64 edition)'; Version = '26.03'; Publisher = 'Igor Pavlov'; InstallDate = '20261110' }, [pscustomobject]@{ Name = 'Same Name App'; Version = '1.0'; Publisher = 'P'; InstallDate = '' })
+                ClientApplications = @(
+                    [pscustomobject]@{ Name = '7-Zip (x64 edition) - 26.03'; Id = 'S/A1'; Revision = '13'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Install'); SoftwareVersion = '26.03'; Publisher = 'Igor Pavlov' }
+                    [pscustomobject]@{ Name = 'Same Name App'; Id = 'S/A2'; Revision = '2'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Uninstall', 'Repair'); SoftwareVersion = '1.0'; Publisher = 'P' }
+                    [pscustomobject]@{ Name = 'Not Installed App'; Id = 'S/A3'; Revision = '1'; InstallState = 'NotInstalled'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @('Install'); SoftwareVersion = '1.0'; Publisher = 'P' }
+                )
+            }
+        }
+        $arrRow = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection)
+        $arrRow.Count | Should -Be 3
+        $objClientRow = @($arrRow | Where-Object Status -eq 'Client application')
+        $objClientRow.Count | Should -Be 1
+        $objClientRow[0].ClientApplicationId | Should -Be 'S/A1'
+        $objClientRow[0].CanUninstall | Should -BeTrue
+        $objClientRow[0].CanRepair | Should -BeFalse
+        $objLinked = @($arrRow | Where-Object Name -eq 'Same Name App')[0]
+        $objLinked.ClientApplicationId | Should -Be 'S/A2'
+        $objLinked.CanRepair | Should -BeTrue
+        @($arrRow | Where-Object Name -eq '7-Zip 26.03 (x64 edition)')[0].ClientApplicationId | Should -Be ''
+    }
+
+    It 'does not count a client application row as an inventory difference' {
+        $objInspection = [pscustomobject]@{
+            ComputerName = 'WS01'
+            Site = [pscustomobject]@{ Found = $true; HardwareScanClientTime = '2026-11-10T10:01:00'; InstalledApplications = @() }
+            Device = [pscustomobject]@{ Client = [pscustomobject]@{ HardwareCycleLocalTime = '2026-11-10T10:00:00' }; InstalledApplications = @()
+                ClientApplications = @([pscustomobject]@{ Name = 'CM App'; Id = 'S/A1'; Revision = '1'; InstallState = 'Installed'; IsMachineTarget = $true; IsPreflightOnly = $false; AllowedActions = @(); SoftwareVersion = '1'; Publisher = '' }) }
+        }
+        (Test-DeviceInspectionInventory -Inspection $objInspection).State | Should -Be 'Current'
+    }
+
+    It 'has Uninstall and Repair entries that open the action through the gate' {
+        $script:strXaml | Should -Match 'x:Name="menuUninstallApp"[^>]*ToolTipService.ShowOnDisabled="True"'
+        $script:strXaml | Should -Match 'x:Name="menuRepairApp"'
+        $script:strXaml | Should -Match '<ComboBoxItem Content="Client application"/>'
+        $script:strStart | Should -Match "(?s)\`$gridApps\.ContextMenu\.Add_Opened\(\{\s*\`$gate = Get-ActionGateText"
+        $script:strStart | Should -Match "(?s)function Invoke-ApplicationOperation \{.*?Invoke-DeviceAction -Name \('\{0\} application' -f \`$Operation\) -Function 'Invoke-DeviceInspectorApplicationAction'"
+    }
+}

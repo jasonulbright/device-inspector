@@ -364,6 +364,7 @@
                             <ComboBoxItem Content="Version differs"/>
                             <ComboBoxItem Content="Device only"/>
                             <ComboBoxItem Content="Inventory only"/>
+                            <ComboBoxItem Content="Client application"/>
                         </ComboBox>
                     </Grid>
                     <DataGrid x:Name="gridApps" Grid.Row="1"
@@ -372,8 +373,8 @@
                               CellStyle="{StaticResource GridCellStyle}">
                         <DataGrid.ContextMenu>
                             <ContextMenu>
-                                <MenuItem Header="Uninstall..." IsEnabled="False" ToolTip="Planned for a later release. This release is read only."/>
-                                <MenuItem Header="Repair..."    IsEnabled="False" ToolTip="Planned for a later release. This release is read only."/>
+                                <MenuItem x:Name="menuUninstallApp" Header="Uninstall..." IsEnabled="False" ToolTipService.ShowOnDisabled="True"/>
+                                <MenuItem x:Name="menuRepairApp"    Header="Repair..."    IsEnabled="False" ToolTipService.ShowOnDisabled="True"/>
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
