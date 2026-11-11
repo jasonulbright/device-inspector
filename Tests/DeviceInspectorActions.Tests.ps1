@@ -1120,7 +1120,7 @@ Describe 'Add to collection' {
             Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
             Mock Disconnect-InspectorSite { }
             Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 16777221; Name = 'WS01' } }
-            Mock Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ00030'; Name = 'Pilot 2'; LimitToCollectionID = 'SMS00001' } }
+            Mock Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ00030'; Name = 'Pilot 2'; MemberCount = 3; LimitToCollectionID = 'SMS00001' } }
             Mock Get-CMDeviceCollectionDirectMembershipRule { }
             Mock Add-CMDeviceCollectionDirectMembershipRule { }
             Mock Invoke-CMCollectionUpdate { }
