@@ -702,7 +702,7 @@ Describe 'Install pending updates' {
 
     It 'sends the confirmed IDs also for all, and selects the row under the pointer' {
         $script:strStart | Should -Match "(?s)function Invoke-UpdateInstall \{.*?UpdateId = \[string\[\]\]@\(\`$Rows \| ForEach-Object"
-        $script:strStart | Should -Match '\$gridUpdates\.Add_PreviewMouseRightButtonDown\(\{ param\(\$s, \$e\) Select-RowUnderPointer -Grid \$gridUpdates'
+        $script:strStart | Should -Match '\$gridUpdates\.Add_PreviewMouseRightButtonDown\(\{ param\(\$s, \$e\) try \{ Select-RowUnderPointer -Grid \$gridUpdates'
         $script:strStart | Should -Match "Wait for the running task to end"
     }
 
