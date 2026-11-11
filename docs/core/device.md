@@ -54,6 +54,10 @@ When the tool cannot reach the device, the **Device** groups are missing and the
 
 None.
 
+## Inventory check
+
+The group **Inventory check** shows the state of the site inventory against the device: **Current**, **Corrupt**, **NotCurrent** or **Unknown**, the result text, and one row **Difference** for each application that differs. See [Actions](actions.md#repair-a-corrupt-inventory).
+
 ## Limits
 
 - The last logon user is empty when the site has no value for it.

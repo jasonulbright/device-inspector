@@ -60,7 +60,8 @@ The right-click menus of the Applications, Updates and Collections grids hold di
 - A deployment deadline is shown as the local time that the site stores, with no zone.
 - The tool shows deployments that target a collection of the device. It does not show the per-device result of each deployment.
 - The site inventory list depends on the hardware inventory classes `Add Remove Programs` and `Add Remove Programs (64)`. The classes must be enabled in the client settings.
-- The device list reads the machine-wide uninstall keys only. Per-user installs are not listed.
+- The device list reads the machine-wide uninstall keys only. Per-user installs are not listed. System components are listed, as in the site inventory.
+- The inventory check compares dates and application names only. An application removed after the last hardware inventory cycle makes the state **Corrupt** until the next cycle.
 - A device name that has several resource records in the site uses the first record and adds a problem line.
 - The updates that the site lists as required come from the update compliance status of the site. They can lag the state on the device.
 

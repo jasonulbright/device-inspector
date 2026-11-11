@@ -49,6 +49,28 @@ The **Full hardware inventory...** button is on the Device panel. Use it when th
 
 The tool deletes the `InventoryActionStatus` record of hardware inventory (`{00000000-0000-0000-0000-000000000001}`) in `root\ccm\invagt` on the device. Then it triggers the Hardware Inventory schedule. Without the record, the client sends a full report instead of a delta report, and the site replaces all hardware inventory of the device. When no record exists, the tool only triggers the schedule. When the delete fails, the tool does not trigger the schedule. The client log `InventoryAgent.log` shows the full report. The site shows the new inventory date after it processes the report. When hardware inventory is off in the client settings, the client sends no report.
 
+### Repair a corrupt inventory
+
+Each inspection with the site and the device runs an inventory check. The Device panel shows it in the group **Inventory check**.
+
+| State | Meaning |
+|---|---|
+| **Current** | The site inventory date is not older than the start of the last hardware inventory cycle on the device, and the installed applications of the site inventory and of the device match. |
+| **Corrupt** | The site inventory is current, but applications differ. The rows **Difference** name them. The **Problems** panel gets a line. |
+| **NotCurrent** | The site has not processed the last hardware inventory cycle of the device yet. The check does not compare the applications. |
+| **Unknown** | The site record, the client facts or a date is missing. |
+
+An application on the device with an install date on or after the day of the last cycle does not count, because the next cycle reports it.
+
+The **Repair inventory...** button is on the Device panel. It is on only when the state is **Corrupt**.
+
+1. Turn on **Enable actions**.
+2. Inspect the device. The state is **Corrupt**.
+3. Select **Repair inventory...**. The dialog shows the result of the check.
+4. Select **Dry run**, then select **Repair inventory...** again and select **Run**.
+
+The repair runs the same device steps as **Full hardware inventory**, under the action name `Corrupt-inventory repair`. Inspect the device again after the site processes the full report. The state is then **Current**.
+
 ## Options and settings of this page
 
 | Control | Effect |
@@ -94,3 +116,4 @@ The action log is `Logs\DeviceInspector-actions.log` in the script folder. The t
 - [How to manage clients in Configuration Manager](https://learn.microsoft.com/intune/configmgr/core/clients/manage/manage-clients#start-policy-retrieval): Describes policy retrieval.
 - [How to Reset the Hardware Inventory Cache](https://learn.microsoft.com/intune/configmgr/develop/core/clients/inventory/how-to-reset-the-hardware-inventory-cache): Describes the delete of the status record.
 - [InventoryActionStatus Client WMI Class](https://learn.microsoft.com/intune/configmgr/develop/reference/core/clients/client-classes/inventoryactionstatus-client-wmi-class): Lists the properties of the status record.
+- [Hardware inventory views in Configuration Manager](https://learn.microsoft.com/intune/configmgr/develop/core/understand/sqlviews/hardware-inventory-views-configuration-manager): Describes the Add Remove Programs inventory that the check compares.

@@ -69,7 +69,7 @@ A row shows the status as text. It has no color.
 ## Limits
 
 - The inventory list needs the hardware inventory classes `Add Remove Programs` and `Add Remove Programs (64)` in the client settings.
-- The device list reads the machine-wide uninstall keys only. Per-user installs are not listed.
+- The device list reads the machine-wide uninstall keys only. Per-user installs are not listed. Entries that Windows marks as system components (`SystemComponent` 1) are listed, because the site inventory lists them too. Names are compared without spaces at the ends.
 - The inventory can lag the device. A new install shows as **Device only** until the next hardware inventory.
 
 ## Troubleshooting

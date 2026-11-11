@@ -1061,15 +1061,16 @@ function Get-DeviceFact {
                 foreach ($strKeyPath in $arrKeyPath) {
                     foreach ($objEntry in @(Get-ItemProperty -Path $strKeyPath -ErrorAction SilentlyContinue)) {
                         $objName = $objEntry.PSObject.Properties['DisplayName']
-                        $objSystemComponent = $objEntry.PSObject.Properties['SystemComponent']
                         if ($null -eq $objName -or [string]::IsNullOrWhiteSpace([string]$objName.Value)) {
-                            continue
-                        }
-                        if ($null -ne $objSystemComponent -and [int]$objSystemComponent.Value -eq 1) {
                             continue
                         }
                         $objVersion = $objEntry.PSObject.Properties['DisplayVersion']
                         $objPublisher = $objEntry.PSObject.Properties['Publisher']
+                        $objInstallDate = $objEntry.PSObject.Properties['InstallDate']
+                        $strInstallDate = ''
+                        if ($null -ne $objInstallDate) {
+                            $strInstallDate = [string]$objInstallDate.Value
+                        }
                         $strVersion = ''
                         if ($null -ne $objVersion) {
                             $strVersion = [string]$objVersion.Value
@@ -1079,9 +1080,10 @@ function Get-DeviceFact {
                             $strPublisher = [string]$objPublisher.Value
                         }
                         $listInstalled.Add([pscustomobject]@{
-                                Name      = [string]$objName.Value
-                                Version   = $strVersion
-                                Publisher = $strPublisher
+                                Name        = ([string]$objName.Value).Trim()
+                                Version     = $strVersion
+                                Publisher   = $strPublisher
+                                InstallDate = $strInstallDate
                             })
                     }
                 }
@@ -1309,15 +1311,127 @@ function Get-DeviceInspection {
         if ($PSBoundParameters.ContainsKey('SiteServer')) {
             $strSiteServerText = $SiteServer
         }
-        [pscustomobject]@{
-            ComputerName = $ComputerName
-            InspectedAt  = ConvertTo-InspectionTimestamp -Value ([datetime]::UtcNow)
-            SiteServer   = $strSiteServerText
-            SiteCode     = $strResolvedSiteCode
-            Site         = $objSite
-            Device       = $objDevice
-            Problems     = @($listProblem)
+        $objInspection = [pscustomobject]@{
+            ComputerName   = $ComputerName
+            InspectedAt    = ConvertTo-InspectionTimestamp -Value ([datetime]::UtcNow)
+            SiteServer     = $strSiteServerText
+            SiteCode       = $strResolvedSiteCode
+            Site           = $objSite
+            Device         = $objDevice
+            InventoryCheck = $null
+            Problems       = @()
         }
+        try {
+            $objInspection.InventoryCheck = Test-DeviceInspectionInventory -Inspection $objInspection
+            if ($objInspection.InventoryCheck.State -eq 'Corrupt') {
+                $listProblem.Add(('Inventory: {0}' -f $objInspection.InventoryCheck.Message))
+            }
+        } catch {
+            Write-Debug -Message $_.Exception.Message
+            $listProblem.Add(('Inventory check: {0}' -f $_.Exception.Message))
+        }
+        $objInspection.Problems = @($listProblem)
+        $objInspection
+    }
+}
+
+function Test-DeviceInspectionInventory {
+    # .SYNOPSIS
+    # Flags a device whose site inventory is current but whose installed applications differ.
+    #
+    # .DESCRIPTION
+    # Read only. The site inventory is current when its date is not older than the
+    # start of the last hardware inventory cycle on the device, so the site holds the
+    # last report. Then the installed applications of the site inventory and of the
+    # device must match. A difference means that the inventory on the site is
+    # corrupt. A device application whose install date is on or after the day of the
+    # last cycle does not count, because the next cycle reports it.
+    #
+    # States: Corrupt (current, applications differ), Current (current, no
+    # difference), NotCurrent (the site has not processed the last cycle yet),
+    # Unknown (the site or the device part is missing, or a date is missing).
+    #
+    # .PARAMETER Inspection
+    # The object that Get-DeviceInspection returns.
+    #
+    # .EXAMPLE
+    # (Test-DeviceInspectionInventory -Inspection $objInspection).State
+    #
+    # # Corrupt, Current, NotCurrent or Unknown.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] Properties: State, SiteInventory, DeviceCycle, Differences,
+    # Applications, Message.
+    #
+    # .NOTES
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Inspection
+    )
+
+    process {
+        $scriptBlockResult = {
+            param($strState, $strSite, $strCycle, $arrApplication, $strMessage)
+            [pscustomobject]@{
+                State         = $strState
+                SiteInventory = $strSite
+                DeviceCycle   = $strCycle
+                Differences   = @($arrApplication).Count
+                Applications  = @($arrApplication)
+                Message       = $strMessage
+            }
+        }
+        $objSite = $Inspection.Site
+        $objDevice = $Inspection.Device
+        if ($null -eq $objSite -or -not $objSite.Found -or $null -eq $objDevice -or $null -eq $objDevice.Client) {
+            return (& $scriptBlockResult 'Unknown' $null $null @() 'The check needs the site record and the client facts of the device.')
+        }
+        $strSite = [string]$objSite.LastHardwareInventory
+        $strCycle = [string]$objDevice.Client.LastHardwareInventoryCycle
+        $objCulture = [System.Globalization.CultureInfo]::InvariantCulture
+        $enumStyle = [System.Globalization.DateTimeStyles]::AdjustToUniversal -bor [System.Globalization.DateTimeStyles]::AssumeUniversal
+        $datetimeSite = [datetime]::MinValue
+        $datetimeCycle = [datetime]::MinValue
+        if (-not [datetime]::TryParse($strSite, $objCulture, $enumStyle, [ref]$datetimeSite) -or -not [datetime]::TryParse($strCycle, $objCulture, $enumStyle, [ref]$datetimeCycle)) {
+            return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() 'The site inventory date or the last hardware inventory cycle of the device is missing.')
+        }
+        if ($datetimeSite -lt $datetimeCycle) {
+            return (& $scriptBlockResult 'NotCurrent' $strSite $strCycle @() ('The site inventory ({0}) is older than the last hardware inventory cycle of the device ({1}). The site has not processed that report yet.' -f $strSite, $strCycle))
+        }
+        $strCycleDay = $datetimeCycle.ToString('yyyyMMdd', $objCulture)
+        $hashtableInstallDate = @{}
+        foreach ($objApplication in @($objDevice.InstalledApplications)) {
+            $objDate = $objApplication.PSObject.Properties['InstallDate']
+            if ($null -ne $objDate -and ([string]$objDate.Value) -match '^\d{8}$') {
+                $strKey = ([string]$objApplication.Name).Trim().ToLowerInvariant()
+                if (-not $hashtableInstallDate.ContainsKey($strKey) -or [string]$objDate.Value -gt $hashtableInstallDate[$strKey]) {
+                    $hashtableInstallDate[$strKey] = [string]$objDate.Value
+                }
+            }
+        }
+        $listApplication = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        foreach ($objRow in @(ConvertTo-DeviceInspectionApplicationRow -Inspection $Inspection)) {
+            if ($objRow.Status -eq 'Match') {
+                continue
+            }
+            $strKey = ([string]$objRow.Name).Trim().ToLowerInvariant()
+            if ($objRow.Status -ne 'Inventory only' -and $hashtableInstallDate.ContainsKey($strKey) -and $hashtableInstallDate[$strKey] -ge $strCycleDay) {
+                continue
+            }
+            $listApplication.Add(('{0}: {1}' -f $objRow.Status, $objRow.Name))
+        }
+        if ($listApplication.Count -eq 0) {
+            return (& $scriptBlockResult 'Current' $strSite $strCycle @() 'The site inventory is current and its applications match the device.')
+        }
+        & $scriptBlockResult 'Corrupt' $strSite $strCycle $listApplication.ToArray() ('The site inventory is current ({0}), but {1} applications differ from the device. The inventory on the site can be corrupt. Repair inventory runs a full hardware inventory.' -f $strSite, $listApplication.Count)
     }
 }
 
@@ -1615,6 +1729,14 @@ function ConvertTo-DeviceInspectionFactRow {
                 & $scriptBlockRow 'Site record' 'Status' 'The site has no record of this device.'
             }
         }
+        $objCheckProperty = $Inspection.PSObject.Properties['InventoryCheck']
+        if ($null -ne $objCheckProperty -and $null -ne $objCheckProperty.Value) {
+            & $scriptBlockRow 'Inventory check' 'State' $objCheckProperty.Value.State
+            & $scriptBlockRow 'Inventory check' 'Result' $objCheckProperty.Value.Message
+            foreach ($strApplication in @($objCheckProperty.Value.Applications)) {
+                & $scriptBlockRow 'Inventory check' 'Difference' $strApplication
+            }
+        }
     }
 }
 
@@ -1658,7 +1780,7 @@ function ConvertTo-DeviceInspectionApplicationRow {
         $hashtablePublisher = @{}
         if ($null -ne $Inspection.Device) {
             foreach ($objApplication in @($Inspection.Device.InstalledApplications)) {
-                $strKey = ([string]$objApplication.Name).ToLowerInvariant()
+                $strKey = ([string]$objApplication.Name).Trim().ToLowerInvariant()
                 if (-not $hashtableDevice.ContainsKey($strKey)) {
                     $hashtableDevice[$strKey] = New-Object -TypeName 'System.Collections.Generic.List[string]'
                 }
@@ -1668,7 +1790,7 @@ function ConvertTo-DeviceInspectionApplicationRow {
         }
         if ($null -ne $Inspection.Site) {
             foreach ($objApplication in @($Inspection.Site.InstalledApplications)) {
-                $strKey = ([string]$objApplication.Name).ToLowerInvariant()
+                $strKey = ([string]$objApplication.Name).Trim().ToLowerInvariant()
                 if (-not $hashtableSite.ContainsKey($strKey)) {
                     $hashtableSite[$strKey] = New-Object -TypeName 'System.Collections.Generic.List[string]'
                 }
@@ -1684,7 +1806,7 @@ function ConvertTo-DeviceInspectionApplicationRow {
                 continue
             }
             foreach ($objApplication in @($objSource.InstalledApplications)) {
-                $hashtableDisplay[([string]$objApplication.Name).ToLowerInvariant()] = [string]$objApplication.Name
+                $hashtableDisplay[([string]$objApplication.Name).Trim().ToLowerInvariant()] = ([string]$objApplication.Name).Trim()
             }
         }
         foreach ($strKey in @($hashtableDisplay.Keys | Sort-Object)) {
@@ -2098,4 +2220,4 @@ function Write-DeviceInspectionFile {
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord'

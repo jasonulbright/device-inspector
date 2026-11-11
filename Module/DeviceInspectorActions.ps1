@@ -538,6 +538,69 @@ function Invoke-DeviceInspectorFullInventory {
     }
 }
 
+function Invoke-DeviceInspectorInventoryRepair {
+    # .SYNOPSIS
+    # Repairs a corrupt site inventory of a device with a full hardware inventory.
+    #
+    # .DESCRIPTION
+    # The same device steps as Invoke-DeviceInspectorFullInventory, under the action
+    # name Corrupt-inventory repair. The window offers it only when
+    # Test-DeviceInspectionInventory returns the state Corrupt.
+    #
+    # .PARAMETER ComputerName
+    # The device name.
+    #
+    # .PARAMETER DryRun
+    # Read the record and list the steps only.
+    #
+    # .PARAMETER Credential
+    # An optional credential for the WinRM connection.
+    #
+    # .EXAMPLE
+    # Invoke-DeviceInspectorInventoryRepair -ComputerName 'WS01' -DryRun
+    #
+    # # Shows the status record and the two steps. Nothing changes.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [pscustomobject] See New-DeviceInspectorActionRecord.
+    #
+    # .NOTES
+    # Non-throwing contract: a failure gives Succeeded $false and a Summary.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261111.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9_.-]{1,255}\z')]
+        [string]$ComputerName,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$DryRun,
+
+        [Parameter(Mandatory = $false)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    process {
+        $hashtableAction = @{
+            Action       = 'Corrupt-inventory repair'
+            ComputerName = $ComputerName
+            ScriptBlock  = $script:scriptBlockFullInventory
+            DryRun       = $DryRun
+        }
+        if ($PSBoundParameters.ContainsKey('Credential')) {
+            $hashtableAction['Credential'] = $Credential
+        }
+        Invoke-ActionOnDevice @hashtableAction
+    }
+}
+
 function ConvertTo-DeviceInspectorActionText {
     # .SYNOPSIS
     # Formats an action result as text lines.

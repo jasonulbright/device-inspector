@@ -137,6 +137,7 @@ $viewProblems    = $window.FindName('viewProblems')
 $txtSummary      = $window.FindName('txtSummary')
 $btnPolicyUpdate = $window.FindName('btnPolicyUpdate')
 $btnFullInventory = $window.FindName('btnFullInventory')
+$btnRepairInventory = $window.FindName('btnRepairInventory')
 $gridFacts       = $window.FindName('gridFacts')
 $txtAppFilter    = $window.FindName('txtAppFilter')
 $cboAppStatus    = $window.FindName('cboAppStatus')
@@ -247,6 +248,12 @@ function Test-DeviceActionReady {
     return [bool]($script:ActionsEnabled -and -not $script:IsBusy -and $script:Inspection -and $null -ne $script:Inspection.Device)
 }
 
+function Test-InventoryCorrupt {
+    if (-not $script:Inspection) { return $false }
+    $check = $script:Inspection.PSObject.Properties['InventoryCheck']
+    return [bool]($null -ne $check -and $null -ne $check.Value -and $check.Value.State -eq 'Corrupt')
+}
+
 function Update-ControlState {
     $idle = -not $script:IsBusy
     $has = [bool]$script:Inspection
@@ -259,6 +266,7 @@ function Update-ControlState {
     $toggleActions.IsEnabled = $idle
     $btnPolicyUpdate.IsEnabled = Test-DeviceActionReady
     $btnFullInventory.IsEnabled = Test-DeviceActionReady
+    $btnRepairInventory.IsEnabled = (Test-DeviceActionReady) -and (Test-InventoryCorrupt)
 }
 
 # === View switching ===
@@ -866,6 +874,14 @@ $btnPolicyUpdate.Add_Click({
 $btnFullInventory.Add_Click({
     Invoke-DeviceAction -Name 'Full hardware inventory' -Function 'Invoke-DeviceInspectorFullInventory' `
         -Message 'The tool deletes the hardware inventory status record on the device (InventoryActionStatus, root\ccm\invagt), then starts a hardware inventory cycle. The client then sends a full report, and the site replaces all hardware inventory of the device.'
+})
+
+$btnRepairInventory.Add_Click({
+    if (-not (Test-InventoryCorrupt)) { Add-LogLine 'Repair inventory: the inventory check does not say Corrupt.'; return }
+    $check = $script:Inspection.InventoryCheck
+    Invoke-DeviceAction -Name 'Corrupt-inventory repair' -Function 'Invoke-DeviceInspectorInventoryRepair' `
+        -Message ('{0} The tool deletes the hardware inventory status record on the device and starts a hardware inventory. The client sends a full report, and the site replaces the hardware inventory of the device. Inspect again after the site processes the report.' -f $check.Message) `
+        -AfterRun { param($r) Add-LogLine ('{0}: inspect {1} again after the site processes the full report.' -f $r.Action, $r.ComputerName) }
 })
 
 # === Log file ===
