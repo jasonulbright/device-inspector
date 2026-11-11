@@ -1,6 +1,6 @@
 # Device Inspector documentation
 
-Device Inspector reads the facts of one device from a Configuration Manager site and from the device itself. It only reads. This page links every page of the documentation.
+Device Inspector reads the facts of one device from a Configuration Manager site and from the device itself. The inspection only reads. The actions change the device or the site only when **Enable actions** is on. This page links every page of the documentation.
 
 ## Start
 
@@ -15,12 +15,13 @@ Device Inspector reads the facts of one device from a Configuration Manager site
 - [Collections panel](core/collections.md): the collections of the device and the deployments that target them.
 - [Problems panel](core/problems.md): the parts that failed, and what a failed part leaves.
 - [Export](core/export.md): Export JSON and Export HTML.
+- [Actions](core/actions.md): Enable actions, the confirmation, the dry run, the action log, and each action.
 - [Options dialog](core/options.md): the site server, the site code and About.
 - [Command line](core/command-line.md): `Invoke-DeviceInspector.ps1`, its parameters and its output.
 
 ## Reference
 
-- [Read-only design](reference/read-only-design.md): what the tool reads, why it cannot change anything, and its limits.
+- [Read-only design](reference/read-only-design.md): what the tool reads, how the inspection stays read only, how the actions are kept apart, and the limits.
 - [Data sources](reference/data-sources.md): the cmdlet or device read behind each fact, with the lab comparison.
 - [Settings](reference/settings.md): every setting with its default and where it is stored.
 - [Permissions](reference/permissions.md): the rights that each part needs.

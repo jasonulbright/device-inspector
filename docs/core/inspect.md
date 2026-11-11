@@ -70,7 +70,7 @@ The tool checks the boxes before it reads anything. A wrong value opens a messag
 
 The site code comes from **Options**. It is required whenever a site server is set. The tool saves the device name and **Site only** when you select **Inspect** with valid inputs. It saves the site server on **Inspect** only when the box is not empty, and when you select **OK** in Options.
 
-The **Enable actions** switch at the bottom of the sidebar is off and cannot be turned on in this release. The tool is read only. See [Read-only design](../reference/read-only-design.md).
+The **Enable actions** switch at the bottom of the sidebar is off at each start. While it is off, the tool only reads. See [Actions](actions.md).
 
 ## Limits
 

@@ -105,14 +105,16 @@ Describe 'Window XAML text' {
 }
 
 Describe 'Dialog text' {
-    It 'finds the Options dialog XAML in the script' {
-        $script:DialogXaml.Count | Should -Be 1
+    It 'finds the Options dialog XAML first and the action confirmation XAML second in the script' {
+        $script:DialogXaml.Count | Should -Be 2
+        $script:DialogXaml[0] | Should -Match 'x:Name="paneConnection"'
+        $script:DialogXaml[1] | Should -Match 'x:Name="btnActionRun"'
     }
 
-    It 'has every control that the Options dialog code looks up' {
+    It 'has every control that the dialog code looks up' {
         $lookups = @([regex]::Matches($script:ShellText, "\`$dlg\.FindName\('([^']+)'\)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
         $lookups.Count | Should -BeGreaterThan 5
-        foreach ($n in $lookups) { $script:DialogXaml[0] | Should -Match ('x:Name="{0}"' -f [regex]::Escape($n)) }
+        foreach ($n in $lookups) { ($script:DialogXaml -join "`n") | Should -Match ('x:Name="{0}"' -f [regex]::Escape($n)) }
     }
 
     It 'gives every message box a title that differs from the title of its owner window' {
@@ -176,6 +178,17 @@ Describe 'Dialog windows' -Skip:(-not $script:WindowGuard.Allowed) {
             $v.Interactive.Count | Should -BeGreaterThan 2 -Because "pane $($v.Pane) shows buttons"
         }
         Get-ContrastViolation -Views $views | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Action confirmation' -Skip:(-not $script:WindowGuard.Allowed) {
+    It 'shows the action confirmation without clipped text and meets the contrast standard in the <Theme> theme' -ForEach @(@{ Dark = $true; Theme = 'dark' }, @{ Dark = $false; Theme = 'light' }) {
+        $m = Invoke-WpfSta -Arguments @{ Config = $script:AppConfig; Xaml = $script:DialogXaml[1]; Dark = $Dark } -Script $script:ActionDialogMeasureScript
+        $m.Text.Count | Should -BeGreaterThan 2
+        $m.Interactive.Count | Should -Be 3
+        $m.Clipped | ForEach-Object { '{0}: needs {1}px, has {2}px' -f $_.Text, $_.Needed, $_.Actual } | Should -BeNullOrEmpty
+        $m.Offscreen | ForEach-Object { '{0} at {1},{2}' -f $_.Name, $_.X, $_.Y } | Should -BeNullOrEmpty
+        Get-ContrastViolation -Views @($m) | Should -BeNullOrEmpty
     }
 }
 

@@ -1,6 +1,6 @@
 # Read-only design
 
-This page lists what Device Inspector reads, why it cannot change anything, and its limits.
+This page lists what Device Inspector reads, how the inspection stays read only, how the actions are kept apart, and the limits.
 
 ## What it does
 
@@ -41,14 +41,17 @@ Two "last hardware inventory" values exist on purpose. The site value is the sca
 - The only files the tool writes are its log files, its settings files and the exports that the person names. In an installation of the suite, the shared update check also writes `%LOCALAPPDATA%\AppPackagerSuite\update-check.json`.
 - The tool uses the permissions of the Windows account that runs it. It stores no password.
 
-## Layout for later actions
+## Actions
 
-This release has no action that changes the site or the device. The window keeps room for them:
+The actions are the only code that changes the device or the site. They live in `Module/DeviceInspectorActions.ps1`, apart from the inspection code in `Module/DeviceInspectorCommon.psm1`, so that the read-only test of the inspection code still parses one file. The rules:
 
-- The **Enable actions** switch in the sidebar is disabled.
-- The right-click menus of the Applications, Updates and Collections grids hold disabled entries: Uninstall, Repair, Install pending updates, Remove from collection, Add to collection.
+- The **Enable actions** switch is off at each start and is not saved. The window checks it before it shows the confirmation.
+- Each action asks for a confirmation that names the action and shows the number of devices and their names.
+- Each action has a dry run. The dry run runs the same code on the device, reads the state, lists the steps and skips every call that changes state. A test runs each device script with the dry run and fails if it calls a method.
+- Each run and each dry run goes to the action log. See [Actions](../core/actions.md).
+- Calls that change state (`Invoke-CimMethod`) appear only in the device scripts of the actions file. A test checks this.
 
-Each later action will follow the rules of the suite: off until Enable actions is on, a confirmation before each change, a dry run, and a record in an action log.
+The right-click menus of the Applications, Updates and Collections grids hold disabled entries for later actions: Uninstall, Repair, Install pending updates, Remove from collection, Add to collection.
 
 ## Known limits
 
