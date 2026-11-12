@@ -49,3 +49,5 @@ The images in `docs/images` come from one command. Run it on a computer with Pow
 ```
 
 The credential script sets `$LabCredential`. Keep it outside the repository. The images of the `-SecondDevice` server end with `-server`. `-UnreachableDevice` names a device that does not exist, for the images of an unreachable device. The default is `no-such-device`. The steps are in `tools/guide-capture/steps-guide.ps1` and `tools/guide-capture/steps-console-missing.ps1`.
+
+To retake a few images, add `-Section` with the names of the sections that make them, and `-Image` with the image names (without `.png`). Only the named sections run, and only the named images are copied. A section uses the state that the sections before it leave, so name every section that the images need, in the order of the steps file. The section `action menus` makes the uninstall images and needs an application row that the capture can uninstall: leave it out when the workstation has none. The script stops before it connects when a section name is wrong.

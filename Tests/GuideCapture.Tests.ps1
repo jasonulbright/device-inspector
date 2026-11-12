@@ -115,6 +115,65 @@ Describe 'Capture scripts' {
         }
     }
 
+    It 'takes optional Section and Image parameters that select sections and images' {
+        $cmd = Get-Command (Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1')
+        foreach ($name in 'Section', 'Image') {
+            $cmd.Parameters.ContainsKey($name) | Should -BeTrue -Because $name
+            $cmd.Parameters[$name].ParameterType | Should -Be ([string[]]) -Because $name
+            @($cmd.Parameters[$name].Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] -and $_.Mandatory }).Count | Should -Be 0 -Because "$name is optional"
+        }
+    }
+
+    It 'stops on an unknown section name before it connects to the lab computer' {
+        $text = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1'))
+        $text | Should -Match 'Unknown section'
+        $text.IndexOf('Unknown section') | Should -BeLessThan $text.IndexOf('New-PSSession')
+        # A run with -Section takes the guide steps only, and it passes the names to the lab side.
+        $text | Should -Match 'Sections = @\(\$Section'
+        $text | Should -Match 'if \(\$Section\) \{ @\(''steps-guide\.ps1''\)'
+    }
+
+    It 'copies only the named images and checks that each one was taken' {
+        $text = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1'))
+        $text | Should -Match 'did not produce these named images'
+        $text.IndexOf('did not produce these named images') | Should -BeLessThan $text.IndexOf('Copy-Item $png.FullName')
+        $text | Should -Match 'Where-Object \{ \$wanted -contains \$_\.BaseName \}'
+    }
+
+    It 'names each section of the guide steps once, and keeps the uninstall images in the section action menus' {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $script:CaptureDir 'steps-guide.ps1'), [ref]$null, [ref]$null)
+        $sections = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Section' }, $true))
+        $names = @($sections | ForEach-Object { $_.CommandElements[1].Value })
+        $names.Count | Should -BeGreaterThan 8
+        @($names | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name) | Should -BeNullOrEmpty
+        $body = @{}
+        foreach ($s in $sections) { $body[$s.CommandElements[1].Value] = $s.CommandElements[2].Extent.Text }
+        $body['action menus'] | Should -Match 'apps-uninstall-confirm'
+        $body['action menus'] | Should -Match 'apps-context-menu'
+        foreach ($n in $names | Where-Object { $_ -ne 'action menus' }) {
+            $body[$n] | Should -Not -Match 'apps-uninstall-confirm' -Because "$n must run on a workstation with no uninstallable row"
+            $body[$n] | Should -Not -Match 'apps-context-menu' -Because $n
+        }
+        # The image of the action buttons and of the running list are in a section of their own, before the menus.
+        $names.IndexOf('actions') | Should -BeLessThan $names.IndexOf('action menus')
+        $body['actions'] | Should -Match 'actions-device-buttons'
+        $body['actions'] | Should -Match 'actions-running-list'
+    }
+
+    It 'runs only the selected sections and sets the site server and the site code in a section that is not an image section' {
+        $lib = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'guilib.ps1'))
+        $lib | Should -Match '\$Capture\.Sections'
+        $lib | Should -Match '\$Name -ne ''setup'''
+        $lib | Should -Match 'not selected'
+        $steps = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'steps-guide.ps1'))
+        $steps | Should -Match "Section 'setup'"
+        $setup = [regex]::Match($steps, "(?s)Section 'setup' \{.*?\r?\n    \}").Value
+        $setup | Should -Not -BeNullOrEmpty
+        $setup | Should -Not -Match '\bShot\b'
+        # The sections that set the site server and the site code themselves do not get the setup first.
+        $steps | Should -Match '''first run'' -notin \$selectedSections -and ''options'' -notin'
+    }
+
     It 'documents the one command that retakes every capture in the guide index' {
         $index = [System.IO.File]::ReadAllText((Join-Path $script:Root 'docs\index.md'))
         $index | Should -Match '(?m)^## Retake the captures'

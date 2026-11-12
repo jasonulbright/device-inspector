@@ -35,6 +35,18 @@ function Find-Item($Grid, [string]$Pattern) {
     $items[0]
 }
 
+# A run with -Section starts the app with no saved settings. The sections 'first run' and 'options' set the site server
+# and the site code, and 'first run' needs the empty first-run state. When neither is selected, this part sets the
+# site server and the site code instead, and it takes no image.
+$selectedSections = @($Capture.Sections | Where-Object { $_ })
+if ($selectedSections.Count -and 'first run' -notin $selectedSections -and 'options' -notin $selectedSections) {
+    Section 'setup' {
+        Invoke-El (Get-El $win 'btnOptions'); $d = Find-Top 'Options' 10
+        Set-Text (Get-El $d 'txtSmsProvider') $Capture.SmsProvider; Set-Text (Get-El $d 'txtSiteCode') $Capture.SiteCode
+        Invoke-El (Get-El $d 'btnOk'); Start-Sleep -Milliseconds 800
+        Set-Text (Get-El $win 'txtSiteServer') $Capture.SmsProvider
+    }
+}
 Section 'first run' {
     Shot $win 'start-first-run'
     Invoke-El (Get-El $win 'btnInspect'); Start-Sleep -Seconds 1
@@ -156,7 +168,12 @@ Section 'actions' {
     Shot $warn 'actions-close-warning'
     Invoke-El (Get-El $warn 'btnWait'); Start-Sleep -Milliseconds 800
     Wait-NoRun; Close-ResultWindows
-    # Right-click menus. The menu is a popup: Shot -Hover keeps it open and it is in the image.
+}
+# The right-click menus of the Updates and Applications panels and the uninstall confirmation. Enable actions stays on from the section before.
+# This section has its own name so that a run with -Section can leave it out: its guard stops the capture on a workstation
+# that has no harmless uninstallable row.
+Section 'action menus' {
+    # The menu is a popup: Shot -Hover keeps it open and it is in the image.
     Show-View 'btnViewUpdates'; Hide-LogTail
     RightClick-El (Find-Item (Get-El $win 'gridUpdates') '*Source=Device*'); Shot $win 'updates-context-menu' -Hover; Send-Keys '{ESC}'
     Show-View 'btnViewApps'; Hide-LogTail
@@ -175,6 +192,9 @@ Section 'actions' {
     Shot $dlg 'apps-uninstall-confirm'
     Invoke-El (Get-El $dlg 'btnActionCancel'); Start-Sleep -Milliseconds 600
     Select-AppType 'All'
+}
+# Enable actions is on from the section 'actions'. This section turns it off at its end.
+Section 'collection menus' {
     # The collection images use the server: the collections of the workstation hold test collections of other tools.
     Show-View 'btnViewDevice'; Set-Text (Get-El $win 'txtDevice') $Capture.SecondDevice; Invoke-El (Get-El $win 'btnInspect'); Wait-Idle
     Show-View 'btnViewCollections'; Hide-LogTail
