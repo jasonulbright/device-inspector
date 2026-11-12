@@ -105,7 +105,11 @@ function Start-App([string]$Script, [string]$Title) {
 function Stop-App([string]$Script) {
     Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like "*$Script*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
-function Section([string]$Name, [scriptblock]$Body) { if ($script:CaptureAborted) { Log ('== ' + $Name + ' skipped: the capture stopped'); return }; Log ('== ' + $Name); try { & $Body } catch { Log ('ERROR in ' + $Name + ': ' + $_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber) } }
+function Section([string]$Name, [scriptblock]$Body) {
+    # A run with -Section lists the sections to run in $Capture.Sections. 'setup' runs only then and always runs.
+    $selected = @($Capture.Sections | Where-Object { $_ })
+    if ($selected.Count -and $Name -ne 'setup' -and $Name -notin $selected) { Log ('== ' + $Name + ' not selected'); return }
+    if ($script:CaptureAborted) { Log ('== ' + $Name + ' skipped: the capture stopped'); return }; Log ('== ' + $Name); try { & $Body } catch { Log ('ERROR in ' + $Name + ': ' + $_.Exception.Message + ' @ ' + $_.InvocationInfo.ScriptLineNumber) } }
 function Find-All([string]$Name) {
     $cond = New-Object System.Windows.Automation.AndCondition((New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, $Name)), (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)))
     @($root.FindAll('Descendants', $cond))

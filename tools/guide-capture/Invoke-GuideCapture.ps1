@@ -37,6 +37,19 @@
 .PARAMETER UnreachableDevice
     A device name that does not exist, for the images of an unreachable device.
 
+.PARAMETER Section
+    The names of the sections of steps-guide.ps1 to run, for example 'inspect the client'. Only these sections run, and the
+    console-missing steps do not run. The app starts with no saved settings. When neither 'first run' nor 'options' is selected,
+    the run first enters the site server and the site code, as those sections do, and takes no image of that. A section uses the state that the
+    sections before it leave, so select every section that your images need, in the order of the file. The section 'action menus'
+    holds the uninstall images: leave it out on a workstation with no harmless uninstallable application row. The script stops
+    before it connects when a name is not a section. Without -Section, every section runs.
+
+.PARAMETER Image
+    The names of the images to copy into docs\images, without the .png extension, for example device-panel. Other images that the
+    run takes are not copied. The script stops and replaces no image when a named image was not taken. Use it with -Section. With -Section and no -Image, every image that the sections take is copied, and the check for a
+    missing guide image is off.
+
 .PARAMETER AddNew
     Also copy images that are not in docs\images yet. Use it for the first capture of a new page.
 
@@ -55,6 +68,8 @@ param(
     [Parameter(Mandatory)][string]$SecondDevice,
     [string]$UnreachableDevice = 'no-such-device',
     [int]$Minutes = 20,
+    [string[]]$Section,
+    [string[]]$Image,
     [switch]$AddNew
 )
 $ErrorActionPreference = 'Stop'
@@ -63,7 +78,12 @@ $repo = (Resolve-Path (Join-Path $here '..\..')).Path
 $app = Split-Path $repo -Leaf
 $images = Join-Path $repo 'docs\images'
 . $CredentialScript
-$captureJson = @{ SiteCode = $SiteCode; SmsProvider = $SmsProvider; Device = $Device; SecondDevice = $SecondDevice; UnreachableDevice = $UnreachableDevice } | ConvertTo-Json
+# A name that is not a section would run nothing and look like a success: stop before the first connection.
+$knownSections = @([regex]::Matches([IO.File]::ReadAllText((Join-Path $here 'steps-guide.ps1')), "(?m)^Section '([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+foreach ($name in @($Section | Where-Object { $_ })) {
+    if ($knownSections -notcontains $name) { throw ("Unknown section '{0}'. The sections are: {1}" -f $name, ($knownSections -join ', ')) }
+}
+$captureJson = @{ SiteCode = $SiteCode; SmsProvider = $SmsProvider; Device = $Device; SecondDevice = $SecondDevice; UnreachableDevice = $UnreachableDevice; Sections = @($Section | Where-Object { $_ }) } | ConvertTo-Json
 $failed = New-Object System.Collections.Generic.List[string]
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('guide-capture-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $tmp | Out-Null
@@ -78,7 +98,9 @@ $stopCapture = {
 $session = New-PSSession -ComputerName $Target -Credential $LabCredential
 $completed = $false
 try {
-    foreach ($steps in 'steps-guide.ps1', 'steps-console-missing.ps1') {
+    # A run with -Section takes the guide steps only: the console-missing steps have no section.
+    $stepFiles = if ($Section) { @('steps-guide.ps1') } else { @('steps-guide.ps1', 'steps-console-missing.ps1') }
+    foreach ($steps in $stepFiles) {
         $dest = "C:\guide\$app"
         # A fresh copy for each run: no saved settings, no window state, no log of an earlier run.
         Invoke-Command $session $stopCapture
@@ -112,8 +134,16 @@ try {
     # A failed section stops the capture before any guide image is replaced.
     if ($failed.Count) { throw ("The capture failed. No image was replaced.`n" + ($failed -join "`n")) }
     $captured = @(Get-ChildItem $tmp -Recurse -Filter *.png | Where-Object { $_.Name -notlike 'fail-*' })
-    $missing = @(Get-ChildItem $images -Filter *.png | Where-Object { $captured.Name -notcontains $_.Name } | ForEach-Object { $_.Name })
-    if ($missing.Count) { throw ("The capture did not produce these guide images. No image was replaced.`n" + ($missing -join "`n")) }
+    $wanted = @($Image | Where-Object { $_ } | ForEach-Object { $_ -replace '\.png$', '' })
+    if ($wanted.Count) {
+        $missing = @($wanted | Where-Object { $captured.BaseName -notcontains $_ })
+        if ($missing.Count) { throw ("The capture did not produce these named images. No image was replaced.`n" + ($missing -join "`n")) }
+        $captured = @($captured | Where-Object { $wanted -contains $_.BaseName })
+    }
+    elseif (-not $Section) {
+        $missing = @(Get-ChildItem $images -Filter *.png | Where-Object { $captured.Name -notcontains $_.Name } | ForEach-Object { $_.Name })
+        if ($missing.Count) { throw ("The capture did not produce these guide images. No image was replaced.`n" + ($missing -join "`n")) }
+    }
     foreach ($png in $captured) {
         if ($AddNew -or (Test-Path (Join-Path $images $png.Name))) { Copy-Item $png.FullName (Join-Path $images $png.Name) -Force }
     }
