@@ -764,7 +764,7 @@ function Show-OptionsDialog {
         <Border Grid.Column="1" Grid.Row="0" Background="{DynamicResource MahApps.Brushes.Gray8}"/>
         <Grid Grid.Column="2" Grid.Row="0" Margin="20,16,20,16">
             <StackPanel x:Name="paneConnection" Visibility="Visible">
-                <TextBlock Text="Configuration Manager Connection" Style="{StaticResource OptLabel}" FontSize="13" Margin="0,0,0,10"/>
+                <TextBlock Text="Configuration Manager Connection" Style="{StaticResource OptLabel}" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
                 <TextBlock Text="Site Server (SMS Provider FQDN)" Style="{StaticResource OptLabel}" FontSize="14" FontWeight="Bold" Margin="0,4,0,2"/>
                 <TextBox x:Name="txtSmsProvider" FontSize="12" Padding="6,4,6,4"
                          Controls:TextBoxHelper.Watermark="e.g. sms01.example.com"/>
@@ -776,8 +776,8 @@ function Show-OptionsDialog {
                            Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
             </StackPanel>
             <StackPanel x:Name="paneAbout" Visibility="Collapsed">
-                <TextBlock Text="About" Style="{StaticResource OptLabel}" FontSize="13" Margin="0,0,0,10"/>
-                <TextBlock x:Name="txtAboutVersion" Text="Device Inspector v0.0.0" Style="{StaticResource OptLabel}" FontSize="13"/>
+                <TextBlock Text="About" Style="{StaticResource OptLabel}" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                <TextBlock x:Name="txtAboutVersion" Text="Device Inspector v0.0.0" Style="{StaticResource OptLabel}" FontSize="13" FontWeight="SemiBold"/>
                 <TextBlock Text="Read the facts of one device from a Configuration Manager site and from the device itself: operating system, client health, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report."
                            FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
                 <TextBlock Text="Author: Jason Ulbright. License: MIT."
@@ -962,7 +962,7 @@ function Show-ActionConfirmDialog {
         </Grid.RowDefinitions>
         <Border x:Name="bannerDevices" Grid.Row="0" Padding="10,6,10,6" Margin="0,4,0,12"
                 Background="{DynamicResource MahApps.Brushes.Highlight}">
-            <TextBlock x:Name="txtDeviceCount" TextWrapping="Wrap" FontSize="13" FontWeight="Bold"
+            <TextBlock x:Name="txtDeviceCount" TextWrapping="Wrap" FontSize="13" FontWeight="SemiBold"
                        Foreground="{DynamicResource MahApps.Brushes.IdealForeground}"/>
         </Border>
         <TextBlock x:Name="txtActionMessage" Grid.Row="1" TextWrapping="Wrap" FontSize="13" Margin="0,0,0,12"/>

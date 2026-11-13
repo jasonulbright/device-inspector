@@ -394,8 +394,23 @@ Describe 'Fonts do not depend on the theme (b)' {
         foreach ($strName in 'txtSiteCode', 'txtSmsProvider', 'txtProvider', 'txtSiteServer') { $arrName | Should -Contain $strName }
     }
 
-    It 'uses no SemiBold title or label in <_.Source>, so that every title and field label is bold' -ForEach $script:arrOwnXamlDocD {
-        $_.Text | Should -Not -Match 'FontWeight(=|" Value=)"SemiBold"'
+    It 'keeps the page title, the progress title, the log header, the running actions header, the device count and the Options headers SemiBold' {
+        $arrExpect = @(
+            @{ Source = 'MainWindow.xaml'; Name = 'txtModuleTitle' }, @{ Source = 'MainWindow.xaml'; Name = 'txtProgressTitle' }
+            @{ Source = 'MainWindow.xaml'; Name = 'lblLogOutput' }, @{ Source = 'MainWindow.xaml'; Name = 'lblRuns' }
+        )
+        foreach ($hashCase in $arrExpect) {
+            $objDoc = @($script:arrOwnXamlDoc | Where-Object { $_.Source -eq $hashCase.Source })[0]
+            [xml]$xml = $objDoc.Text
+            $xml.SelectSingleNode(("//*[@*[local-name()='Name']='{0}']" -f $hashCase.Name)).GetAttribute('FontWeight') | Should -Be 'SemiBold' -Because $hashCase.Name
+        }
+        $strShell = Get-Content -LiteralPath (Join-Path -Path $script:strRepoRoot -ChildPath 'start-deviceinspector.ps1') -Raw
+        foreach ($strName in 'txtDeviceCount', 'txtAboutVersion') {
+            $strShell | Should -Match ('x:Name="{0}"[^>]*FontWeight="SemiBold"' -f $strName)
+        }
+        foreach ($strText in 'Configuration Manager Connection', 'About') {
+            $strShell | Should -Match ('Text="{0}" Style="\{{StaticResource OptLabel\}}" FontSize="13" FontWeight="SemiBold"' -f $strText)
+        }
     }
 
     It 'uses no theme trigger on a font property in <_.Source>' -ForEach $script:arrXamlDocD {
