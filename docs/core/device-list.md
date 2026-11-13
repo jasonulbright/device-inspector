@@ -4,7 +4,7 @@ The Device List panel finds devices on the site, by name or by collection, and i
 
 ## What it does
 
-The panel reads the devices of the site with the site server of the Inspect bar and the site code of **Options**. It only reads. It shows one row for each device: the name, the resource ID, whether a client is installed and active, the client version, the operating system, the last logon user and the last active time (UTC).
+The panel reads the devices of the site with the site server and the site code of **Options**. The footer shows both, for example `Site MCM · cm01.contoso.com`. It only reads. It shows one row for each device: the name, the resource ID, whether a client is installed and active, the client version, the operating system, the last logon user and the last active time (UTC).
 
 ## When to use it
 
@@ -13,7 +13,7 @@ The panel reads the devices of the site with the site server of the Inspect bar 
 
 ## Requirements
 
-- A site server in the Inspect bar and a site code in **Options**.
+- A site server and a site code in **Options**.
 - The rights to read devices and collections on the site. See [Permissions](../reference/permissions.md).
 
 ## Steps
@@ -53,7 +53,7 @@ The search reads with `Get-CMDevice -Name <pattern> -Fast`, or with `Get-CMColle
 
 | Message | Cause | Fix |
 |---|---|---|
-| Enter a site server in the Inspect bar. ... | The site server box is empty. | Enter the site server. Set the site code in **Options**. |
+| Set a site server in Options. The device list reads the site. | The site server is empty. | Set the site server and the site code in **Options**. |
 | Enter a name pattern, a collection ID, or both. | Both boxes are empty. | Enter a pattern or a collection ID. |
 | A name pattern without a collection needs at least one letter or digit. | The pattern is only `*` or `?`. | Add a letter or a digit, or enter a collection ID. |
 | The search failed. The log file has the reason. | The site cannot be opened or read. | Check the site server, the site code and the account rights. |

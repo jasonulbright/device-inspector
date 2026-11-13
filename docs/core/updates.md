@@ -63,7 +63,7 @@ The grid is read only. A right-click opens a menu with **Install Selected Pendin
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| Only **Device** rows show. | **Site Only** was off and the site part failed, or the site server box was empty. | Read the **Problems** panel. Enter the site server. |
+| Only **Device** rows show. | **Site Only** was off and the site part failed, or the site server was empty. | Read the **Problems** panel. Set the site server in **Options**. |
 | Only **Site** rows show. | **Site Only** was on, or the device did not answer. | Clear **Site Only**. Read the **Problems** panel. |
 
 ## Links

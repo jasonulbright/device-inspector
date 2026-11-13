@@ -24,12 +24,12 @@ None.
 | Message | Where | Cause | Fix |
 |---|---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | Dialog **Inspect** and log | The device box is empty or holds another character. | Enter a valid device name. |
-| The site server is a computer name or an FQDN. | Dialog **Inspect** and log | The site server holds another character. | Enter a computer name or an FQDN. |
+| The site server is a computer name or an FQDN. | Dialog **Inspect** and log | The saved site server has another character. | Correct it in **Options**. |
 | The site code is three letters or digits. | Dialog **Inspect** and log | The saved site code has another form. | Enter three letters or digits in **Options**. |
-| A site code needs a site server. | Dialog **Inspect** and log | A site code is set and the site server box is empty. | Enter a site server, or clear the site code in **Options**. |
+| A site code needs a site server. | Dialog **Inspect** and log | A site code is set and the site server is empty. | Set the site server in **Options**, or clear the site code. |
 | A site server needs a site code. Enter it in Options. | Dialog **Inspect** and log | The site server is set and the site code is empty. | Enter the site code in **Options**. |
 | The Configuration Manager console is not installed on this computer. Device Inspector reads the site with the ConfigurationManager PowerShell module, which comes only with the console. Install the console, then start Device Inspector again. | Message box **Device Inspector** at start | The module is not found. | Install the console. |
-| Inspect: Site Only needs a site server. | Log. The status bar says "Enter a site server, or clear Site Only." | **Site Only** is on and the site server box is empty. | Enter a site server, or clear **Site Only**. |
+| Inspect: Site Only needs a site server. | Log. The status bar says "Set a site server in Options, or clear Site Only." | **Site Only** is on and the site server is empty. | Set the site server in **Options**, or clear **Site Only**. |
 | The inspection failed. Check the site server, the site code and your account rights in Options. The log file has the reason. | Dialog **Inspect**. The log says "Inspect failed. The log file has the reason." The status bar says "Inspect failed. The log file has the reason." | The inspection stopped on an error that no part caught. | Select **Open Log File**, find the line "Inspect failed:" in the file, and read the reason. |
 
 ### Options dialog

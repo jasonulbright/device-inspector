@@ -44,7 +44,6 @@ if ($selectedSections.Count -and 'first run' -notin $selectedSections -and 'opti
         Invoke-El (Get-El $win 'btnOptions'); $d = Find-Top 'Options' 10
         Set-Text (Get-El $d 'txtSmsProvider') $Capture.SmsProvider; Set-Text (Get-El $d 'txtSiteCode') $Capture.SiteCode
         Invoke-El (Get-El $d 'btnOk'); Start-Sleep -Milliseconds 800
-        Set-Text (Get-El $win 'txtSiteServer') $Capture.SmsProvider
     }
 }
 Section 'first run' {
@@ -107,7 +106,6 @@ Section 'site only and device only' {
     Invoke-El (Get-El $win 'btnInspect'); Wait-Idle; Assert-Applications; Shot $win 'device-device-only'
     Invoke-El (Get-El $win 'btnOptions'); $d = Find-Top 'Options' 10
     Set-Text (Get-El $d 'txtSmsProvider') $Capture.SmsProvider; Set-Text (Get-El $d 'txtSiteCode') $Capture.SiteCode; Invoke-El (Get-El $d 'btnOk'); Start-Sleep -Milliseconds 800
-    Set-Text (Get-El $win 'txtSiteServer') $Capture.SmsProvider
 }
 Section 'enter key' {
     Show-View 'btnViewDevice'; Set-Text (Get-El $win 'txtDevice') $Capture.Device
