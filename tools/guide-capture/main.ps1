@@ -1,16 +1,16 @@
 # Lab-side runner. The scheduled task starts it in the interactive session. It runs steps.ps1
 # and writes the finished flag: 'finished', or 'failed: <reason>' when the steps stopped.
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '', Justification = 'steps.ps1 is dot-sourced and reads appDir and Capture.')]
-param([string]$App)
+param([string]$GuideRoot)
 $ErrorActionPreference = 'Stop'
-$OutDir = 'C:\guide\ui\out'; New-Item -ItemType Directory $OutDir -Force | Out-Null
-$appDir = Join-Path 'C:\guide' $App
+$OutDir = Join-Path $GuideRoot 'ui\out'; New-Item -ItemType Directory $OutDir -Force | Out-Null
+$appDir = $GuideRoot
 $flag = 'finished'
 try {
-    . C:\guide\ui\guilib.ps1
+    . (Join-Path $GuideRoot 'ui\guilib.ps1')
     # Settings that Invoke-GuideCapture.ps1 passes in (site code, SMS Provider, device names).
-    $Capture = Get-Content -LiteralPath C:\guide\ui\capture.json -Raw | ConvertFrom-Json
-    . C:\guide\ui\steps.ps1
+    $Capture = Get-Content -LiteralPath (Join-Path $GuideRoot 'ui\capture.json') -Raw | ConvertFrom-Json
+    . (Join-Path $GuideRoot 'ui\steps.ps1')
 }
 catch {
     $flag = 'failed: ' + $_.Exception.Message

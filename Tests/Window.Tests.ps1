@@ -1,4 +1,4 @@
-#Requires -Modules Pester
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
 # Window tests. The main window and the Options dialog (built from XAML text in the start script)
 # are opened off screen on an STA thread, in both themes and at 1024x720 and 1440x900, and measured.
 # The app-specific names live in WindowConfig.ps1. The tests that open a window run only with the
@@ -179,6 +179,7 @@ Describe 'Dialog windows' -Skip:(-not $script:WindowGuard.Allowed) {
         foreach ($v in $views) {
             $v.Text.Count | Should -BeGreaterThan 2 -Because "pane $($v.Pane) shows text"
             $v.Interactive.Count | Should -BeGreaterThan 2 -Because "pane $($v.Pane) shows buttons"
+            $v.ButtonStates.Count | Should -BeGreaterThan 2 -Because "pane $($v.Pane) probes the hover, focus and pressed state of its buttons"
         }
         Get-ContrastViolation -Views $views | Should -BeNullOrEmpty
     }
@@ -189,6 +190,7 @@ Describe 'Action confirmation' -Skip:(-not $script:WindowGuard.Allowed) {
         $m = Invoke-WpfSta -Arguments @{ Config = $script:AppConfig; Xaml = $script:DialogXaml[1]; Dark = $Dark } -Script $script:ActionDialogMeasureScript
         $m.Text.Count | Should -BeGreaterThan 2
         $m.Interactive.Count | Should -Be 3
+        $m.ButtonStates.Count | Should -Be 3 -Because 'Run, Dry Run and Cancel are probed in the hover, focus and pressed state'
         $m.Clipped | ForEach-Object { '{0}: needs {1}px, has {2}px' -f $_.Text, $_.Needed, $_.Actual } | Should -BeNullOrEmpty
         $m.Offscreen | ForEach-Object { '{0} at {1},{2}' -f $_.Name, $_.X, $_.Y } | Should -BeNullOrEmpty
         Get-ContrastViolation -Views @($m) | Should -BeNullOrEmpty
@@ -225,6 +227,43 @@ Describe 'Contrast <Theme>' -ForEach @(@{ Theme = 'dark' }, @{ Theme = 'light' }
         $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq $View)
         $m.Text.Count | Should -BeGreaterThan 3
         $m.Interactive.Count | Should -BeGreaterThan 5
+        Get-ContrastViolation -Views @($m) | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Selected rows, combo box items and button states <Theme>' -ForEach @(@{ Theme = 'dark' }, @{ Theme = 'light' }) -Skip:(-not $script:WindowGuard.Allowed) {
+    # The grids get a selected first row in the measurement. The rows must show white text on the theme highlight.
+    It 'shows a selected row with white text on the highlight in the <View> view' -ForEach @(@{ View = 'Device list' }, @{ View = 'Device' }, @{ View = 'Applications' }, @{ View = 'Updates' }, @{ View = 'Collections' }) {
+        $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq $View)
+        $m.Selected.Count | Should -BeGreaterThan 0 -Because 'a selected row is in the view, so the scan is not empty'
+        foreach ($r in $m.Selected) {
+            $r.IsHighlight | Should -BeTrue -Because ('the backdrop of the selected {0} is {1}' -f $r.Type, $r.Backdrop)
+            $r.TextRatio | Should -BeGreaterOrEqual 4.5 -Because $r.Detail
+        }
+    }
+
+    It 'shows the selected item and a highlighted item of the application type box with white text on the highlight' {
+        $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq 'Applications')
+        @($m.ComboItems | Where-Object State -eq 'selected').Count | Should -Be 1
+        @($m.ComboItems | Where-Object State -eq 'highlighted').Count | Should -Be 1
+        foreach ($r in $m.ComboItems) {
+            $r.Applied | Should -BeTrue -Because ('the {0} state of the item is applied' -f $r.State)
+            $r.IsHighlight | Should -BeTrue -Because ('the {0} item shows the theme highlight' -f $r.State)
+            $r.TextRatio | Should -BeGreaterOrEqual 4.5 -Because $r.Detail
+        }
+    }
+
+    It 'applies the hover, focus and pressed state to every button of the <View> view and keeps the contrast' -ForEach $script:ViewCases {
+        $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq $View)
+        # The seven sidebar buttons, Inspect, the two export buttons and the buttons of the view are probed.
+        $m.ButtonStates.Count | Should -BeGreaterThan 9
+        foreach ($r in $m.ButtonStates) {
+            $r.Parts | Should -BeTrue -Because ('{0} has the template parts Bd and Cp' -f $r.Name)
+            $r.Keys | Should -BeTrue -Because 'the keys of the read-only properties are found'
+            $r.HoverApplied | Should -BeTrue -Because $r.Name
+            $r.FocusApplied | Should -BeTrue -Because $r.Name
+            $r.PressedApplied | Should -BeTrue -Because $r.Name
+        }
         Get-ContrastViolation -Views @($m) | Should -BeNullOrEmpty
     }
 }

@@ -18,7 +18,7 @@ function Get-RunRows {
 # A dry run on a lab device lasts a second or two: poll fast so that the running-actions list is in the image.
 function Wait-RunRow([int]$Seconds = 10) { $end = (Get-Date).AddSeconds($Seconds); while ((Get-Date) -lt $end) { if (@(Get-RunRows).Count -gt 0) { return $true }; Start-Sleep -Milliseconds 50 }; $false }
 function Wait-NoRun { $null = Wait-Until { @(Get-RunRows).Count -eq 0 } 120 }
-function Close-ResultWindows { foreach ($w in @(Find-All 'Action result') + @(Find-All 'Action failed')) { try { Invoke-El (Get-El $w 'btnPrimary') } catch { $null = $_ } }; Start-Sleep -Milliseconds 400 }
+function Close-ResultWindows { foreach ($w in @(Find-All 'Action Result') + @(Find-All 'Action Failed')) { try { Invoke-El (Get-El $w 'btnPrimary') } catch { $null = $_ } }; Start-Sleep -Milliseconds 400 }
 # The first row of a grid whose UI Automation name matches the pattern, else the first row.
 # Like Find-Item, but with no fallback to the first row: a row that does not match is an error.
 function Find-NamedItem($Grid, [string]$Pattern) {
@@ -153,18 +153,21 @@ Section 'actions' {
     Set-Text (Get-El $win 'txtDevice') $Capture.Device; Invoke-El (Get-El $win 'btnInspect'); Wait-Idle
     Toggle-El (Get-El $win 'toggleActions'); Start-Sleep -Milliseconds 800
     Shot $win 'actions-device-buttons'
-    Invoke-El (Get-El $win 'btnPolicyUpdate'); $dlg = Find-Top 'Client policy update' 15
+    Invoke-El (Get-El $win 'btnPolicyUpdate'); $dlg = Find-Top 'Client Policy Update' 15
     Shot $dlg 'actions-confirm-dialog'
     Invoke-El (Get-El $dlg 'btnActionDryRun')
     if (-not (Wait-RunRow 10)) { throw 'The running-actions list did not show the dry run.' }
     Shot $win 'actions-running-list' -Now
     Wait-NoRun
-    $res = Find-Top 'Action result' 15; Shot $res 'actions-result'; Close-ResultWindows
+    $res = Find-Top 'Action Result' 15; Shot $res 'actions-result'; Close-ResultWindows
     # The close warning: close the window right after a dry run starts, then choose Wait.
-    Invoke-El (Get-El $win 'btnFullInventory'); $dlg = Find-Top 'Full hardware inventory' 15
-    Invoke-El (Get-El $dlg 'btnActionDryRun')
-    Invoke-El (Get-El $win 'Close')
-    $warn = Find-Top 'Actions still running' 15
+    # Find the Close button before the dialog opens, and the dry run button at once: the dry run must still be open when the window closes.
+    $closeButton = Get-El $win 'Close'
+    Invoke-El (Get-El $win 'btnFullInventory'); $dlg = Find-Top 'Full Hardware Inventory' 15
+    $dryButton = Get-El $dlg 'btnActionDryRun'
+    Invoke-El $dryButton
+    Invoke-El $closeButton
+    $warn = Find-Top 'Actions Still Running' 15
     Shot $warn 'actions-close-warning'
     Invoke-El (Get-El $warn 'btnWait'); Start-Sleep -Milliseconds 800
     Wait-NoRun; Close-ResultWindows
@@ -174,24 +177,28 @@ Section 'actions' {
 # that has no harmless uninstallable row.
 Section 'action menus' {
     # The menu is a popup: Shot -Hover keeps it open and it is in the image.
-    Show-View 'btnViewUpdates'; Hide-LogTail
-    RightClick-El (Find-Item (Get-El $win 'gridUpdates') '*Source=Device*'); Shot $win 'updates-context-menu' -Hover; Send-Keys '{ESC}'
     Show-View 'btnViewApps'; Hide-LogTail
-    # The name filter keeps a lab application with a personal publisher name out of the images (D-05).
-    Set-Text (Get-El $win 'txtAppFilter') 'micro'; Start-Sleep -Milliseconds 400
+    # The name filter keeps a lab application with a personal publisher name out of the images (D-05). It is the whole name of the row.
+    $uninstallApp = if ($Capture.UninstallApp) { [string]$Capture.UninstallApp } else { 'Microsoft Visual C++ 2022 X86 Minimum Runtime' }
+    Set-Text (Get-El $win 'txtAppFilter') $uninstallApp; Start-Sleep -Milliseconds 400
     Select-AppType 'MSI'
     # A harmless named row with the Uninstall entry on: the name of a row in UI Automation lists its properties.
     # Never the Configuration Manager console (POLICY 2a): the guard stops the capture before the right click.
     # This row is a system component on a plain lab device (no Uninstall entry), and then the capture stops with that message.
-    $appRow = Find-NamedItem (Get-El $win 'gridApps') '*Microsoft Visual C++ 2022 X86 Minimum Runtime*'
+    $appRow = Find-NamedItem (Get-El $win 'gridApps') ('*' + $uninstallApp + '*')
     if ($appRow.Current.Name -like '*Configuration Manager*') { throw ('The capture selected a Configuration Manager row: ' + $appRow.Current.Name) }
     if ($appRow.Current.Name -notlike '*CanUninstall=True*') { throw ('The selected application row has no Uninstall entry: ' + $appRow.Current.Name) }
     RightClick-El $appRow; Shot $win 'apps-context-menu' -Hover
     # The first entry of the open menu is Uninstall...: the Down key selects it and Enter opens the confirmation dialog.
-    Send-Keys '{DOWN}'; Send-Keys '{ENTER}'; $dlg = Find-Top 'Uninstall application' 15
+    Send-Keys '{DOWN}'; Send-Keys '{ENTER}'; $dlg = Find-Top 'Uninstall Application' 15
     Shot $dlg 'apps-uninstall-confirm'
     Invoke-El (Get-El $dlg 'btnActionCancel'); Start-Sleep -Milliseconds 600
     Select-AppType 'All'
+    # The workstation can list no required update (the site has none for it). The Updates menu then comes from the server,
+    # which lists rows of the site. The menu entries are off for a site row, as the guide says.
+    Show-View 'btnViewDevice'; Set-Text (Get-El $win 'txtDevice') $Capture.SecondDevice; Invoke-El (Get-El $win 'btnInspect'); Wait-Idle
+    Show-View 'btnViewUpdates'; Hide-LogTail
+    RightClick-El (Find-Item (Get-El $win 'gridUpdates') '*Source=Device*'); Shot $win 'updates-context-menu' -Hover; Send-Keys '{ESC}'
 }
 # Enable actions is on from the section 'actions'. This section turns it off at its end.
 Section 'collection menus' {
@@ -199,7 +206,7 @@ Section 'collection menus' {
     Show-View 'btnViewDevice'; Set-Text (Get-El $win 'txtDevice') $Capture.SecondDevice; Invoke-El (Get-El $win 'btnInspect'); Wait-Idle
     Show-View 'btnViewCollections'; Hide-LogTail
     RightClick-El (Find-Item (Get-El $win 'gridCollections') '*'); Shot $win 'collections-context-menu' -Hover; Send-Keys '{ESC}'
-    Invoke-El (Get-El $win 'btnAddCollection'); $pick = Find-Top 'Add to collection' 90
+    Invoke-El (Get-El $win 'btnAddCollection'); $pick = Find-Top 'Add to Collection' 90
     $null = Get-El $pick 'btnCancel'
     Set-Text (Get-El $pick 'txtPickerFilter') 'All'; Start-Sleep -Milliseconds 600
     Shot $pick 'collections-browser'

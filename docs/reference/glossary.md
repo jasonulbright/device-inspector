@@ -29,7 +29,7 @@ None.
 | Quiet uninstall string | The `QuietUninstallString` value of an uninstall key. It holds a command line that uninstalls the application without a window. The tool runs it as written and adds no switches. |
 | Resource ID | The ID that the site gives to the device record. |
 | Site drive | The `CMSite` PowerShell drive that the tool opens for the site code. The ConfigurationManager cmdlets work only from it. It exists only in the PowerShell session of the tool. |
-| Site only | The option that skips the connection to the device. |
+| Site Only | The option that skips the connection to the device. |
 | Site record | The facts that the site stores about the device. |
 
 ## Steps

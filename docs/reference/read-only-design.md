@@ -20,7 +20,7 @@ None.
 |---|---|---|
 | Site | `Get-CMSite` | No fact. The tool runs it once, when it opens the site drive, to check that the site answers. |
 | Site | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | Device record (resource ID, client installed, client version, active, operating system, last logon user). Its last hardware scan is the fallback for the Last hardware inventory fact. |
-| Site | `Get-CMDevice -Name <pattern> -Fast`, `Get-CMCollectionMember -CollectionId <ID>` | The Device list panel: the devices that match a name pattern or a collection. |
+| Site | `Get-CMDevice -Name <pattern> -Fast`, `Get-CMCollectionMember -CollectionId <ID>` | The Device List panel: the devices that match a name pattern or a collection. |
 | Site | `Invoke-CMWmiQuery` on `SMS_G_System_WORKSTATION_STATUS` | The hardware scan time, as the local clock time of the client. One read serves the Last hardware inventory fact and the inventory check. |
 | Site | `Invoke-CMWmiQuery` on `SMS_G_System_ADD_REMOVE_PROGRAMS` and `SMS_G_System_ADD_REMOVE_PROGRAMS_64` | Installed applications from hardware inventory (32-bit and 64-bit). |
 | Site | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | Collection memberships (collection IDs, and `IsDirect` for the membership rule). |
@@ -47,7 +47,7 @@ Two "last hardware inventory" values exist on purpose. The site value is the sca
 
 The actions are the only code that changes the device or the site. They live in `Module/DeviceInspectorActions.ps1`, apart from the inspection code in `Module/DeviceInspectorCommon.psm1`, so that the read-only test of the inspection code still parses one file. The rules:
 
-- The **Enable actions** switch is off at each start and is not saved. The window checks it before it shows the confirmation.
+- The **Enable Actions** switch is off at each start and is not saved. The window checks it before it shows the confirmation.
 - Each action asks for a confirmation that names the action and shows the number of devices and their names.
 - Each action has a dry run. The dry run runs the same code on the device, reads the state, lists the steps and skips every call that changes state. A test runs each device script with the dry run and fails if it calls a method.
 - Each run and each dry run goes to the action log with an action ID. See [Actions](../core/actions.md).
@@ -66,7 +66,7 @@ The site actions use the ConfigurationManager cmdlets with the site drive, as th
 - The tool shows deployments that target a collection of the device. It does not show the per-device result of each deployment.
 - The site inventory list depends on the hardware inventory classes `Add Remove Programs` and `Add Remove Programs (64)`. The classes must be enabled in the client settings.
 - The device list reads the machine-wide uninstall keys only. Per-user installs are not listed. System components are listed, and their actions are off.
-- The Applications panel is a live view of the uninstall keys. It does not compare them with the site inventory. Uninstall and Repair run on the device from the uninstall key (see [Actions](../core/actions.md#uninstall-or-repair-an-application)). They are write actions behind **Enable actions**, not part of the inspection.
+- The Applications panel is a live view of the uninstall keys. It does not compare them with the site inventory. Uninstall and Repair run on the device from the uninstall key (see [Actions](../core/actions.md#uninstall-or-repair-an-application)). They are write actions behind **Enable Actions**, not part of the inspection.
 - The inventory check compares dates and application names only. An application removed after the last hardware inventory cycle makes the state **Corrupt** until the next cycle.
 - A device name that has several resource records in the site uses the first record and adds a problem line.
 - The updates that the site lists as required come from the update compliance status of the site. They can lag the state on the device.

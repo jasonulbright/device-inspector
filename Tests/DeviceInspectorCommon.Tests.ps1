@@ -1,4 +1,5 @@
-﻿[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake device names.')]
+﻿#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
+[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake device names.')]
 [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '', Justification = 'The test builds a dummy credential.')]
 param ()
 
@@ -254,7 +255,8 @@ Describe 'Get-SiteFact' {
             $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             $objSite.LastHardwareInventorySource | Should -Be 'Get-CMDevice'
             $listProblem.Count | Should -Be 1
-            $listProblem[0] | Should -BeLike '*class read failed*'
+            $listProblem[0] | Should -Be 'Site hardware scan time: the read failed. The log file has the reason.'
+            $listProblem[0] | Should -Not -BeLike '*class read failed*'
         }
     }
 
@@ -384,7 +386,7 @@ Describe 'Get-SiteFact' {
             $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             @($objSite.Collections).Count | Should -Be 2
             $objSite.Collections[0].Name | Should -BeNullOrEmpty
-            @($listProblem | Where-Object { $_ -like 'Site collection names:*name lookup failed*' }).Count | Should -Be 1
+            @($listProblem | Where-Object { $_ -eq 'Site collection names: the read failed. The log file has the reason.' }).Count | Should -Be 1
         }
     }
 
@@ -431,7 +433,7 @@ Describe 'Get-SiteFact' {
             $objSite = Get-SiteFact -ComputerName 'A' -Problems $listProblem
             $objSite.Found | Should -BeTrue
             $objSite.ClientInstalled | Should -BeTrue
-            @($listProblem | Where-Object { $_ -like '*membership failed*' }).Count | Should -Be 1
+            @($listProblem | Where-Object { $_ -eq 'Site collection membership: the read failed. The log file has the reason.' }).Count | Should -Be 1
         }
     }
 
@@ -487,7 +489,24 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
         Mock -ModuleName DeviceInspectorCommon Get-PSDrive { }
         Mock -ModuleName DeviceInspectorCommon New-PSDrive { throw 'RPC server is unavailable' }
         Mock -ModuleName DeviceInspectorCommon Set-Location { }
-        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw 'Cannot open site XYZ on sms01.*RPC server is unavailable*'
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw 'Cannot open site XYZ on sms01. Check the site code*The log file has the reason.'
+    }
+
+    It 'keeps the raw text out of the thrown message and puts it in the Data of the exception' {
+        Mock -ModuleName DeviceInspectorCommon Resolve-ConfigurationManagerModulePath { 'C:\Console\bin\ConfigurationManager.psd1' }
+        Mock -ModuleName DeviceInspectorCommon Get-Module { [pscustomobject]@{ Name = 'ConfigurationManager' } }
+        Mock -ModuleName DeviceInspectorCommon Get-PSDrive { }
+        Mock -ModuleName DeviceInspectorCommon New-PSDrive { throw 'secret-boom-1' }
+        Mock -ModuleName DeviceInspectorCommon Set-Location { }
+        $objCaught = InModuleScope DeviceInspectorCommon {
+            try {
+                Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ'
+            } catch {
+                [pscustomobject]@{ Message = $_.Exception.Message; RawText = [string]$_.Exception.Data['RawText'] }
+            }
+        }
+        $objCaught.Message | Should -Not -BeLike '*secret-boom-1*'
+        $objCaught.RawText | Should -Be 'secret-boom-1'
     }
 
     It 'removes the drive that it created when the site check fails, and keeps one that it did not create' {
@@ -498,10 +517,10 @@ Describe 'Connect-InspectorSite and Disconnect-InspectorSite' {
         Mock -ModuleName DeviceInspectorCommon Set-Location { }
         Mock -ModuleName DeviceInspectorCommon Remove-PSDrive { }
         Mock -ModuleName DeviceInspectorCommon Get-CMSite { throw 'site not found' }
-        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw '*site not found*'
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw 'Cannot open site XYZ on sms01.*The log file has the reason.'
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 1 -Exactly -Scope It
         Mock -ModuleName DeviceInspectorCommon Get-PSDrive { [pscustomobject]@{ Name = 'XYZ'; Root = 'sms01' } }
-        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw '*site not found*'
+        { InModuleScope DeviceInspectorCommon { Connect-InspectorSite -SiteServer 'sms01' -SiteCode 'XYZ' } } | Should -Throw 'Cannot open site XYZ on sms01.*The log file has the reason.'
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-PSDrive -Times 1 -Exactly -Scope It
     }
     It 'goes back to the earlier folder and removes a drive that it created' {
@@ -576,7 +595,7 @@ Describe 'Connect-InspectorSite with a credential' {
         { InModuleScope DeviceInspectorCommon -Parameters @{ Cred = $script:objTestCredential } {
                 param ([System.Management.Automation.PSCredential]$Cred)
                 Connect-InspectorSite -SiteServer 'sms01.example.com' -SiteCode 'XYZ' -Credential $Cred
-            } } | Should -Throw 'Cannot open site XYZ on sms01.example.com. The site server is this computer, and Windows does not allow credentials for a local connection.*'
+            } } | Should -Throw 'Cannot open site XYZ on sms01.example.com. The site server is this computer, and Windows does not allow credentials for a local connection.*The log file has the reason.'
     }
 }
 
@@ -642,7 +661,7 @@ Describe 'Get-DeviceInspection' {
             Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $true } }
             Mock Disconnect-InspectorSite { }
             Mock Get-SiteFact { [pscustomobject]@{ Found = $true; ResourceId = 1; ClientInstalled = $true; ClientVersion = '1'; Active = $true; OperatingSystem = 'os'; LastLogonUserName = ''; LastHardwareInventory = $null; InstalledApplications = @(); Collections = @(); Deployments = @() } }
-            Mock Get-DeviceFact { [pscustomobject]@{ Reachable = $true; OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @('Operating system: boom') } }
+            Mock Get-DeviceFact { [pscustomobject]@{ Reachable = $true; OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @('Operating system: the read failed. The log file has the reason.'); ProblemDetail = @('Operating system: secret-boom-1') } }
         }
     }
 
@@ -652,7 +671,8 @@ Describe 'Get-DeviceInspection' {
             $objInspection.SiteCode | Should -Be 'XYZ'
             $objInspection.Site.Found | Should -BeTrue
             $objInspection.Device.Reachable | Should -BeTrue
-            $objInspection.Problems | Should -Contain 'Device: Operating system: boom'
+            $objInspection.Problems | Should -Contain 'Device: Operating system: the read failed. The log file has the reason.'
+            $objInspection.ProblemDetail | Should -Contain 'Device: Operating system: secret-boom-1'
             Should -Invoke Get-SiteFact -Times 1 -Exactly -ParameterFilter { $ComputerName -eq 'ws01' }
             Should -Invoke Connect-InspectorSite -Times 1 -Exactly -ParameterFilter { $SiteServer -eq 'sms01' -and $SiteCode -eq 'XYZ' }
             Should -Invoke Disconnect-InspectorSite -Times 1 -Exactly
@@ -694,9 +714,33 @@ Describe 'Get-DeviceInspection' {
             Mock Connect-InspectorSite { throw 'no route' }
             $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ'
             $objInspection.Site | Should -BeNullOrEmpty
-            $objInspection.Problems | Should -Contain 'Site: no route'
+            $objInspection.Problems | Should -Contain 'Site: the read failed. The log file has the reason.'
+            $objInspection.ProblemDetail | Should -Contain 'Site: no route'
             $objInspection.Device.Reachable | Should -BeTrue
             Should -Invoke Disconnect-InspectorSite -Times 1 -Exactly
+        }
+    }
+
+    It 'shows the fixed message of Connect-InspectorSite and keeps its raw text in ProblemDetail' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Connect-InspectorSite {
+                $exceptionFixed = New-Object -TypeName 'System.InvalidOperationException' -ArgumentList 'Cannot open site XYZ on sms01. Check the site code and the site server name, and the account rights. The log file has the reason.'
+                $exceptionFixed.Data['RawText'] = 'secret-boom-1'
+                throw $exceptionFixed
+            }
+            $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -SkipDevice
+            $objInspection.Problems | Should -Contain 'Site: Cannot open site XYZ on sms01. Check the site code and the site server name, and the account rights. The log file has the reason.'
+            @($objInspection.Problems | Where-Object { $_ -like '*secret-boom-1*' }).Count | Should -Be 0
+            $objInspection.ProblemDetail | Should -Contain 'Site: secret-boom-1'
+        }
+    }
+
+    It 'has an empty ProblemDetail when nothing failed' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Get-DeviceFact { [pscustomobject]@{ Reachable = $true; OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @(); ProblemDetail = @() } }
+            $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ'
+            @($objInspection.ProblemDetail).Count | Should -Be 0
+            $objInspection.PSObject.Properties.Name | Should -Contain 'ProblemDetail'
         }
     }
 
@@ -706,7 +750,8 @@ Describe 'Get-DeviceInspection' {
             $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ'
             $objInspection.Device | Should -BeNullOrEmpty
             $objInspection.Site.Found | Should -BeTrue
-            $objInspection.Problems | Should -Contain 'Device: WinRM failed'
+            $objInspection.Problems | Should -Contain 'Device: the read failed. The log file has the reason.'
+            $objInspection.ProblemDetail | Should -Contain 'Device: WinRM failed'
         }
     }
 
@@ -993,5 +1038,239 @@ Describe 'Last hardware inventory fact' {
         $objRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection) | Where-Object { $_.Group -eq 'Site record' -and $_.Name -eq 'Last hardware inventory' }
         $objRow.Value | Should -BeLike '2026-11-05T17:41:51Z (UTC, from Get-CMDevice; can lag*'
         ConvertTo-DeviceInspectionHtml -Inspection $objInspection | Should -BeLike '*can lag a processed report*'
+    }
+}
+
+Describe 'Exception text and the Problems list' {
+    Context 'Get-SiteFact' {
+        BeforeEach {
+            InModuleScope DeviceInspectorCommon {
+                Mock Get-CMDevice {
+                    [pscustomobject]@{ ResourceID = 16777221; Name = 'WS01'; IsClient = $true; ClientVersion = '5.00.9146.1009'; IsActive = $true; DeviceOS = 'Microsoft Windows NT Workstation 10.0'; LastLogonUser = 'user'; LastHardwareScan = [datetime]::SpecifyKind([datetime]'2026-11-02T19:50:00', 'Utc') }
+                }
+            }
+        }
+
+        It 'keeps the text of a failed query out of Problems and puts it in ProblemDetail' {
+            InModuleScope DeviceInspectorCommon {
+                Mock Invoke-SiteQuery { throw 'secret-boom-1' }
+                $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem -ProblemDetail $listDetail
+                $arrExpectedLabel = @(
+                    'Site hardware scan time'
+                    'Site installed applications (SMS_G_System_ADD_REMOVE_PROGRAMS)'
+                    'Site installed applications (SMS_G_System_ADD_REMOVE_PROGRAMS_64)'
+                    'Site collection membership'
+                    'Site required updates'
+                )
+                $listProblem.Count | Should -Be 5
+                $listDetail.Count | Should -Be 5
+                for ($intIndex = 0; $intIndex -lt 5; $intIndex++) {
+                    $listProblem[$intIndex] | Should -Be ('{0}: the read failed. The log file has the reason.' -f $arrExpectedLabel[$intIndex])
+                    $listDetail[$intIndex] | Should -Be ('{0}: secret-boom-1' -f $arrExpectedLabel[$intIndex])
+                }
+                @($listProblem | Where-Object { $_ -like '*secret-boom-1*' }).Count | Should -Be 0
+            }
+        }
+
+        It 'keeps the text of a failed collection name read and deployment read out of Problems' {
+            InModuleScope DeviceInspectorCommon {
+                Mock Invoke-SiteQuery { if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } } }
+                Mock Get-CMDeviceCollection { throw 'secret-boom-1' }
+                Mock Get-CMDeployment { throw 'secret-boom-1' }
+                $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem -ProblemDetail $listDetail
+                @($listProblem) | Should -Be @('Site collection names: the read failed. The log file has the reason.', 'Site deployments: the read failed. The log file has the reason.')
+                @($listDetail) | Should -Be @('Site collection names: secret-boom-1', 'Site deployments: secret-boom-1')
+            }
+        }
+
+        It 'works without the ProblemDetail parameter' {
+            InModuleScope DeviceInspectorCommon {
+                Mock Invoke-SiteQuery { throw 'secret-boom-1' }
+                $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+                { Get-SiteFact -ComputerName 'WS01' -Problems $listProblem } | Should -Not -Throw
+                @($listProblem | Where-Object { $_ -like '*secret-boom-1*' }).Count | Should -Be 0
+            }
+        }
+    }
+
+    Context 'Get-DeviceFact' {
+        It 'keeps the text of every failed device read out of Problems and puts it in ProblemDetail' {
+            InModuleScope DeviceInspectorCommon {
+                Mock Invoke-Command { & $ScriptBlock }
+                Mock Get-CimInstance { throw 'secret-boom-1' }
+                Mock Get-ItemProperty { }
+                $objDevice = Get-DeviceFact -ComputerName 'WS01'
+                $arrExpectedLabel = @('Operating system', 'Client health', 'Client application policy', 'Pending updates')
+                @($objDevice.Problems).Count | Should -Be 4
+                @($objDevice.ProblemDetail).Count | Should -Be 4
+                for ($intIndex = 0; $intIndex -lt 4; $intIndex++) {
+                    $objDevice.Problems[$intIndex] | Should -Be ('{0}: the read failed. The log file has the reason.' -f $arrExpectedLabel[$intIndex])
+                    $objDevice.ProblemDetail[$intIndex] | Should -BeLike ('{0}: *secret-boom-1*' -f $arrExpectedLabel[$intIndex])
+                }
+                @($objDevice.Problems | Where-Object { $_ -like '*secret-boom-1*' }).Count | Should -Be 0
+            }
+        }
+
+        It 'keeps the text of a failed client detail read out of Problems' {
+            InModuleScope DeviceInspectorCommon {
+                Mock Invoke-Command { & $ScriptBlock }
+                Mock Get-CimInstance { throw 'secret-boom-1' }
+                Mock Get-CimInstance { [pscustomobject]@{ Name = 'CcmExec'; State = 'Running'; StartMode = 'Auto' } } -ParameterFilter { $ClassName -eq 'Win32_Service' }
+                Mock Get-ItemProperty { }
+                $objDevice = Get-DeviceFact -ComputerName 'WS01'
+                @($objDevice.Problems) | Should -Contain 'Client details: the read failed. The log file has the reason.'
+                @($objDevice.ProblemDetail | Where-Object { $_ -like 'Client details: *secret-boom-1*' }).Count | Should -Be 1
+                @($objDevice.Problems | Where-Object { $_ -like '*secret-boom-1*' }).Count | Should -Be 0
+            }
+        }
+
+        It 'returns an empty ProblemDetail when the remote block returns none' {
+            InModuleScope DeviceInspectorCommon {
+                Mock Invoke-Command { [pscustomobject]@{ OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @() } }
+                $objDevice = Get-DeviceFact -ComputerName 'WS01'
+                @($objDevice.ProblemDetail).Count | Should -Be 0
+            }
+        }
+    }
+
+    Context 'Get-DeviceInspection' {
+        BeforeEach {
+            InModuleScope DeviceInspectorCommon {
+                Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $true } }
+                Mock Disconnect-InspectorSite { }
+                Mock Get-SiteFact { [pscustomobject]@{ Found = $true; ResourceId = 1; ClientInstalled = $true; ClientVersion = '1'; Active = $true; OperatingSystem = 'os'; LastLogonUserName = ''; LastHardwareInventory = $null; InstalledApplications = @(); Collections = @(); Deployments = @() } }
+            }
+        }
+
+        It 'keeps the text of every caught exception out of Problems' {
+            InModuleScope DeviceInspectorCommon {
+                Mock Get-SiteFact { throw 'secret-boom-1' }
+                Mock Get-DeviceFact { throw 'secret-boom-2' }
+                Mock Test-DeviceInspectionInventory { throw 'secret-boom-3' }
+                $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ'
+                @($objInspection.Problems) | Should -Be @(
+                    'Site: the read failed. The log file has the reason.'
+                    'Device: the read failed. The log file has the reason.'
+                    'Inventory check: the check failed. The log file has the reason.'
+                )
+                @($objInspection.ProblemDetail) | Should -Be @('Site: secret-boom-1', 'Device: secret-boom-2', 'Inventory check: secret-boom-3')
+                ($objInspection.Problems -join "`n") | Should -Not -BeLike '*secret-boom*'
+            }
+        }
+
+        It 'prefixes the device texts and keeps the fixed texts and the details in the same order' {
+            InModuleScope DeviceInspectorCommon {
+                Mock Get-DeviceFact { [pscustomobject]@{ Reachable = $true; OperatingSystem = $null; Client = $null; InstalledApplications = @(); ClientApplications = @(); Problems = @('Operating system: the read failed. The log file has the reason.', 'Pending updates: the read failed. The log file has the reason.'); ProblemDetail = @('Operating system: secret-boom-1', 'Pending updates: secret-boom-2') } }
+                $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ'
+                $objInspection.Problems.Count | Should -Be 2
+                $objInspection.ProblemDetail.Count | Should -Be 2
+                for ($intIndex = 0; $intIndex -lt 2; $intIndex++) {
+                    ($objInspection.Problems[$intIndex] -split ': ', 3)[1] | Should -Be (($objInspection.ProblemDetail[$intIndex] -split ': ', 3)[1])
+                }
+            }
+        }
+    }
+
+    Context 'Exports and the log file' {
+        BeforeAll {
+            $script:objSiteFull = [pscustomobject]@{ Found = $true; ResourceId = 5; ClientInstalled = $true; ClientVersion = '5'; Active = $true; OperatingSystem = 'os'; LastLogonUserName = 'u'; LastHardwareInventory = '2026-11-05T17:41:51Z'; HardwareScanClientTime = '2026-11-10T19:22:32'; LastHardwareInventorySource = 'SMS_G_System_WORKSTATION_STATUS'; InstalledApplications = @(); Collections = @(); Deployments = @(); RequiredUpdates = @() }
+            $script:objSecret = [pscustomobject]@{
+                ComputerName   = 'WS01'
+                InspectedAt    = '2026-11-12T10:00:00Z'
+                SiteServer     = 'sms01'
+                SiteCode       = 'XYZ'
+                Site           = $script:objSiteFull
+                Device         = $null
+                InventoryCheck = $null
+                Problems       = @('Operating system: the read failed. The log file has the reason.', 'Site: the read failed. The log file has the reason.')
+                ProblemDetail  = @('Operating system: secret-boom-1', 'Site: secret-boom-2')
+            }
+        }
+
+        AfterEach {
+            Initialize-Logging -LogPath ''
+        }
+
+        It 'carries ProblemDetail in the JSON export and keeps the raw text out of Problems' {
+            $objJson = ConvertTo-DeviceInspectionJson -Inspection $script:objSecret | ConvertFrom-Json
+            @($objJson.ProblemDetail) | Should -Contain 'Operating system: secret-boom-1'
+            @($objJson.ProblemDetail) | Should -Contain 'Site: secret-boom-2'
+            (@($objJson.Problems) -join "`n") | Should -Not -BeLike '*secret-boom*'
+        }
+
+        It 'shows the raw text in a detail section of the HTML export' {
+            $strHtml = ConvertTo-DeviceInspectionHtml -Inspection $script:objSecret
+            $strHtml | Should -BeLike '*Problem detail (2)*'
+            $strHtml | Should -BeLike '*Operating system: secret-boom-1*'
+            $strHtml | Should -BeLike '*Site: secret-boom-2*'
+        }
+
+        It 'shows the raw text in a detail section of the text report' {
+            $strReport = ConvertTo-DeviceInspectionReport -Inspection $script:objSecret
+            $strReport | Should -BeLike '*== Problems (2) ==*'
+            $strReport | Should -BeLike '*== Problem detail (2) ==*'
+            $strReport | Should -BeLike '*  Operating system: secret-boom-1*'
+            $strReport | Should -BeLike '*  Site: secret-boom-2*'
+        }
+
+        It 'writes the ProblemDetail lines to the log file' {
+            $strLog = Join-Path -Path $TestDrive -ChildPath 'detail.log'
+            Initialize-Logging -LogPath $strLog
+            Write-DeviceInspectionFullLog -Inspection $script:objSecret -LogPath $strLog | Should -BeTrue
+            $strText = Get-Content -LiteralPath $strLog -Raw
+            $strText | Should -Match 'Operating system: secret-boom-1'
+            $strText | Should -Match 'Site: secret-boom-2'
+        }
+
+        It 'has no detail section when the inspection has no ProblemDetail property or no entry' {
+            $objOld = [pscustomobject]@{ ComputerName = 'X'; InspectedAt = 't'; SiteServer = 'sms01'; SiteCode = 'XYZ'; Site = $script:objSiteFull; Device = $null; Problems = @() }
+            ConvertTo-DeviceInspectionReport -Inspection $objOld | Should -Not -BeLike '*Problem detail*'
+            ConvertTo-DeviceInspectionHtml -Inspection $objOld | Should -Not -BeLike '*Problem detail*'
+            $objEmpty = [pscustomobject]@{ ComputerName = 'X'; InspectedAt = 't'; SiteServer = 'sms01'; SiteCode = 'XYZ'; Site = $script:objSiteFull; Device = $null; Problems = @(); ProblemDetail = @() }
+            ConvertTo-DeviceInspectionReport -Inspection $objEmpty | Should -Not -BeLike '*Problem detail*'
+            ConvertTo-DeviceInspectionHtml -Inspection $objEmpty | Should -Not -BeLike '*Problem detail*'
+        }
+    }
+
+    Context 'Static check of the module file' {
+        BeforeAll {
+            $script:objModuleAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strModuleFile, [ref]$null, [ref]$null)
+        }
+
+        It 'adds no exception text to Problems inside a catch block' {
+            $arrCatch = @($script:objModuleAst.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CatchClauseAst] }, $true))
+            $arrCatch.Count | Should -BeGreaterThan 0
+            $listProblemAdd = New-Object -TypeName 'System.Collections.Generic.List[object]'
+            foreach ($objCatch in $arrCatch) {
+                $arrFound = @($objCatch.Body.FindAll({
+                            param($objNode)
+                            $objNode -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and
+                            $objNode.Member.Extent.Text -eq 'Add' -and
+                            $objNode.Expression -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                            @('listProblem', 'Problems') -contains $objNode.Expression.VariablePath.UserPath
+                        }, $true))
+                foreach ($objAdd in $arrFound) {
+                    $listProblemAdd.Add($objAdd)
+                }
+            }
+            $listProblemAdd.Count | Should -BeGreaterThan 10
+            foreach ($objAdd in $listProblemAdd) {
+                $strArgument = (@($objAdd.Arguments) | ForEach-Object { $_.Extent.Text }) -join ' '
+                $strArgument | Should -Not -Match '\$_(?![A-Za-z0-9_])' -Because ('line {0}: {1}' -f $objAdd.Extent.StartLineNumber, $objAdd.Extent.Text)
+                $strArgument | Should -Not -Match 'Exception' -Because ('line {0}: {1}' -f $objAdd.Extent.StartLineNumber, $objAdd.Extent.Text)
+            }
+        }
+
+        It 'throws no message that holds exception text' {
+            $arrThrow = @($script:objModuleAst.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.ThrowStatementAst] }, $true))
+            $arrThrow.Count | Should -BeGreaterThan 0
+            foreach ($objThrow in $arrThrow) {
+                $objThrow.Extent.Text | Should -Not -CMatch '\$_(?![A-Za-z0-9_])|Exception\.Message' -Because ('line {0}' -f $objThrow.Extent.StartLineNumber)
+            }
+        }
     }
 }

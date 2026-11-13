@@ -1,6 +1,6 @@
-# Device list
+# Device List
 
-The Device list panel finds devices on the site, by name or by collection, and inspects one of them.
+The Device List panel finds devices on the site, by name or by collection, and inspects one of them.
 
 ## What it does
 
@@ -20,12 +20,12 @@ The panel reads the devices of the site with the site server of the Inspect bar 
 
 ### Find a device by name
 
-1. Select **Device list** in the sidebar.
+1. Select **Device List** in the sidebar.
 2. Enter a name or a pattern in the name box. `*` stands for any text and `?` for one character, for example `WS*`.
 3. Select **Search**, or press Enter. The panel reads the site in the background.
-4. Select a row, then select **Inspect selected**, or double-click the row. The tool puts the name in the device box, opens the Device panel and inspects the device.
+4. Select a row, then select **Inspect Selected**, or double-click the row. The tool puts the name in the device box, opens the Device panel and inspects the device.
 
-![The Device list panel after a search for CLIENT*, with one device selected](../images/device-list-results.png)
+![The Device List panel after a search for CLIENT*, with one device selected](../images/device-list-results.png)
 
 ### List the devices of a collection
 
@@ -39,7 +39,7 @@ The panel reads the devices of the site with the site server of the Inspect bar 
 | Name box | A device name or a pattern with `*` and `?`. Letters, digits, hyphen, underscore and dot. |
 | Collection box | Optional. An eight-character collection ID. |
 | **Search** | Reads the matching devices from the site. |
-| **Inspect selected** | Inspects the selected device. On when a row is selected. |
+| **Inspect Selected** | Inspects the selected device. On when a row is selected. |
 
 The search reads with `Get-CMDevice -Name <pattern> -Fast`, or with `Get-CMCollectionMember -CollectionId <ID>` (and `-Name <pattern>` when a pattern is given). Members of a collection that are not systems are left out. The site drive is closed after each search.
 
@@ -56,7 +56,7 @@ The search reads with `Get-CMDevice -Name <pattern> -Fast`, or with `Get-CMColle
 | Enter a site server in the Inspect bar. ... | The site server box is empty. | Enter the site server. Set the site code in **Options**. |
 | Enter a name pattern, a collection ID, or both. | Both boxes are empty. | Enter a pattern or a collection ID. |
 | A name pattern without a collection needs at least one letter or digit. | The pattern is only `*` or `?`. | Add a letter or a digit, or enter a collection ID. |
-| The search failed. See the log. | The site cannot be opened or read. | Check the site server, the site code and the account rights. |
+| The search failed. The log file has the reason. | The site cannot be opened or read. | Check the site server, the site code and the account rights. |
 
 ## Links
 

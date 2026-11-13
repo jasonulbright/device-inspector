@@ -4,7 +4,7 @@ This page shows how to install Device Inspector, set the site server, and inspec
 
 ## What it does
 
-Device Inspector has six panels: Device list, Device, Applications, Updates, Collections and Problems. The Device list panel finds devices of the site by name or collection. The other five show one device. It reads the site with ConfigurationManager cmdlets and WQL `SELECT` queries through `Invoke-CMWmiQuery`, and reads the device with one remote script block (`Invoke-Command`). See [Read-only design](reference/read-only-design.md). The inspection never changes the site or the device. The actions change them only when you turn on **Enable actions** and confirm. See [Actions](core/actions.md).
+Device Inspector has six panels: Device List, Device, Applications, Updates, Collections and Problems. The Device List panel finds devices of the site by name or collection. The other five show one device. It reads the site with ConfigurationManager cmdlets and WQL `SELECT` queries through `Invoke-CMWmiQuery`, and reads the device with one remote script block (`Invoke-Command`). See [Read-only design](reference/read-only-design.md). The inspection never changes the site or the device. The actions change them only when you turn on **Enable Actions** and confirm. See [Actions](core/actions.md).
 
 ## When to use it
 
@@ -60,9 +60,9 @@ The sidebar shows six panels. See [Inspect bar](core/inspect.md) for every contr
 ### Leave one source out
 
 - To read only the device, leave the site server empty.
-- To read only the site, select **Site only**.
+- To read only the site, select **Site Only**.
 
-The tool saves the device name and **Site only** when you select **Inspect** with valid inputs. It saves a site server that is not empty on **Inspect**, and on **OK** in Options.
+The tool saves the device name and **Site Only** when you select **Inspect** with valid inputs. It saves a site server that is not empty on **Inspect**, and on **OK** in Options.
 
 ### Start the tool on a computer without the console
 

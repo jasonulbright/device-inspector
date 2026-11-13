@@ -357,6 +357,57 @@ function Select-ListedEntry {
     }
 }
 
+function Get-InspectionProblemDetail {
+    # .SYNOPSIS
+    # Returns the ProblemDetail lines of an inspection object.
+    #
+    # .DESCRIPTION
+    # ProblemDetail holds the raw technical text of the problems that came from an
+    # exception. Only files and the log file show it. The window never shows it.
+    # An inspection object from an older build has no ProblemDetail property. For
+    # that object the function returns no line.
+    #
+    # .PARAMETER Inspection
+    # The object that Get-DeviceInspection returns.
+    #
+    # .EXAMPLE
+    # $arrDetail = @(Get-InspectionProblemDetail -Inspection $objInspection)
+    #
+    # # $arrDetail = 'Operating system: <raw exception text>'
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] One object for each line of ProblemDetail.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
+    # return shape, and positional contract may change without notice.
+    #
+    # Positional parameters: none.
+    #
+    # Version: 1.0.20261112.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Inspection
+    )
+
+    process {
+        $objProperty = $Inspection.PSObject.Properties['ProblemDetail']
+        if ($null -eq $objProperty -or $null -eq $objProperty.Value) {
+            return
+        }
+        foreach ($objDetail in @($objProperty.Value)) {
+            if ($null -ne $objDetail) {
+                [string]$objDetail
+            }
+        }
+    }
+}
+
 function Test-DeviceInspectorConsole {
     # .SYNOPSIS
     # Checks that the ConfigurationManager PowerShell module is installed on this computer.
@@ -545,7 +596,9 @@ function Connect-InspectorSite {
     # Imports ConfigurationManager.psd1, creates a CMSite PSDrive named after the site
     # code with the site server as root, and sets the location to the drive. The
     # ConfigurationManager cmdlets work only from the site drive. The function throws
-    # a plain message when the module is missing or the site is not reachable. Pass
+    # a fixed message when the module is missing or the site is not reachable. The
+    # message has no exception text. The raw text of the failure is in the Data
+    # item RawText of the thrown exception and in the debug stream. Pass
     # the returned object to Disconnect-InspectorSite.
     #
     # .PARAMETER SiteServer
@@ -576,7 +629,7 @@ function Connect-InspectorSite {
     #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261106.0
+    # Version: 1.1.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -595,7 +648,10 @@ function Connect-InspectorSite {
     process {
         $objCheck = Test-DeviceInspectorConsole
         if (-not $objCheck.Available) {
-            throw $objCheck.Message
+            # The console message is a fixed text. The caller can show it as it is.
+            $exceptionConsole = New-Object -TypeName 'System.InvalidOperationException' -ArgumentList $objCheck.Message
+            $exceptionConsole.Data['RawText'] = $objCheck.Message
+            throw $exceptionConsole
         }
         $objPrevious = Get-Location
         $strSiteDrive = '{0}:' -f $SiteCode
@@ -628,15 +684,22 @@ function Connect-InspectorSite {
             Set-Location -LiteralPath $strSiteDrive -ErrorAction Stop
             [void](Get-CMSite -SiteCode $SiteCode -ErrorAction Stop)
         } catch {
-            Write-Debug -Message ('Connect-InspectorSite failed: {0}' -f $_.Exception.Message)
+            $strRawText = $_.Exception.Message
+            Write-Debug -Message ('Connect-InspectorSite failed: {0}' -f $strRawText)
             Set-Location -LiteralPath $objPrevious.Path -ErrorAction SilentlyContinue
             if ($boolCreated) {
                 Remove-PSDrive -Name $SiteCode -PSProvider 'CMSite' -Force -ErrorAction SilentlyContinue
             }
-            if ($_.Exception.Message -like '*credentials cannot be used for local connections*') {
-                throw ('Cannot open site {0} on {1}. The site server is this computer, and Windows does not allow credentials for a local connection. Enter the name of this computer as the site server, or run without a credential. {2}' -f $SiteCode, $SiteServer, $_.Exception.Message)
+            # The thrown message is a fixed text. The raw text goes in the Data of the
+            # exception, so that the caller can keep it in ProblemDetail.
+            if ($strRawText -like '*credentials cannot be used for local connections*') {
+                $strFixedText = 'Cannot open site {0} on {1}. The site server is this computer, and Windows does not allow credentials for a local connection. Enter the name of this computer as the site server, or run without a credential. The log file has the reason.' -f $SiteCode, $SiteServer
+            } else {
+                $strFixedText = 'Cannot open site {0} on {1}. Check the site code and the site server name, and the account rights. The log file has the reason.' -f $SiteCode, $SiteServer
             }
-            throw ('Cannot open site {0} on {1}. Check the site code and the site server name, and the account rights. {2}' -f $SiteCode, $SiteServer, $_.Exception.Message)
+            $exceptionFixed = New-Object -TypeName 'System.InvalidOperationException' -ArgumentList $strFixedText
+            $exceptionFixed.Data['RawText'] = $strRawText
+            throw $exceptionFixed
         }
         [pscustomobject]@{
             SiteCode         = $SiteCode
@@ -760,10 +823,16 @@ function Get-SiteFact {
     # The device name, without a domain suffix.
     #
     # .PARAMETER Problems
-    # A list that receives one text line for each part that failed.
+    # A list that receives one fixed text line for each part that failed. The line
+    # has no exception text.
+    #
+    # .PARAMETER ProblemDetail
+    # An optional list that receives the raw exception text of each part that
+    # failed, in the same order as the lines in Problems. Each entry starts with
+    # the same area label as its line in Problems. Omit it to drop the raw text.
     #
     # .EXAMPLE
-    # $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+    # $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem -ProblemDetail $listDetail
     #
     # # $objSite.Found is $true when the site knows the device.
     #
@@ -782,7 +851,7 @@ function Get-SiteFact {
     #
     # Positional parameters: none.
     #
-    # Version: 2.1.20261111.0
+    # Version: 2.2.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -792,10 +861,17 @@ function Get-SiteFact {
 
         [Parameter(Mandatory = $true)]
         [AllowEmptyCollection()]
-        [System.Collections.Generic.List[string]]$Problems
+        [System.Collections.Generic.List[string]]$Problems,
+
+        [Parameter(Mandatory = $false)]
+        [System.Collections.Generic.List[string]]$ProblemDetail
     )
 
     process {
+        if ($null -eq $ProblemDetail) {
+            $ProblemDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        }
+        $strFailedText = 'the read failed. The log file has the reason.'
         # The cmdlet warns about a wildcard in Name even with DisableWildcardHandling.
         $arrResource = @(Get-CMDevice -Name $ComputerName -Fast -DisableWildcardHandling -ErrorAction Stop -WarningAction SilentlyContinue)
         if ($arrResource.Count -eq 0) {
@@ -842,7 +918,8 @@ function Get-SiteFact {
             }
         } catch {
             Write-Debug -Message $_.Exception.Message
-            $Problems.Add(('Site hardware scan time: {0}' -f $_.Exception.Message))
+            $ProblemDetail.Add(('Site hardware scan time: {0}' -f $_.Exception.Message))
+            $Problems.Add(('Site hardware scan time: {0}' -f $strFailedText))
         }
 
         # One read serves the fact and the inventory check. With no row, the fact falls
@@ -874,7 +951,8 @@ function Get-SiteFact {
             } catch {
                 Write-Debug -Message $_.Exception.Message
                 $boolApplicationReadComplete = $false
-                $Problems.Add(('Site installed applications ({0}): {1}' -f $strClass, $_.Exception.Message))
+                $ProblemDetail.Add(('Site installed applications ({0}): {1}' -f $strClass, $_.Exception.Message))
+                $Problems.Add(('Site installed applications ({0}): {1}' -f $strClass, $strFailedText))
             }
         }
 
@@ -895,7 +973,8 @@ function Get-SiteFact {
             }
         } catch {
             Write-Debug -Message $_.Exception.Message
-            $Problems.Add(('Site collection membership: {0}' -f $_.Exception.Message))
+            $ProblemDetail.Add(('Site collection membership: {0}' -f $_.Exception.Message))
+            $Problems.Add(('Site collection membership: {0}' -f $strFailedText))
         }
 
         # Each of the next three reads is one call for the whole site, then a filter.
@@ -908,7 +987,8 @@ function Get-SiteFact {
                 }
             } catch {
                 Write-Debug -Message $_.Exception.Message
-                $Problems.Add(('Site collection names: {0}' -f $_.Exception.Message))
+                $ProblemDetail.Add(('Site collection names: {0}' -f $_.Exception.Message))
+                $Problems.Add(('Site collection names: {0}' -f $strFailedText))
             }
         }
         $listCollection = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
@@ -943,7 +1023,8 @@ function Get-SiteFact {
                 }
             } catch {
                 Write-Debug -Message $_.Exception.Message
-                $Problems.Add(('Site deployments: {0}' -f $_.Exception.Message))
+                $ProblemDetail.Add(('Site deployments: {0}' -f $_.Exception.Message))
+                $Problems.Add(('Site deployments: {0}' -f $strFailedText))
             }
         }
 
@@ -969,7 +1050,8 @@ function Get-SiteFact {
             }
         } catch {
             Write-Debug -Message $_.Exception.Message
-            $Problems.Add(('Site required updates: {0}' -f $_.Exception.Message))
+            $ProblemDetail.Add(('Site required updates: {0}' -f $_.Exception.Message))
+            $Problems.Add(('Site required updates: {0}' -f $strFailedText))
         }
         [pscustomobject]@{
             Found                 = $true
@@ -1016,7 +1098,10 @@ function Get-DeviceFact {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] The device facts. The Problems property lists the parts that failed.
+    # [pscustomobject] The device facts. The Problems property lists the parts that
+    # failed, with fixed texts and no exception text. The ProblemDetail property
+    # ([string[]]) holds the raw exception text of those parts, in the same order,
+    # each entry with the same area label as its fixed text.
     #
     # .NOTES
     # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
@@ -1027,7 +1112,7 @@ function Get-DeviceFact {
     #
     # Positional parameters: none.
     #
-    # Version: 1.2.20261111.0
+    # Version: 1.3.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1042,6 +1127,8 @@ function Get-DeviceFact {
         $scriptBlockRead = {
             $ErrorActionPreference = 'Stop'
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $listProblemDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $strFailedText = 'the read failed. The log file has the reason.'
             $strFormat = 'yyyy-MM-ddTHH:mm:ssZ'
             $objCulture = [System.Globalization.CultureInfo]::InvariantCulture
 
@@ -1056,7 +1143,8 @@ function Get-DeviceFact {
                     LastBootUp   = ([datetime]$objRawOperatingSystem.LastBootUpTime).ToUniversalTime().ToString($strFormat, $objCulture)
                 }
             } catch {
-                $listProblem.Add(('Operating system: {0}' -f $_.Exception.Message))
+                $listProblemDetail.Add(('Operating system: {0}' -f $_.Exception.Message))
+                $listProblem.Add(('Operating system: {0}' -f $strFailedText))
             }
 
             $objClient = $null
@@ -1089,7 +1177,8 @@ function Get-DeviceFact {
                             }
                         }
                     } catch {
-                        $listProblem.Add(('Client details: {0}' -f $_.Exception.Message))
+                        $listProblemDetail.Add(('Client details: {0}' -f $_.Exception.Message))
+                        $listProblem.Add(('Client details: {0}' -f $strFailedText))
                     }
                     $objClient = [pscustomobject]@{
                         ServiceState               = [string]$objService.State
@@ -1103,7 +1192,8 @@ function Get-DeviceFact {
                     }
                 }
             } catch {
-                $listProblem.Add(('Client health: {0}' -f $_.Exception.Message))
+                $listProblemDetail.Add(('Client health: {0}' -f $_.Exception.Message))
+                $listProblem.Add(('Client health: {0}' -f $strFailedText))
             }
 
             $listInstalled = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
@@ -1153,7 +1243,8 @@ function Get-DeviceFact {
                     }
                 }
             } catch {
-                $listProblem.Add(('Installed applications: {0}' -f $_.Exception.Message))
+                $listProblemDetail.Add(('Installed applications: {0}' -f $_.Exception.Message))
+                $listProblem.Add(('Installed applications: {0}' -f $strFailedText))
             }
 
             $listClientApplication = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
@@ -1178,7 +1269,8 @@ function Get-DeviceFact {
                         })
                 }
             } catch {
-                $listProblem.Add(('Client application policy: {0}' -f $_.Exception.Message))
+                $listProblemDetail.Add(('Client application policy: {0}' -f $_.Exception.Message))
+                $listProblem.Add(('Client application policy: {0}' -f $strFailedText))
             }
 
             $listPendingUpdate = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
@@ -1198,7 +1290,8 @@ function Get-DeviceFact {
                         })
                 }
             } catch {
-                $listProblem.Add(('Pending updates: {0}' -f $_.Exception.Message))
+                $listProblemDetail.Add(('Pending updates: {0}' -f $_.Exception.Message))
+                $listProblem.Add(('Pending updates: {0}' -f $strFailedText))
             }
             [pscustomobject]@{
                 OperatingSystem       = $objOperatingSystem
@@ -1207,6 +1300,7 @@ function Get-DeviceFact {
                 ClientApplications    = @($listClientApplication | Sort-Object -Property Name)
                 PendingUpdates        = @($listPendingUpdate | Sort-Object -Property Name)
                 Problems              = @($listProblem)
+                ProblemDetail         = @($listProblemDetail)
             }
         }
 
@@ -1243,6 +1337,11 @@ function Get-DeviceFact {
                 })
         }
 
+        $arrProblemDetail = @()
+        if ($null -ne $objRaw.PSObject.Properties['ProblemDetail']) {
+            $arrProblemDetail = @($objRaw.ProblemDetail | Where-Object { $null -ne $_ } | ForEach-Object { [string]$_ })
+        }
+
         [pscustomobject]@{
             Reachable             = $true
             OperatingSystem       = $objRaw.OperatingSystem
@@ -1251,6 +1350,7 @@ function Get-DeviceFact {
             ClientApplications    = @($objRaw.ClientApplications)
             PendingUpdates        = $arrPendingUpdate
             Problems              = @($objRaw.Problems)
+            ProblemDetail         = $arrProblemDetail
         }
     }
 }
@@ -1475,18 +1575,24 @@ function Get-DeviceInspection {
     #
     # .OUTPUTS
     # [pscustomobject] One object with ComputerName, InspectedAt, SiteServer,
-    # SiteCode, Site, Device, InventoryCheck and Problems. Site and Device are
-    # $null when skipped or when the connection failed. InventoryCheck is the
-    # result of Test-DeviceInspectionInventory.
+    # SiteCode, Site, Device, InventoryCheck, Problems and ProblemDetail. Site and
+    # Device are $null when skipped or when the connection failed. InventoryCheck
+    # is the result of Test-DeviceInspectionInventory. Problems holds the texts that
+    # the window shows. These texts never contain exception text. ProblemDetail
+    # ([string[]], empty by default) holds the raw exception text of each problem
+    # that came from an exception, in the same order as the fixed texts, each entry
+    # with the same area label as its fixed text, for example
+    # 'Operating system: <raw exception text>'. The window never shows ProblemDetail.
+    # The exports and the log file carry it.
     #
     # .NOTES
     # Non-throwing contract: a connection or query failure is recorded in
-    # Problems. The function throws only for invalid parameters, or when
-    # SiteServer is omitted and SkipDevice is set.
+    # Problems and ProblemDetail. The function throws only for invalid parameters,
+    # or when SiteServer is omitted and SkipDevice is set.
     #
     # Positional parameters: position 0 is ComputerName. Other parameters are named.
     #
-    # Version: 1.1.20261110.0
+    # Version: 1.2.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1518,6 +1624,8 @@ function Get-DeviceInspection {
         }
 
         $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $listProblemDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $strFailedText = 'the read failed. The log file has the reason.'
         $strShortName = $ComputerName.Split('.')[0]
         $strResolvedSiteCode = $null
         $objSite = $null
@@ -1535,13 +1643,22 @@ function Get-DeviceInspection {
                     $hashtableConnect['Credential'] = $Credential
                 }
                 $objConnection = Connect-InspectorSite @hashtableConnect
-                $objSite = Get-SiteFact -ComputerName $strShortName -Problems $listProblem
+                $objSite = Get-SiteFact -ComputerName $strShortName -Problems $listProblem -ProblemDetail $listProblemDetail
                 if (-not $objSite.Found) {
                     $listProblem.Add(('Site: no device named {0} exists in site {1}.' -f $strShortName, $strResolvedSiteCode))
                 }
             } catch {
                 Write-Debug -Message $_.Exception.Message
-                $listProblem.Add(('Site: {0}' -f $_.Exception.Message))
+                # Connect-InspectorSite throws a fixed message and keeps the raw text in
+                # Data. Any other failure gets the fixed text of this function.
+                $strSiteProblem = 'Site: {0}' -f $strFailedText
+                $strSiteDetail = $_.Exception.Message
+                if ($_.Exception.Data.Contains('RawText')) {
+                    $strSiteProblem = 'Site: {0}' -f $_.Exception.Message
+                    $strSiteDetail = [string]$_.Exception.Data['RawText']
+                }
+                $listProblemDetail.Add(('Site: {0}' -f $strSiteDetail))
+                $listProblem.Add($strSiteProblem)
             } finally {
                 Disconnect-InspectorSite -Connection $objConnection
             }
@@ -1556,9 +1673,13 @@ function Get-DeviceInspection {
                 foreach ($strDeviceProblem in $objDevice.Problems) {
                     $listProblem.Add(('Device: {0}' -f $strDeviceProblem))
                 }
+                foreach ($strDeviceDetail in @(Get-InspectionProblemDetail -Inspection $objDevice)) {
+                    $listProblemDetail.Add(('Device: {0}' -f $strDeviceDetail))
+                }
             } catch {
                 Write-Debug -Message $_.Exception.Message
-                $listProblem.Add(('Device: {0}' -f $_.Exception.Message))
+                $listProblemDetail.Add(('Device: {0}' -f $_.Exception.Message))
+                $listProblem.Add(('Device: {0}' -f $strFailedText))
             }
         }
 
@@ -1575,6 +1696,7 @@ function Get-DeviceInspection {
             Device         = $objDevice
             InventoryCheck = $null
             Problems       = @()
+            ProblemDetail  = [string[]]@()
         }
         try {
             $objInspection.InventoryCheck = Test-DeviceInspectionInventory -Inspection $objInspection
@@ -1583,9 +1705,11 @@ function Get-DeviceInspection {
             }
         } catch {
             Write-Debug -Message $_.Exception.Message
-            $listProblem.Add(('Inventory check: {0}' -f $_.Exception.Message))
+            $listProblemDetail.Add(('Inventory check: {0}' -f $_.Exception.Message))
+            $listProblem.Add('Inventory check: the check failed. The log file has the reason.')
         }
         $objInspection.Problems = @($listProblem)
+        $objInspection.ProblemDetail = [string[]]@($listProblemDetail)
         $objInspection
     }
 }
@@ -1727,8 +1851,11 @@ function ConvertTo-DeviceInspectionReport {
     # .DESCRIPTION
     # Builds the report as one string with sections: operating system, client
     # health, site record, collections, deployments, installed applications
-    # (device and site), client application policy, problems. Long lists stop
-    # after MaximumListedItems entries and show how many entries were left out.
+    # (device and site), client application policy, problems, problem detail. Long
+    # lists stop after MaximumListedItems entries and show how many entries were
+    # left out. The problem detail section shows the raw exception text from
+    # ProblemDetail. It is absent when ProblemDetail is empty. The report is for
+    # files and the log file, not for the window.
     #
     # .PARAMETER Inspection
     # The object that Get-DeviceInspection returns.
@@ -1750,7 +1877,7 @@ function ConvertTo-DeviceInspectionReport {
     # .NOTES
     # Positional parameters: position 0 is Inspection.
     #
-    # Version: 1.1.20261110.0
+    # Version: 1.2.20261112.0
     [CmdletBinding()]
     [OutputType([string])]
     param (
@@ -1858,6 +1985,14 @@ function ConvertTo-DeviceInspectionReport {
         $listLine.Add(('== Problems ({0}) ==' -f @($Inspection.Problems).Count))
         foreach ($strProblem in @($Inspection.Problems)) {
             $listLine.Add(('  {0}' -f $strProblem))
+        }
+        $arrProblemDetail = @(Get-InspectionProblemDetail -Inspection $Inspection)
+        if ($arrProblemDetail.Count -gt 0) {
+            $listLine.Add('')
+            $listLine.Add(('== Problem detail ({0}) ==' -f $arrProblemDetail.Count))
+            foreach ($strDetail in $arrProblemDetail) {
+                $listLine.Add(('  {0}' -f $strDetail))
+            }
         }
 
         return ($listLine -join "`n")
@@ -2426,12 +2561,14 @@ function ConvertTo-DeviceInspectionJson {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [string] The JSON text.
+    # [string] The JSON text. It carries every property of the inspection, so it
+    # carries ProblemDetail ([string[]], the raw exception text of the problems that
+    # came from an exception). The JSON file is a file that the person saves.
     #
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.0.20261106.0
+    # Version: 1.1.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
     param (
@@ -2450,6 +2587,9 @@ function ConvertTo-DeviceInspectionHtml {
     #
     # .DESCRIPTION
     # The page has no script and no external resource. Every value is HTML encoded.
+    # The page ends with a problem detail list (ProblemDetail, the raw exception
+    # text) when the inspection has entries in it. The page is a file that the
+    # person saves.
     #
     # .PARAMETER Inspection
     # The object that Get-DeviceInspection returns.
@@ -2468,7 +2608,7 @@ function ConvertTo-DeviceInspectionHtml {
     # .NOTES
     # This function does not support positional parameters.
     #
-    # Version: 1.1.20261110.0
+    # Version: 1.2.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
     param (
@@ -2521,6 +2661,11 @@ function ConvertTo-DeviceInspectionHtml {
         } else {
             $listLine.Add('<ul>' + ((@($Inspection.Problems) | ForEach-Object { '<li>{0}</li>' -f (& $scriptBlockEncode $_) }) -join '') + '</ul>')
         }
+        $arrProblemDetail = @(Get-InspectionProblemDetail -Inspection $Inspection)
+        if ($arrProblemDetail.Count -gt 0) {
+            $listLine.Add(('<h2 class="problem">Problem detail ({0})</h2>' -f $arrProblemDetail.Count))
+            $listLine.Add('<ul>' + (($arrProblemDetail | ForEach-Object { '<li>{0}</li>' -f (& $scriptBlockEncode $_) }) -join '') + '</ul>')
+        }
         $listLine.Add('</body></html>')
         $listLine -join [System.Environment]::NewLine
     }
@@ -2532,7 +2677,8 @@ function Write-DeviceInspectionFullLog {
     #
     # .DESCRIPTION
     # Builds the report with no list limit and writes it with one Write-Log call,
-    # between a start line and an end line. One call keeps the log write short on
+    # between a start line and an end line. The report has the Problem detail
+    # section, so the log file gets the raw text of ProblemDetail. One call keeps the log write short on
     # the window thread. The function does not throw. It returns $false when the
     # report cannot be built or the log file did not grow, because Write-Log drops
     # a line without an error after three failed writes.
@@ -2557,7 +2703,7 @@ function Write-DeviceInspectionFullLog {
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.1.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([bool])]
     param (
@@ -2939,7 +3085,7 @@ function Get-DeviceInspectorActionBlock {
 
     process {
         if (-not $ActionsEnabled) {
-            return 'Turn on Enable actions first.'
+            return 'Turn on Enable Actions first.'
         }
         if ($Busy) {
             return 'Wait for the running task to end.'

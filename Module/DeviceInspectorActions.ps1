@@ -14,6 +14,7 @@ $script:scriptBlockPolicyUpdate = {
 
     $ErrorActionPreference = 'Stop'
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
     $arrSchedule = @(
         @{ Id = '{00000000-0000-0000-0000-000000000021}'; Name = 'Machine policy retrieval (Machine Policy Assignments Request)' }
         @{ Id = '{00000000-0000-0000-0000-000000000022}'; Name = 'Machine policy evaluation (Machine Policy Evaluation)' }
@@ -21,7 +22,8 @@ $script:scriptBlockPolicyUpdate = {
     try {
         $objClient = Get-CimInstance -Namespace 'root\ccm' -ClassName 'SMS_Client'
     } catch {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The Configuration Manager client does not answer: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+        $listDetail.Add(('Client read: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client does not answer. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
     }
     if ($null -eq $objClient) {
         return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client is not installed on the device.'; Steps = @($listStep) }
@@ -40,8 +42,9 @@ $script:scriptBlockPolicyUpdate = {
             }
             $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
         } catch {
-            $listStep.Add(('{0} failed: {1}' -f $hashtableSchedule.Name, $_.Exception.Message))
-            return [pscustomobject]@{ Succeeded = $false; Summary = ('{0} failed. The earlier steps, if any, ran.' -f $hashtableSchedule.Name); Steps = @($listStep) }
+            $listStep.Add(('{0} failed.' -f $hashtableSchedule.Name))
+            $listDetail.Add(('{0}: {1}' -f $hashtableSchedule.Name, $_.Exception.Message))
+            return [pscustomobject]@{ Succeeded = $false; Summary = ('{0} failed. The earlier steps, if any, ran. The action log has the reason.' -f $hashtableSchedule.Name); Steps = @($listStep); Detail = @($listDetail) }
         }
         if ($boolRefused) {
             $listStep.Add(('{0} failed: TriggerSchedule returned {1}.' -f $hashtableSchedule.Name, $objReturnValue))
@@ -64,13 +67,15 @@ $script:scriptBlockFullInventory = {
 
     $ErrorActionPreference = 'Stop'
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
     $strActionId = '{00000000-0000-0000-0000-000000000001}'
     $strFormat = 'yyyy-MM-ddTHH:mm:ssZ'
     $objCulture = [System.Globalization.CultureInfo]::InvariantCulture
     try {
         $objClient = Get-CimInstance -Namespace 'root\ccm' -ClassName 'SMS_Client'
     } catch {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The Configuration Manager client does not answer: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+        $listDetail.Add(('Client read: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client does not answer. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
     }
     if ($null -eq $objClient) {
         return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client is not installed on the device.'; Steps = @($listStep) }
@@ -79,7 +84,8 @@ $script:scriptBlockFullInventory = {
     try {
         $arrStatus = @(Get-CimInstance -Namespace 'root\ccm\invagt' -ClassName 'InventoryActionStatus' -Filter ("InventoryActionID = '{0}'" -f $strActionId))
     } catch {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The hardware inventory status cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+        $listDetail.Add(('Status read: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The hardware inventory status cannot be read. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
     }
     foreach ($objStatus in $arrStatus) {
         try {
@@ -110,8 +116,9 @@ $script:scriptBlockFullInventory = {
         try {
             Remove-CimInstance -InputObject $objStatus
         } catch {
-            $listStep.Add(('Delete of the status record failed: {0}' -f $_.Exception.Message))
-            return [pscustomobject]@{ Succeeded = $false; Summary = 'The hardware inventory status record cannot be deleted. The schedule was not triggered.'; Steps = @($listStep) }
+            $listStep.Add('Delete of the status record failed.')
+            $listDetail.Add(('Delete of the status record: {0}' -f $_.Exception.Message))
+            return [pscustomobject]@{ Succeeded = $false; Summary = 'The hardware inventory status record cannot be deleted. The schedule was not triggered. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
         }
         $listStep.Add(('Deleted the InventoryActionStatus record {0}.' -f $strActionId))
     }
@@ -123,8 +130,9 @@ $script:scriptBlockFullInventory = {
         }
         $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
     } catch {
-        $listStep.Add(('Hardware Inventory trigger failed: {0}' -f $_.Exception.Message))
-        return [pscustomobject]@{ Succeeded = $false; Summary = 'The status record is deleted, but the cycle did not start. The next scheduled cycle sends a full report.'; Steps = @($listStep) }
+        $listStep.Add('Hardware Inventory trigger failed.')
+        $listDetail.Add(('Hardware Inventory trigger: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The status record is deleted, but the cycle did not start. The next scheduled cycle sends a full report. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
     }
     if ($boolRefused) {
         $listStep.Add(('Hardware Inventory trigger failed: TriggerSchedule returned {0}.' -f $objReturnValue))
@@ -147,7 +155,8 @@ $script:scriptBlockUpdateInstall = {
 
     $ErrorActionPreference = 'Stop'
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
-    $arrStateName = @('None', 'Available', 'Submitted', 'Detecting', 'PreDownload', 'Downloading', 'WaitInstall', 'Installing', 'PendingSoftReboot', 'PendingHardReboot', 'WaitReboot', 'Verifying', 'InstallComplete', 'Error', 'WaitServiceWindow', 'WaitUserLogon', 'WaitUserLogoff', 'WaitJobUserLogon', 'WaitUserReconnect', 'PendingUserLogoff', 'PendingUpdate', 'WaitingRetry', 'WaitPresModeOff', 'WaitForOrchestration')
+    $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $arrStateName =@('None', 'Available', 'Submitted', 'Detecting', 'PreDownload', 'Downloading', 'WaitInstall', 'Installing', 'PendingSoftReboot', 'PendingHardReboot', 'WaitReboot', 'Verifying', 'InstallComplete', 'Error', 'WaitServiceWindow', 'WaitUserLogon', 'WaitUserLogoff', 'WaitJobUserLogon', 'WaitUserReconnect', 'PendingUserLogoff', 'PendingUpdate', 'WaitingRetry', 'WaitPresModeOff', 'WaitForOrchestration')
     $scriptBlockState = {
         param($objValue)
         $intValue = [int]$objValue
@@ -159,7 +168,8 @@ $script:scriptBlockUpdateInstall = {
     try {
         $objClient = Get-CimInstance -Namespace 'root\ccm' -ClassName 'SMS_Client'
     } catch {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The Configuration Manager client does not answer: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+        $listDetail.Add(('Client read: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client does not answer. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
     }
     if ($null -eq $objClient) {
         return [pscustomobject]@{ Succeeded = $false; Summary = 'The Configuration Manager client is not installed on the device.'; Steps = @($listStep) }
@@ -168,7 +178,8 @@ $script:scriptBlockUpdateInstall = {
     try {
         $arrAll = @(Get-CimInstance -Namespace 'root\ccm\ClientSDK' -ClassName 'CCM_SoftwareUpdate')
     } catch {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The updates of the client policy cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+        $listDetail.Add(('Update read: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The updates of the client policy cannot be read. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
     }
     $arrRequired = @($arrAll | Where-Object { [int]$_.ComplianceState -eq 0 })
     $arrCandidate = $arrRequired
@@ -202,8 +213,9 @@ $script:scriptBlockUpdateInstall = {
         }
         $boolRefused = ($null -ne $objReturnValue -and [int64]$objReturnValue -ne 0)
     } catch {
-        $listStep.Add(('InstallUpdates failed: {0}' -f $_.Exception.Message))
-        return [pscustomobject]@{ Succeeded = $false; Summary = 'The client did not accept the install request.'; Steps = @($listStep) }
+        $listStep.Add('InstallUpdates failed.')
+        $listDetail.Add(('InstallUpdates: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The client did not accept the install request. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
     }
     if ($boolRefused) {
         $listStep.Add(('InstallUpdates returned {0}.' -f $objReturnValue))
@@ -220,9 +232,10 @@ $script:scriptBlockUpdateInstall = {
             $listStep.Add(('After the request: KB{0}, state {1}, percent complete {2}.' -f [string]$objUpdate.ArticleID, (& $scriptBlockState $objUpdate.EvaluationState), [int]$objUpdate.PercentComplete))
         }
     } catch {
-        $listStep.Add(('The state after the request cannot be read: {0}' -f $_.Exception.Message))
+        $listStep.Add('The state after the request cannot be read.')
+        $listDetail.Add(('State read after the request: {0}' -f $_.Exception.Message))
     }
-    [pscustomobject]@{ Succeeded = $true; Summary = ('The client accepted the install of {0} updates. It downloads and installs them now. A restart can follow, as the deployment sets.' -f $arrTarget.Count); Steps = @($listStep) }
+    [pscustomobject]@{ Succeeded = $true; Summary = ('The client accepted the install of {0} updates. It downloads and installs them now. A restart can follow, as the deployment sets.' -f $arrTarget.Count); Steps = @($listStep); Detail = @($listDetail) }
 }
 
 # Runs on the device. Uninstalls or repairs one entry of the uninstall registry keys
@@ -247,6 +260,7 @@ $script:scriptBlockApplicationAction = {
 
     $ErrorActionPreference = 'Stop'
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+    $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
     $intTimeoutMilliseconds = 600000
 
     # MSI when the key name is a product code in braces and the uninstall string starts
@@ -384,7 +398,8 @@ $script:scriptBlockApplicationAction = {
     try {
         $objEntry = & $scriptBlockReadKey $View $KeyName
     } catch {
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The uninstall key cannot be read: {0}' -f $_.Exception.Message); Steps = @($listStep) }
+        $listDetail.Add(('Uninstall key read: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = 'The uninstall key cannot be read. The action log has the reason.'; Steps = @($listStep); Detail = @($listDetail) }
     }
     if ($null -eq $objEntry) {
         return [pscustomobject]@{ Succeeded = $false; Summary = ('The uninstall key {0} ({1} view) is not on the device now. Inspect the device again.' -f $KeyName, $View); Steps = @($listStep) }
@@ -458,8 +473,9 @@ $script:scriptBlockApplicationAction = {
         $null = $objProcess.Handle
         $boolExited = $objProcess.WaitForExit($intTimeoutMilliseconds)
     } catch {
-        $listStep.Add(('The command did not start: {0}' -f $_.Exception.Message))
-        return [pscustomobject]@{ Succeeded = $false; Summary = ('The {0} did not start: {1}' -f $Operation.ToLowerInvariant(), $_.Exception.Message); Steps = @($listStep) }
+        $listStep.Add('The command did not start.')
+        $listDetail.Add(('Command start: {0}' -f $_.Exception.Message))
+        return [pscustomobject]@{ Succeeded = $false; Summary = ('The {0} did not start. The action log has the reason.' -f $Operation.ToLowerInvariant()); Steps = @($listStep); Detail = @($listDetail) }
     }
     if (-not $boolExited) {
         $listStep.Add(('The installer (process {0}) still runs after 10 minutes.' -f $objProcess.Id))
@@ -480,12 +496,13 @@ $script:scriptBlockApplicationAction = {
             }
         } catch {
             $boolKeyKnown = $false
-            $listStep.Add(('Check after the uninstall: the tool could not read the uninstall key: {0}' -f $_.Exception.Message))
+            $listStep.Add('Check after the uninstall: the tool could not read the uninstall key.')
+            $listDetail.Add(('Uninstall key read after the run: {0}' -f $_.Exception.Message))
         }
     }
     $objMap = & $scriptBlockMapExitCode $Operation $intExitCode $boolKeyGone $boolKeyKnown
     $strSummary = ('{0} of {1}: {2}' -f $Operation, $strDisplay.Trim(), $objMap.Text)
-    [pscustomobject]@{ Succeeded = $objMap.Succeeded; Summary = $strSummary; Steps = @($listStep) }
+    [pscustomobject]@{ Succeeded = $objMap.Succeeded; Summary = $strSummary; Steps = @($listStep); Detail = @($listDetail) }
 }
 
 #endregion Remote script blocks
@@ -594,7 +611,11 @@ function New-DeviceInspectorActionRecord {
     # One sentence about the outcome.
     #
     # .PARAMETER Steps
-    # One line for each step that ran or would run.
+    # One line for each step that ran or would run. It never holds exception text.
+    #
+    # .PARAMETER Detail
+    # Optional. The raw technical reasons of a failure, for example the text of an exception.
+    # The window does not show them. The action log file holds them.
     #
     # .EXAMPLE
     # $objResult = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $true -Succeeded $true -Summary 'Done.' -Steps @()
@@ -606,12 +627,13 @@ function New-DeviceInspectorActionRecord {
     #
     # .OUTPUTS
     # [pscustomobject] Properties: ActionId, Action, ComputerName, DryRun, Mode, StartedAt,
-    # Account, Succeeded, Outcome, Summary, Steps.
+    # Account, Succeeded, Outcome, Summary, Steps, Detail. Detail is a [string[]] that is empty
+    # when the action has no raw reason.
     #
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.1.20261110.0
+    # Version: 1.2.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -639,7 +661,11 @@ function New-DeviceInspectorActionRecord {
 
         [Parameter(Mandatory = $true)]
         [AllowEmptyCollection()]
-        [string[]]$Steps
+        [string[]]$Steps,
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyCollection()]
+        [string[]]$Detail = @()
     )
 
     process {
@@ -670,6 +696,7 @@ function New-DeviceInspectorActionRecord {
             Outcome      = $strOutcome
             Summary      = $Summary
             Steps        = @($Steps)
+            Detail       = @($Detail)
         }
     }
 }
@@ -680,7 +707,10 @@ function Invoke-ActionOnDevice {
     #
     # .DESCRIPTION
     # A connection failure or a script failure becomes a result with Succeeded
-    # $false. The function does not throw for these failures.
+    # $false. The function does not throw for these failures. The Summary of a
+    # connection failure never holds the exception text. The text goes to the Detail
+    # property of the result. The function also copies the Detail of the object that
+    # the device returns, when that object has the property.
     #
     # .PARAMETER Action
     # The name of the action.
@@ -690,7 +720,7 @@ function Invoke-ActionOnDevice {
     #
     # .PARAMETER ScriptBlock
     # The script block. Its first parameter is DryRun. It returns an object with
-    # Succeeded, Summary and Steps.
+    # Succeeded, Summary and Steps. It can return Detail, a list of raw technical reasons.
     #
     # .PARAMETER ArgumentList
     # More arguments for the script block, after DryRun.
@@ -710,7 +740,8 @@ function Invoke-ActionOnDevice {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] See New-DeviceInspectorActionRecord.
+    # [pscustomobject] See New-DeviceInspectorActionRecord. The property Detail holds
+    # the raw reasons ([string[]], empty when there are none).
     #
     # .NOTES
     # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
@@ -718,7 +749,7 @@ function Invoke-ActionOnDevice {
     #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261110.0
+    # Version: 1.1.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -756,16 +787,21 @@ function Invoke-ActionOnDevice {
             $objRaw = @(Invoke-ActionDeviceScript @hashtableInvoke) | Select-Object -Last 1
         } catch {
             Write-Debug -Message $_.Exception.Message
-            $strSummary = 'Cannot run the action on {0}: {1}' -f $ComputerName, $_.Exception.Message
+            $arrDetail = @([string]$_.Exception.Message)
+            $strSummary = 'Cannot run the action on {0}. The action log has the reason.' -f $ComputerName
             if (-not $boolDryRun) {
                 $strSummary = '{0} The connection can fail after a step ran. Inspect the device to see its state.' -f $strSummary
             }
-            return New-DeviceInspectorActionRecord -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $false -Summary $strSummary -Steps @()
+            return New-DeviceInspectorActionRecord -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $false -Summary $strSummary -Steps @() -Detail ([string[]]$arrDetail)
         }
         if ($null -eq $objRaw -or $null -eq $objRaw.PSObject.Properties['Succeeded']) {
             return New-DeviceInspectorActionRecord -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $false -Summary 'The device returned no result.' -Steps @()
         }
-        New-DeviceInspectorActionRecord -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded ([bool]$objRaw.Succeeded) -Summary ([string]$objRaw.Summary) -Steps ([string[]]@($objRaw.Steps))
+        $arrDetail = @()
+        if ($null -ne $objRaw.PSObject.Properties['Detail']) {
+            $arrDetail = @($objRaw.Detail | Where-Object { $null -ne $_ } | ForEach-Object { [string]$_ })
+        }
+        New-DeviceInspectorActionRecord -Action $Action -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded ([bool]$objRaw.Succeeded) -Summary ([string]$objRaw.Summary) -Steps ([string[]]@($objRaw.Steps)) -Detail ([string[]]$arrDetail)
     }
 }
 
@@ -802,14 +838,15 @@ function Invoke-DeviceInspectorPolicyUpdate {
     #
     # .OUTPUTS
     # [pscustomobject] Properties: Action, ComputerName, DryRun, Mode, StartedAt,
-    # Account, Succeeded, Outcome, Summary, Steps.
+    # Account, Succeeded, Outcome, Summary, Steps, Detail. Detail holds the raw reasons of
+    # a failure. Summary and Steps never hold them.
     #
     # .NOTES
     # Non-throwing contract: a failure gives Succeeded $false and a Summary.
     #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261110.0
+    # Version: 1.1.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1212,7 +1249,8 @@ function Invoke-DeviceInspectorCollectionChange {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] See New-DeviceInspectorActionRecord.
+    # [pscustomobject] See New-DeviceInspectorActionRecord. The raw reason of each site
+    # failure goes to the property Detail ([string[]]). Summary and Steps never hold it.
     #
     # .NOTES
     # Non-throwing contract: a failure gives Succeeded $false and a Summary. A
@@ -1220,7 +1258,7 @@ function Invoke-DeviceInspectorCollectionChange {
     #
     # Positional parameters: none.
     #
-    # Version: 1.0.20261111.0
+    # Version: 1.1.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -1263,9 +1301,10 @@ function Invoke-DeviceInspectorCollectionChange {
         }
         $strShortName = $ComputerName.Split('.')[0]
         $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
+        $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
         $scriptBlockEnd = {
             param([bool]$boolSucceeded, [string]$strSummary)
-            New-DeviceInspectorActionRecord -Action $strAction -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $boolSucceeded -Summary $strSummary -Steps ([string[]]$listStep.ToArray())
+            New-DeviceInspectorActionRecord -Action $strAction -ComputerName $ComputerName -DryRun $boolDryRun -Succeeded $boolSucceeded -Summary $strSummary -Steps ([string[]]$listStep.ToArray()) -Detail ([string[]]$listDetail.ToArray())
         }
         if ($CollectionId.StartsWith('SMS', [System.StringComparison]::OrdinalIgnoreCase)) {
             return (& $scriptBlockEnd $false ('{0} is a built-in collection. Built-in collections have no direct membership rules.' -f $CollectionId))
@@ -1330,8 +1369,9 @@ function Invoke-DeviceInspectorCollectionChange {
                     $listStep.Add(('Added a direct rule for resource {0} to {1}.' -f $strResourceId, $CollectionId))
                 }
             } catch {
-                $listStep.Add(('{0} failed: {1}' -f $strAction, $_.Exception.Message))
-                return (& $scriptBlockEnd $false ('The site did not change the rule. {0}' -f $_.Exception.Message))
+                $listStep.Add(('{0} failed.' -f $strAction))
+                $listDetail.Add(('{0}: {1}' -f $strAction, $_.Exception.Message))
+                return (& $scriptBlockEnd $false 'The site did not change the rule. The action log has the reason.')
             }
             $boolUpdateStarted = $false
             try {
@@ -1339,7 +1379,8 @@ function Invoke-DeviceInspectorCollectionChange {
                 $boolUpdateStarted = $true
                 $listStep.Add(('Started a membership update of {0}.' -f $CollectionId))
             } catch {
-                $listStep.Add(('The membership update did not start: {0}. The site updates the collection on its schedule.' -f $_.Exception.Message))
+                $listStep.Add('The membership update did not start. The site updates the collection on its schedule.')
+                $listDetail.Add(('Membership update: {0}' -f $_.Exception.Message))
             }
             # The client notification has an effect only after the site shows the new
             # membership, so the function waits for it, up to 60 seconds.
@@ -1367,7 +1408,8 @@ function Invoke-DeviceInspectorCollectionChange {
                 } else {
                     $strNotShown = 'The site did not show the new membership within 60 seconds. The client gets it at a later policy cycle.'
                     if (-not [string]::IsNullOrEmpty($strReadError)) {
-                        $strNotShown = '{0} Last read error: {1}' -f $strNotShown, $strReadError
+                        $strNotShown = '{0} The last read failed. The action log has the reason.' -f $strNotShown
+                        $listDetail.Add(('Membership read: {0}' -f $strReadError))
                     }
                     $listStep.Add($strNotShown)
                 }
@@ -1376,12 +1418,23 @@ function Invoke-DeviceInspectorCollectionChange {
                 Invoke-CMClientAction -DeviceName $strShortName -ActionType 'ClientNotificationRequestMachinePolicyNow' -ErrorAction Stop
                 $listStep.Add('Sent the client notification Request machine policy now.')
             } catch {
-                $listStep.Add(('The client notification failed: {0}. The client gets the change at its next policy cycle.' -f $_.Exception.Message))
+                $listStep.Add('The client notification failed. The client gets the change at its next policy cycle.')
+                $listDetail.Add(('Client notification: {0}' -f $_.Exception.Message))
             }
             return (& $scriptBlockEnd $true ('The site changed the direct rule of {0} in {1}. Inspect the device again after the membership update.' -f $strShortName, $CollectionId))
         } catch {
             Write-Debug -Message $_.Exception.Message
-            return (& $scriptBlockEnd $false ('Cannot run the action on site {0}: {1}' -f $SiteCode, $_.Exception.Message))
+            # Connect-InspectorSite throws a fixed text and keeps the raw reason in the Data of the exception.
+            # One marker rule: an exception with Data['RawText'] carries a message that the tool wrote for the person. The window shows
+            # that message and the action log keeps the raw reason. Any other exception shows a fixed sentence.
+            $strRaw = $_.Exception.Message
+            $strShown = ('Cannot run the action on site {0}. The action log has the reason.' -f $SiteCode)
+            if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) {
+                $strShown = $_.Exception.Message
+                $strRaw = [string]$_.Exception.Data['RawText']
+            }
+            $listDetail.Add(('Site {0}: {1}' -f $SiteCode, $strRaw))
+            return (& $scriptBlockEnd $false $strShown)
         } finally {
             Disconnect-InspectorSite -Connection $objConnection
         }
@@ -1397,10 +1450,15 @@ function ConvertTo-DeviceInspectorActionText {
     # the mode, the outcome and the summary. A result without an ID shows a hyphen in
     # the ID field. One indented line follows for each step. Line breaks and control
     # characters in a field become one space, so text from the device cannot add a
-    # line to the action log.
+    # line to the action log. The function does not print the Detail of the result, unless
+    # you set IncludeDetail. Then one line 'Detail: <text>' follows for each Detail entry,
+    # after the step lines.
     #
     # .PARAMETER Result
     # The object that an action function returns.
+    #
+    # .PARAMETER IncludeDetail
+    # Add one line for each Detail entry. The action log file uses it. The window does not.
     #
     # .EXAMPLE
     # ConvertTo-DeviceInspectorActionText -Result $objResult
@@ -1416,12 +1474,15 @@ function ConvertTo-DeviceInspectorActionText {
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.1.20261110.0
+    # Version: 1.2.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
     param (
         [Parameter(Mandatory = $true)]
-        [pscustomobject]$Result
+        [pscustomobject]$Result,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$IncludeDetail
     )
 
     process {
@@ -1441,6 +1502,11 @@ function ConvertTo-DeviceInspectorActionText {
         foreach ($strStep in @($Result.Steps)) {
             '    {0}' -f (& $scriptBlockLine $strStep)
         }
+        if ($IncludeDetail.IsPresent -and $null -ne $Result.PSObject.Properties['Detail']) {
+            foreach ($strDetail in @($Result.Detail | Where-Object { $null -ne $_ })) {
+                '    Detail: {0}' -f (& $scriptBlockLine $strDetail)
+            }
+        }
     }
 }
 
@@ -1451,7 +1517,8 @@ function Write-DeviceInspectorActionLog {
     # .DESCRIPTION
     # The action log keeps every run and every dry run, from every session, in one
     # file. The function creates the folder and the file when they do not exist and
-    # writes UTF-8 text without a byte order mark.
+    # writes UTF-8 text without a byte order mark. The file holds the Detail lines of the
+    # result (the raw reasons of a failure). The window log does not.
     #
     # .PARAMETER Path
     # The action log file.
@@ -1473,7 +1540,7 @@ function Write-DeviceInspectorActionLog {
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261110.0
+    # Version: 1.1.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
     param (
@@ -1488,7 +1555,7 @@ function Write-DeviceInspectorActionLog {
     process {
         $strFullPath = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($Path)
         [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($strFullPath))
-        $strText = (@(ConvertTo-DeviceInspectorActionText -Result $Result) -join "`r`n") + "`r`n"
+        $strText = (@(ConvertTo-DeviceInspectorActionText -Result $Result -IncludeDetail) -join "`r`n") + "`r`n"
         $objEncoding = New-Object -TypeName 'System.Text.UTF8Encoding' -ArgumentList $false
         [System.IO.File]::AppendAllText($strFullPath, $strText, $objEncoding)
         $strFullPath
@@ -1840,12 +1907,13 @@ function Add-DeviceInspectorActionId {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] The same result object, with the property ActionId.
+    # [pscustomobject] The same result object, with the property ActionId. All other
+    # properties, including Detail, stay as they are.
     #
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261110.0
+    # Version: 1.0.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -2226,10 +2294,13 @@ function Resolve-DeviceInspectorRunResult {
     # What the background work returned. Can be $null or an array.
     #
     # .PARAMETER ErrorMessage
-    # The error of the background work, or an empty string.
+    # The error of the background work, or an empty string. The text never reaches the
+    # Summary. The FAILED record holds it in its property Detail. The Summary of that
+    # record is a fixed sentence.
     #
     # .PARAMETER Detail
     # The detail lines of the action. They become the steps of a result that has no steps.
+    # They are not the property Detail of the record.
     #
     # .EXAMPLE
     # $objRecord = Resolve-DeviceInspectorRunResult -Run $objRun -Result $null -ErrorMessage '' -Detail @()
@@ -2240,12 +2311,13 @@ function Resolve-DeviceInspectorRunResult {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] One action record.
+    # [pscustomobject] One action record. A device result keeps its Detail property. A
+    # record for an error has the error text in Detail.
     #
     # .NOTES
     # Positional parameters: none.
     #
-    # Version: 1.0.20261110.0
+    # Version: 1.1.20261112.0
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([pscustomobject])]
     param (
@@ -2268,8 +2340,12 @@ function Resolve-DeviceInspectorRunResult {
 
     process {
         $arrResult = @($Result | Where-Object { $null -ne $_ })
-        $strProblem = $ErrorMessage
-        if ([string]::IsNullOrEmpty($strProblem)) {
+        $strProblem = ''
+        $arrReason = @()
+        if (-not [string]::IsNullOrEmpty($ErrorMessage)) {
+            $strProblem = 'The action stopped with an error. The action log has the reason.'
+            $arrReason = @($ErrorMessage)
+        } else {
             if ($arrResult.Count -eq 0) {
                 $strProblem = 'The action returned no result.'
             } elseif ($arrResult.Count -gt 1) {
@@ -2279,7 +2355,7 @@ function Resolve-DeviceInspectorRunResult {
             }
         }
         if (-not [string]::IsNullOrEmpty($strProblem)) {
-            return New-DeviceInspectorActionRecord -Action ([string]$Run.Action) -ComputerName ([string]$Run.ComputerName) -DryRun ([bool]$Run.DryRun) -Succeeded $false -ActionId ([string]$Run.ActionId) -Summary $strProblem -Steps @($Detail)
+            return New-DeviceInspectorActionRecord -Action ([string]$Run.Action) -ComputerName ([string]$Run.ComputerName) -DryRun ([bool]$Run.DryRun) -Succeeded $false -ActionId ([string]$Run.ActionId) -Summary $strProblem -Steps @($Detail) -Detail ([string[]]$arrReason)
         }
         $objRecord = Add-DeviceInspectorActionId -Result ([pscustomobject]$arrResult[0]) -ActionId ([string]$Run.ActionId)
         if (@($objRecord.Steps).Count -eq 0 -and @($Detail).Count -gt 0) {

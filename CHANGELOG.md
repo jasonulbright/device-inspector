@@ -4,8 +4,21 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Show white text on every blue control in the light theme.
+- Show bold 14 pt titles before the device box and the site boxes.
+- Show a fixed message for each failure and keep the reason in the logs.
+- Give every button one themed style with a hover border.
+
 ### Changed
 
+- Write every title and label in Title Case, in bold.
+- Test the hover, focus, pressed and selected states in both themes.
+- Make the guide capture safe on a shared lab computer.
+- Retake the guide images in both themes.
+- Message boxes that come from the suite keep their own look until the suite changes them.
+- Disabled text in those message boxes keeps the suite colors.
 - Retake the guide images that show the **Last hardware inventory** fact of the site record (`device-panel`, `device-light`, `device-server`, `device-site-only`, `actions-device-buttons`, `actions-running-list`, `exported` and `focus-inspect`) from release 2026.11.11.0010. The row reads "Last hardware inventory" and its value ends with "(device local time)".
 - Add `-Section` and `-Image` to `tools/guide-capture/Invoke-GuideCapture.ps1`. `-Section` runs only the named sections of the guide steps. `-Image` copies only the named images. The uninstall images moved to their own section, `action menus`, so that a run can leave them out.
 

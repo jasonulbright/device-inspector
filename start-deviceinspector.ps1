@@ -195,6 +195,31 @@ function Set-StatusText {
     $txtStatus.Text = $Text
 }
 
+# The window shows a fixed text. The reason of a failure (the text of an exception) goes to the log file only.
+function Write-ErrorLog {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Message)
+    try { Write-Log -Message $Message -Level ERROR -Quiet } catch { $null = $_ }
+}
+
+# A window title in Title Case. The small words in the middle stay in lower case.
+function ConvertTo-TitleCaseText {
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+    $small = @('a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'per', 'by', 'at', 'as', 'but', 'nor', 'with', 'from')
+    $words = @($Text -split ' ')
+    for ($i = 0; $i -lt $words.Count; $i++) {
+        $word = $words[$i]
+        if (-not $word -or ($i -gt 0 -and $small -contains $word)) { continue }
+        # Each part of a word with a hyphen starts with a capital, as in Corrupt-Inventory. A part after a digit (32-bit) stays.
+        $parts = @($word -split '-')
+        for ($p = 0; $p -lt $parts.Count; $p++) {
+            if (-not $parts[$p] -or ($p -gt 0 -and $word -notmatch '^[A-Za-z]')) { continue }
+            $parts[$p] = $parts[$p].Substring(0, 1).ToUpperInvariant() + $parts[$p].Substring(1)
+        }
+        $words[$i] = $parts -join '-'
+    }
+    return ($words -join ' ')
+}
+
 # === Title-bar drag fallback: SuiteCommon owns the hook ===
 Install-TitleBarDragFallback -Window $window
 
@@ -319,7 +344,7 @@ function Set-RunTooltip {
 function Update-RunPanel {
     $count = $script:RunList.Count
     $panelRuns.Visibility = $(if ($count -gt 0) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed })
-    $lblRuns.Text = $(if ($count -gt 0) { 'RUNNING ACTIONS ({0})' -f $count } else { 'RUNNING ACTIONS' })
+    $lblRuns.Text = $(if ($count -gt 0) { 'Running Actions ({0})' -f $count } else { 'Running Actions' })
 }
 
 # After a full inventory or a repair the check is out of date until the next inspection.
@@ -367,7 +392,7 @@ function Update-ControlState {
 
 # === View switching ===
 $script:ViewMeta = @{
-    'Device list'  = @{ Title = 'Device list';  Subtitle = 'Devices of the site that match a name pattern or a collection. Select one and inspect it.' }
+    'Device list'  = @{ Title = 'Device List';  Subtitle = 'Devices of the site that match a name pattern or a collection. Select one and inspect it.' }
     'Device'       = @{ Title = 'Device';       Subtitle = 'Operating system, client health and site record of the device.' }
     'Applications' = @{ Title = 'Applications'; Subtitle = 'Applications that the device lists in its uninstall registry keys now. Right-click a row to uninstall or repair.' }
     'Updates'      = @{ Title = 'Updates';      Subtitle = 'Updates that the site lists as required for the device, and updates pending on the device.' }
@@ -440,7 +465,8 @@ function Show-Inspection {
     $gridCollections.ItemsSource = @(ConvertTo-DeviceInspectionCollectionRow -Inspection $Inspection)
     $gridDeployments.ItemsSource = @(ConvertTo-DeviceInspectionDeploymentRow -Inspection $Inspection)
     $problems = @($Inspection.Problems)
-    $txtProblems.Text = if ($problems.Count -eq 0) { 'No problems. Every part of the inspection ran.' } else { ($problems | ForEach-Object { '- ' + $_ }) -join [Environment]::NewLine }
+    $problemLine = foreach ($problem in $problems) { '- ' + $problem }
+    $txtProblems.Text = if ($problems.Count -eq 0) { 'No problems. Every part of the inspection ran.' } else { @($problemLine) -join [Environment]::NewLine }
     $bits = @()
     $bits += ('Device {0}' -f $Inspection.ComputerName)
     if ($Inspection.Device -and $Inspection.Device.Client) { $bits += ('client service {0}, version {1}' -f $Inspection.Device.Client.ServiceState, $Inspection.Device.Client.Version) }
@@ -535,8 +561,8 @@ function Invoke-Inspect {
     }
     $siteOnly = [bool]$chkSiteOnly.IsChecked
     if ($siteOnly -and -not $check.SiteServer) {
-        Add-LogLine 'Inspect: Site only needs a site server.'
-        Set-StatusText 'Enter a site server, or clear Site only.'
+        Add-LogLine 'Inspect: Site Only needs a site server.'
+        Set-StatusText 'Enter a site server, or clear Site Only.'
         return
     }
     $global:Prefs['LastDevice'] = $check.ComputerName
@@ -555,14 +581,15 @@ function Invoke-Inspect {
             if ($A.SiteOnly) { $p['SkipDevice'] = $true }
             $State.Result = Get-DeviceInspection @p
         }
-        catch { $State.ErrorMsg = $_.Exception.Message }
+        catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
         if ($State.ErrorMsg) {
-            Add-LogLine ('Inspect failed: {0}' -f $State.ErrorMsg)
-            Set-StatusText 'Inspect failed. See the log.'
-            [void](Show-ThemedMessage -Owner $window -Title 'Inspect' -Message ([string]$State.ErrorMsg) -Icon Error)
+            Write-ErrorLog ('Inspect failed: {0}' -f $State.ErrorMsg)
+            Add-LogLine 'Inspect failed. The log file has the reason.'
+            Set-StatusText 'Inspect failed. The log file has the reason.'
+            [void](Show-ThemedMessage -Owner $window -Title 'Inspect' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The inspection failed. Check the site server, the site code and your account rights in Options. The log file has the reason.' }) -Icon Error)
             return
         }
         $r = $State.Result
@@ -595,8 +622,9 @@ function Save-TextExport {
         }
     }
     catch {
-        Add-LogLine ('Export {0} failed: {1}' -f $Kind, $_.Exception.Message)
-        [void](Show-ThemedMessage -Owner $window -Title 'Export' -Message ([string]$_.Exception.Message) -Icon Error)
+        Write-ErrorLog ('Export {0} failed: {1}' -f $Kind, $_.Exception.Message)
+        Add-LogLine ('Export {0} failed. The log file has the reason.' -f $Kind)
+        [void](Show-ThemedMessage -Owner $window -Title 'Export' -Message ('The {0} export failed. Check the folder and the file name. The log file has the reason.' -f $Kind) -Icon Error)
     }
 }
 $btnExportJson.Add_Click({ Save-TextExport -Kind 'JSON' -Extension 'json' -Filter 'JSON files (*.json)|*.json' -GetText { ConvertTo-DeviceInspectionJson -Inspection $script:Inspection } })
@@ -622,61 +650,98 @@ function Show-OptionsDialog {
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Steel.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            <!-- Contrast fixes, the same as in MainWindow.xaml: inactive dark title bar, text box border,
-                 and a button template that keeps 4.5:1 text and a 3:1 border when disabled. -->
-            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#666666"/>
-            <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7A7A7A"/>
-            <ControlTemplate x:Key="AppButtonTemplate" TargetType="ButtonBase">
-                <Grid>
-                    <Border x:Name="AppBd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True"/>
-                    <Rectangle x:Name="AppHover" Margin="{TemplateBinding BorderThickness}" Opacity="0"
-                               Fill="{DynamicResource MahApps.Brushes.Gray.SemiTransparent}"/>
-                    <ContentPresenter x:Name="AppContent" Margin="{TemplateBinding Padding}"
+            <!-- Contrast overrides, the same as in MainWindow.xaml: control borders need 3:1 and white title text 4.5:1. -->
+            <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7F7F7F"/>
+            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#595959"/>
+            <!-- The one button template and the one button style, the same as in MainWindow.xaml. No color literal and
+                 no Opacity: the colors come from the MahApps theme resources. -->
+            <ControlTemplate x:Key="ThemedButtonTemplate" TargetType="Button">
+                <Border Name="Bd"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        SnapsToDevicePixels="True">
+                    <ContentPresenter Name="Cp"
                                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                      RecognizesAccessKey="True" SnapsToDevicePixels="True"/>
-                </Grid>
+                                      Margin="{TemplateBinding Padding}"
+                                      RecognizesAccessKey="True"
+                                      SnapsToDevicePixels="True"/>
+                </Border>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="AppHover" Property="Opacity" Value="1"/>
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                    </MultiTrigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="AppHover" Property="Opacity" Value="0"/>
-                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
-                    </Trigger>
-                    <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
-                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
-                        <Setter TargetName="AppContent" Property="Opacity" Value="0.6"/>
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
-            <Style x:Key="CategoryRowStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
-                <Setter Property="Template" Value="{StaticResource AppButtonTemplate}"/>
+
+            <Style x:Key="ThemedButtonStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+                <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- The one secondary dialog style: a gray fill, the theme text color and a visible border. Cancel and every
+                 other dialog button that is not the main answer use it. The primary dialog style is DialogAccentButton.
+                 No other dialog button style sets a Background. -->
+            <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Gray10}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+            </Style>
+            <!-- The accent fill is the theme highlight (#4A5763 dark, #00589F light): white text is 7:1 on both.
+                 The border is the theme foreground: the highlight alone is 2.1:1 on the dark dialog.
+                 The plain accent fill of the light theme is 4.49:1. -->
+            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="CategoryRowStyle" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
                 <Setter Property="Height" Value="36"/>
                 <Setter Property="HorizontalContentAlignment" Value="Left"/>
                 <Setter Property="Padding" Value="14,0,14,0"/>
                 <Setter Property="FontSize" Value="13"/>
-                <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Setter Property="Margin" Value="0"/>
             </Style>
-            <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
-                <Setter Property="Template" Value="{StaticResource AppButtonTemplate}"/>
-                <Setter Property="HorizontalContentAlignment" Value="Center"/>
-                <Setter Property="VerticalContentAlignment" Value="Center"/>
-                <Setter Property="MinWidth" Value="90"/><Setter Property="Height" Value="32"/>
-                <Setter Property="Margin" Value="0,0,8,0"/>
-                <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
-            </Style>
-            <!-- The MahApps accent (80 percent opaque) gives white text 3.3:1 in the light theme.
-                 The opaque highlight colour gives 7:1 in both themes. -->
-            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
-                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
-                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
+            <!-- Field titles are bold, the same in both themes. -->
+            <Style x:Key="OptLabel" TargetType="TextBlock">
+                <Setter Property="FontWeight" Value="Bold"/>
             </Style>
         </ResourceDictionary>
     </Window.Resources>
@@ -699,11 +764,11 @@ function Show-OptionsDialog {
         <Border Grid.Column="1" Grid.Row="0" Background="{DynamicResource MahApps.Brushes.Gray8}"/>
         <Grid Grid.Column="2" Grid.Row="0" Margin="20,16,20,16">
             <StackPanel x:Name="paneConnection" Visibility="Visible">
-                <TextBlock Text="Configuration Manager Connection" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                <TextBlock Text="Site server (SMS Provider FQDN)" FontSize="11" Margin="0,4,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
+                <TextBlock Text="Configuration Manager Connection" Style="{StaticResource OptLabel}" FontSize="13" Margin="0,0,0,10"/>
+                <TextBlock Text="Site Server (SMS Provider FQDN)" Style="{StaticResource OptLabel}" FontSize="14" FontWeight="Bold" Margin="0,4,0,2"/>
                 <TextBox x:Name="txtSmsProvider" FontSize="12" Padding="6,4,6,4"
                          Controls:TextBoxHelper.Watermark="e.g. sms01.example.com"/>
-                <TextBlock Text="Site Code" FontSize="11" Margin="0,12,0,2" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
+                <TextBlock Text="Site Code" Style="{StaticResource OptLabel}" FontSize="14" FontWeight="Bold" Margin="0,12,0,2"/>
                 <TextBox x:Name="txtSiteCode" FontSize="12" Padding="6,4,6,4"
                          Controls:TextBoxHelper.Watermark="e.g. XYZ. Required with a site server." Width="240" HorizontalAlignment="Left"/>
                 <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The tool needs the Configuration Manager console on this computer. The account needs local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested. Only actions make changes."
@@ -711,8 +776,8 @@ function Show-OptionsDialog {
                            Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
             </StackPanel>
             <StackPanel x:Name="paneAbout" Visibility="Collapsed">
-                <TextBlock Text="About" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                <TextBlock x:Name="txtAboutVersion" Text="Device Inspector v0.0.0" FontSize="13" FontWeight="SemiBold"/>
+                <TextBlock Text="About" Style="{StaticResource OptLabel}" FontSize="13" Margin="0,0,0,10"/>
+                <TextBlock x:Name="txtAboutVersion" Text="Device Inspector v0.0.0" Style="{StaticResource OptLabel}" FontSize="13"/>
                 <TextBlock Text="Read the facts of one device from a Configuration Manager site and from the device itself: operating system, client health, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report."
                            FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
                 <TextBlock Text="Author: Jason Ulbright. License: MIT."
@@ -792,7 +857,7 @@ function Show-ActionConfirmDialog {
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
-    Title="Confirm action" Width="560" SizeToContent="Height" MinWidth="460"
+    Title="Confirm Action" Width="560" SizeToContent="Height" MinWidth="460"
     WindowStartupLocation="CenterOwner" TitleCharacterCasing="Normal"
     GlowBrush="{DynamicResource MahApps.Brushes.Accent}"
     NonActiveGlowBrush="{DynamicResource MahApps.Brushes.Accent}"
@@ -804,40 +869,87 @@ function Show-ActionConfirmDialog {
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Steel.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#666666"/>
-            <ControlTemplate x:Key="AppButtonTemplate" TargetType="ButtonBase">
-                <Grid>
-                    <Border x:Name="AppBd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True"/>
-                    <Rectangle x:Name="AppHover" Margin="{TemplateBinding BorderThickness}" Opacity="0"
-                               Fill="{DynamicResource MahApps.Brushes.Gray.SemiTransparent}"/>
-                    <ContentPresenter x:Name="AppContent" Margin="{TemplateBinding Padding}"
+            <!-- Contrast overrides, the same as in MainWindow.xaml: control borders need 3:1 and white title text 4.5:1. -->
+            <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7F7F7F"/>
+            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#595959"/>
+            <!-- The one button template and the one button style, the same as in MainWindow.xaml. No color literal and
+                 no Opacity: the colors come from the MahApps theme resources. -->
+            <ControlTemplate x:Key="ThemedButtonTemplate" TargetType="Button">
+                <Border Name="Bd"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        SnapsToDevicePixels="True">
+                    <ContentPresenter Name="Cp"
                                       HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                      RecognizesAccessKey="True" SnapsToDevicePixels="True"/>
-                </Grid>
+                                      Margin="{TemplateBinding Padding}"
+                                      RecognizesAccessKey="True"
+                                      SnapsToDevicePixels="True"/>
+                </Border>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="AppHover" Property="Opacity" Value="1"/>
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                    </MultiTrigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="AppHover" Property="Opacity" Value="0"/>
-                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
-            <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
-                <Setter Property="Template" Value="{StaticResource AppButtonTemplate}"/>
+
+            <Style x:Key="ThemedButtonStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+                <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="HorizontalContentAlignment" Value="Center"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
-                <Setter Property="MinWidth" Value="90"/><Setter Property="Height" Value="32"/>
-                <Setter Property="Margin" Value="0,0,8,0"/>
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
             </Style>
-            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource DialogButton}">
+
+            <!-- The one secondary dialog style: a gray fill, the theme text color and a visible border. Cancel and every
+                 other dialog button that is not the main answer use it. The primary dialog style is DialogAccentButton.
+                 No other dialog button style sets a Background. -->
+            <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Gray10}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+            </Style>
+            <!-- The accent fill is the theme highlight (#4A5763 dark, #00589F light): white text is 7:1 on both.
+                 The border is the theme foreground: the highlight alone is 2.1:1 on the dark dialog.
+                 The plain accent fill of the light theme is 4.49:1. -->
+            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
                 <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
             </Style>
         </ResourceDictionary>
     </Window.Resources>
@@ -850,7 +962,7 @@ function Show-ActionConfirmDialog {
         </Grid.RowDefinitions>
         <Border x:Name="bannerDevices" Grid.Row="0" Padding="10,6,10,6" Margin="0,4,0,12"
                 Background="{DynamicResource MahApps.Brushes.Highlight}">
-            <TextBlock x:Name="txtDeviceCount" TextWrapping="Wrap" FontSize="13" FontWeight="SemiBold"
+            <TextBlock x:Name="txtDeviceCount" TextWrapping="Wrap" FontSize="13" FontWeight="Bold"
                        Foreground="{DynamicResource MahApps.Brushes.IdealForeground}"/>
         </Border>
         <TextBlock x:Name="txtActionMessage" Grid.Row="1" TextWrapping="Wrap" FontSize="13" Margin="0,0,0,12"/>
@@ -859,7 +971,7 @@ function Show-ActionConfirmDialog {
                    Text="Dry run reads the current state and lists the steps. It changes nothing. Run and Dry run both go to the action log."/>
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="btnActionRun"    Content="Run"     Style="{StaticResource DialogAccentButton}"/>
-            <Button x:Name="btnActionDryRun" Content="Dry run" Style="{StaticResource DialogButton}"/>
+            <Button x:Name="btnActionDryRun" Content="Dry Run" Style="{StaticResource DialogButton}"/>
             <Button x:Name="btnActionCancel" Content="Cancel"  Style="{StaticResource DialogButton}" IsCancel="True" IsDefault="True"/>
         </StackPanel>
     </Grid>
@@ -868,7 +980,7 @@ function Show-ActionConfirmDialog {
     [xml]$dx = $dlgXaml
     $dlg = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $dx))
     $dlg.Owner = $window
-    $dlg.Title = $Title
+    $dlg.Title = ConvertTo-TitleCaseText $Title
     Install-TitleBarDragFallback -Window $dlg
     Set-DialogTheme -Dialog $dlg
     $count = @($Devices).Count
@@ -892,7 +1004,11 @@ function Write-ActionResult {
     catch { $logError = [string]$_.Exception.Message }
     try {
         foreach ($line in @(ConvertTo-DeviceInspectorActionText -Result $Result)) { Add-LogLine $line }
-        if ($logError) { Add-LogLine ('The action log could not be written: {0}' -f $logError) }
+        if ($logError) {
+            Write-ErrorLog ('The action log could not be written: {0}' -f $logError)
+            foreach ($detailLine in @($Result.Detail)) { if ($detailLine) { Write-ErrorLog ('Detail of {0}: {1}' -f $Result.ActionId, $detailLine) } }
+            Add-LogLine 'The action log could not be written. The log file has the reason.'
+        }
     }
     catch { Write-Log -Message ('The window log could not show an action result: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
 }
@@ -910,7 +1026,7 @@ function Show-ActionResultNotice {
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
-    Title="Action result" Width="460" MinHeight="140" SizeToContent="Height"
+    Title="Action Result" Width="460" MinHeight="140" SizeToContent="Height"
     WindowStartupLocation="CenterOwner" TitleCharacterCasing="Normal"
     ShowActivated="False" ShowInTaskbar="False" ResizeMode="NoResize" ShowIconOnTitleBar="False"
     GlowBrush="{DynamicResource MahApps.Brushes.Accent}"
@@ -923,6 +1039,88 @@ function Show-ActionResultNotice {
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Steel.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- Contrast overrides, the same as in MainWindow.xaml: control borders need 3:1 and white title text 4.5:1. -->
+            <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7F7F7F"/>
+            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#595959"/>
+            <!-- The one button template and the one button style, the same as in MainWindow.xaml. No color literal and
+                 no Opacity: the colors come from the MahApps theme resources. -->
+            <ControlTemplate x:Key="ThemedButtonTemplate" TargetType="Button">
+                <Border Name="Bd"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        SnapsToDevicePixels="True">
+                    <ContentPresenter Name="Cp"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Margin="{TemplateBinding Padding}"
+                                      RecognizesAccessKey="True"
+                                      SnapsToDevicePixels="True"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                    </MultiTrigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <Style x:Key="ThemedButtonStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+                <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- The one secondary dialog style: a gray fill, the theme text color and a visible border. Cancel and every
+                 other dialog button that is not the main answer use it. The primary dialog style is DialogAccentButton.
+                 No other dialog button style sets a Background. -->
+            <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Gray10}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+            </Style>
+            <!-- The accent fill is the theme highlight (#4A5763 dark, #00589F light): white text is 7:1 on both.
+                 The border is the theme foreground: the highlight alone is 2.1:1 on the dark dialog.
+                 The plain accent fill of the light theme is 4.49:1. -->
+            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
     <Grid Margin="20,18,20,14">
@@ -937,26 +1135,16 @@ function Show-ActionResultNotice {
         <TextBlock x:Name="txtIcon" Grid.Row="0" Grid.Column="0" FontSize="20" VerticalAlignment="Top" Margin="0,0,14,0"/>
         <TextBox x:Name="txtMsg" Grid.Row="0" Grid.Column="1" FontSize="13" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
         <Button x:Name="btnPrimary" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" HorizontalAlignment="Right" Margin="0,18,0,0"
-                MinWidth="90" Height="32" Content="OK"
-                Style="{DynamicResource MahApps.Styles.Button.Square.Accent}"
-                Controls:ControlsHelper.ContentCharacterCasing="Normal"/>
+                Content="OK" Style="{StaticResource DialogAccentButton}"/>
     </Grid>
 </Controls:MetroWindow>
 '@
     [xml]$xml = $dlgXaml
     $dlg = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xml))
     Install-TitleBarDragFallback -Window $dlg
-    $theme = [ControlzEx.Theming.ThemeManager]::Current.DetectTheme($window)
-    if ($theme) { [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($dlg, $theme) }
     $dlg.Owner = $window
-    try {
-        $dlg.WindowTitleBrush          = $window.WindowTitleBrush
-        $dlg.NonActiveWindowTitleBrush = $window.NonActiveWindowTitleBrush
-        $dlg.GlowBrush                 = $window.GlowBrush
-        $dlg.NonActiveGlowBrush        = $window.NonActiveGlowBrush
-    }
-    catch { Add-LogLine ('The result window theme could not be set: {0}' -f $_.Exception.Message) }
-    $dlg.Title = $Title
+    Set-DialogTheme -Dialog $dlg
+    $dlg.Title = ConvertTo-TitleCaseText $Title
     $dlg.FindName('txtIcon').Text = $(if ($Icon -eq 'Error') { [string][char]0x2716 } else { [string][char]0x2139 })
     $dlg.FindName('txtMsg').Text = $Message
     $dlg.FindName('btnPrimary').Add_Click({ param($s, $e) [System.Windows.Window]::GetWindow($s).Close() })
@@ -981,7 +1169,7 @@ function Show-CloseWarningDialog {
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
-    Title="Actions still running" Width="520" MinHeight="180" SizeToContent="Height"
+    Title="Actions Still Running" Width="520" MinHeight="180" SizeToContent="Height"
     WindowStartupLocation="CenterOwner" TitleCharacterCasing="Normal"
     ResizeMode="NoResize" ShowIconOnTitleBar="False"
     GlowBrush="{DynamicResource MahApps.Brushes.Accent}"
@@ -994,6 +1182,88 @@ function Show-CloseWarningDialog {
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/MahApps.Metro;component/Styles/Themes/Dark.Steel.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- Contrast overrides, the same as in MainWindow.xaml: control borders need 3:1 and white title text 4.5:1. -->
+            <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7F7F7F"/>
+            <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#595959"/>
+            <!-- The one button template and the one button style, the same as in MainWindow.xaml. No color literal and
+                 no Opacity: the colors come from the MahApps theme resources. -->
+            <ControlTemplate x:Key="ThemedButtonTemplate" TargetType="Button">
+                <Border Name="Bd"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        SnapsToDevicePixels="True">
+                    <ContentPresenter Name="Cp"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Margin="{TemplateBinding Padding}"
+                                      RecognizesAccessKey="True"
+                                      SnapsToDevicePixels="True"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                    </MultiTrigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+
+            <Style x:Key="ThemedButtonStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+                <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- The one secondary dialog style: a gray fill, the theme text color and a visible border. Cancel and every
+                 other dialog button that is not the main answer use it. The primary dialog style is DialogAccentButton.
+                 No other dialog button style sets a Background. -->
+            <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Gray10}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+            </Style>
+            <!-- The accent fill is the theme highlight (#4A5763 dark, #00589F light): white text is 7:1 on both.
+                 The border is the theme foreground: the highlight alone is 2.1:1 on the dark dialog.
+                 The plain accent fill of the light theme is 4.49:1. -->
+            <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="MinWidth" Value="90"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
     <Grid Margin="20,18,20,14">
@@ -1008,12 +1278,8 @@ function Show-CloseWarningDialog {
         <TextBlock x:Name="txtIcon" Grid.Row="0" Grid.Column="0" FontSize="20" VerticalAlignment="Top" Margin="0,0,14,0"/>
         <TextBox x:Name="txtMsg" Grid.Row="0" Grid.Column="1" FontSize="13" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
         <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-            <Button x:Name="btnWait" MinWidth="90" Height="32" Margin="0,0,8,0" Content="Wait" IsDefault="True" IsCancel="True"
-                    Style="{DynamicResource MahApps.Styles.Button.Square.Accent}"
-                    Controls:ControlsHelper.ContentCharacterCasing="Normal"/>
-            <Button x:Name="btnCloseAnyway" MinWidth="110" Height="32" Content="Close anyway"
-                    Style="{DynamicResource MahApps.Styles.Button.Square}"
-                    Controls:ControlsHelper.ContentCharacterCasing="Normal"/>
+            <Button x:Name="btnWait" Content="Wait" IsDefault="True" IsCancel="True" Style="{StaticResource DialogAccentButton}"/>
+            <Button x:Name="btnCloseAnyway" Content="Close Anyway" Style="{StaticResource DialogButton}"/>
         </StackPanel>
     </Grid>
 </Controls:MetroWindow>
@@ -1021,9 +1287,8 @@ function Show-CloseWarningDialog {
     [xml]$xml = $dlgXaml
     $dlg = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xml))
     Install-TitleBarDragFallback -Window $dlg
-    $theme = [ControlzEx.Theming.ThemeManager]::Current.DetectTheme($window)
-    if ($theme) { [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($dlg, $theme) }
     $dlg.Owner = $window
+    Set-DialogTheme -Dialog $dlg
     $dlg.FindName('txtIcon').Text = [string][char]0x26A0
     $dlg.FindName('txtMsg').Text = Get-DeviceInspectorCloseWarningText -Run @($Runs)
     $script:CloseChoice = 'Wait'
@@ -1073,8 +1338,11 @@ function Invoke-DeviceAction {
         # The confirmation dialog is open for a while. A run can have started on this device since the check above.
         try { Register-DeviceInspectorActionRun -Runs $script:RunList -Run $run }
         catch {
-            Add-LogLine ('{0}: {1}' -f $Name, $_.Exception.Message)
-            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message $_.Exception.Message -Icon Warn)
+            Write-ErrorLog ('{0}: {1}' -f $Name, $_.Exception.Message)
+            $why = Get-DeviceInspectorRunBlock -Run @($script:RunList) -ComputerName $device -ResourceId (Get-ActionTargetResourceId)
+            if (-not $why) { $why = 'Another action runs on this device. A device runs one action at a time. Wait until it ends.' }
+            Add-LogLine ('{0}: {1}' -f $Name, $why)
+            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ([string]$why) -Icon Warn)
             return
         }
         # The run is on the list. A failure of the window code must not undo that.
@@ -1091,8 +1359,9 @@ function Invoke-DeviceAction {
                 [void](Unregister-DeviceInspectorActionRun -Runs $script:RunList -ActionId $actionId)
                 try { Update-ControlState } catch { Write-Log -Message ('The controls could not update: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
             }
-            Add-LogLine ('{0}: the action log cannot be written, so the run does not start. {1}' -f $Name, $logProblem)
-            [void](Show-ThemedMessage -Owner $window -Title 'Action log' -Message ('The action log cannot be written, so the run does not start: {0}' -f $logProblem) -Icon Error)
+            Write-ErrorLog ('{0}: the action log cannot be written: {1}' -f $Name, $logProblem)
+            Add-LogLine ('{0}: the action log cannot be written, so the run does not start. The log file has the reason.' -f $Name)
+            [void](Show-ThemedMessage -Owner $window -Title 'Action Log' -Message 'The action log cannot be written, so the run does not start. The log file has the reason.' -Icon Error)
             return
         }
     }
@@ -1106,9 +1375,9 @@ function Invoke-DeviceAction {
             $startProblem = [string]$_.Exception.Message
             [void](Unregister-DeviceInspectorActionRun -Runs $script:RunList -ActionId $actionId)
             try { Update-ControlState } catch { Write-Log -Message ('The controls could not update: {0}' -f $_.Exception.Message) -Level ERROR -Quiet }
-            $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -ActionId $actionId -Summary ('The run did not start: {0}' -f $startProblem) -Steps $Detail
+            $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -ActionId $actionId -Summary 'The run did not start. The action log has the reason.' -Steps $Detail -Detail @($startProblem)
             Write-ActionResult -Result $failed
-            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ('The run did not start: {0}' -f $startProblem) -Icon Error)
+            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message 'The run did not start. The action log has the reason.' -Icon Error)
             return
         }
         # From here the work executes. A failure of the window code below never takes the run off the list.
@@ -1131,9 +1400,9 @@ function Invoke-DeviceAction {
         $script:IsBusy = $false
         $progressOverlay.Visibility = [System.Windows.Visibility]::Collapsed
         Update-ControlState
-        $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -ActionId $actionId -Summary ('The run did not start: {0}' -f $_.Exception.Message) -Steps $Detail
+        $failed = New-DeviceInspectorActionRecord -Action $Name -ComputerName $device -DryRun $dry -Succeeded $false -ActionId $actionId -Summary 'The run did not start. The action log has the reason.' -Steps $Detail -Detail @([string]$_.Exception.Message)
         Write-ActionResult -Result $failed
-        [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ('The run did not start: {0}' -f $_.Exception.Message) -Icon Error)
+        [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message 'The run did not start. The action log has the reason.' -Icon Error)
     }
 }
 
@@ -1145,7 +1414,7 @@ function Get-ActionRunspace {
         $candidate = $script:RunspaceIdle[0]
         $script:RunspaceIdle = @($script:RunspaceIdle | Select-Object -Skip 1)
         if ($candidate.RunspaceStateInfo.State -eq 'Opened' -and $candidate.RunspaceAvailability -eq 'Available') { return $candidate }
-        try { $candidate.CloseAsync() } catch { Add-LogLine ('An idle runspace could not be closed: {0}' -f $_.Exception.Message) }
+        try { $candidate.CloseAsync() } catch { Write-ErrorLog ('An idle runspace could not be closed: {0}' -f $_.Exception.Message) }
     }
     return (New-SuiteBgRunspace -ModulePath $__modulePath -LogPath $script:ToolLogPath)
 }
@@ -1172,14 +1441,14 @@ function Start-DeviceActionRun {
                 $p = $A.Parameters
                 $State.Result = & $A.Function @p
             }
-            catch { $State.ErrorMsg = $_.Exception.Message }
+            catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
             finally { $State.Done = $true }
         }).AddArgument($Arguments).AddArgument($state)
         $handle = $ps.BeginInvoke()
     }
     catch {
-        try { $ps.Dispose() } catch { Add-LogLine ('A run object could not be disposed: {0}' -f $_.Exception.Message) }
-        try { $runspace.CloseAsync() } catch { Add-LogLine ('A runspace could not be closed: {0}' -f $_.Exception.Message) }
+        try { $ps.Dispose() } catch { Write-ErrorLog ('A run object could not be disposed: {0}' -f $_.Exception.Message) }
+        try { $runspace.CloseAsync() } catch { Write-ErrorLog ('A runspace could not be closed: {0}' -f $_.Exception.Message) }
         throw
     }
     $script:RunJobs[[string]$Run.ActionId] = @{ Run = $Run; PowerShell = $ps; Runspace = $runspace; Handle = $handle; State = $state; AfterRun = $AfterRun; Context = $Context; Detail = @($Detail) }
@@ -1226,7 +1495,7 @@ function Complete-DeviceActionRun {
     $script:RunspaceIdle += ,$Job.Runspace
     $record = $null
     try { $record = Resolve-DeviceInspectorRunResult -Run $run -Result $state.Result -ErrorMessage $problem -Detail ([string[]]@($Job.Detail)) }
-    catch { $record = New-DeviceInspectorActionRecord -Action ([string]$run.Action) -ComputerName ([string]$run.ComputerName) -DryRun ([bool]$run.DryRun) -Succeeded $false -ActionId ([string]$run.ActionId) -Summary ('The result could not be read: {0}' -f $_.Exception.Message) -Steps @() }
+    catch { $record = New-DeviceInspectorActionRecord -Action ([string]$run.Action) -ComputerName ([string]$run.ComputerName) -DryRun ([bool]$run.DryRun) -Succeeded $false -ActionId ([string]$run.ActionId) -Summary 'The result could not be read. The action log has the reason.' -Steps @() -Detail @([string]$_.Exception.Message) }
     try { Write-ActionResult -Result $record }
     catch { Write-Log -Message ('Action {0}: the result could not be written: {1}' -f $run.ActionId, $_.Exception.Message) -Level ERROR -Quiet }
     try { [void](Unregister-DeviceInspectorActionRun -Runs $script:RunList -ActionId ([string]$run.ActionId)) }
@@ -1272,16 +1541,16 @@ function Start-ActionWork {
             $p = $A.Parameters
             $State.Result = & $A.Function @p
         }
-        catch { $State.ErrorMsg = $_.Exception.Message }
+        catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
         if ($State.ErrorMsg) {
-            $failed = New-DeviceInspectorActionRecord -Action $script:ActionPending.Name -ComputerName $script:ActionPending.Device -DryRun ([bool]$script:ActionPending.DryRun) -Succeeded $false -ActionId ([string]$script:ActionPending.Id) -Summary ([string]$State.ErrorMsg) -Steps ([string[]]@($script:ActionPending.Detail))
+            $failed = New-DeviceInspectorActionRecord -Action $script:ActionPending.Name -ComputerName $script:ActionPending.Device -DryRun ([bool]$script:ActionPending.DryRun) -Succeeded $false -ActionId ([string]$script:ActionPending.Id) -Summary 'The action failed. The action log has the reason.' -Steps ([string[]]@($script:ActionPending.Detail)) -Detail @([string]$State.ErrorMsg)
             Write-ActionResult -Result $failed
-            Add-LogLine ('Action failed: {0}' -f $State.ErrorMsg)
-            Set-StatusText 'Action failed. See the log.'
-            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message ([string]$State.ErrorMsg) -Icon Error)
+            Add-LogLine 'Action failed. The action log has the reason.'
+            Set-StatusText 'Action failed. The action log has the reason.'
+            [void](Show-ThemedMessage -Owner $window -Title 'Action' -Message 'The action failed. The action log has the reason.' -Icon Error)
             return
         }
         $r = Add-DeviceInspectorActionId -Result $State.Result -ActionId ([string]$script:ActionPending.Id)
@@ -1289,7 +1558,7 @@ function Start-ActionWork {
         Write-ActionResult -Result $r
         Update-StatusBarSummary
         $icon = $(if ($r.Succeeded) { 'Info' } else { 'Error' })
-        [void](Show-ThemedMessage -Owner $window -Title 'Action result' -Message ('{0} on {1}, {2} (ID {3}): {4}' -f $r.Action, $r.ComputerName, $r.Mode, $script:ActionPending.Id, $r.Summary) -Icon $icon)
+        [void](Show-ThemedMessage -Owner $window -Title 'Action Result' -Message ('{0} on {1}, {2} (ID {3}): {4}' -f $r.Action, $r.ComputerName, $r.Mode, $script:ActionPending.Id, $r.Summary) -Icon $icon)
         if ($r.Succeeded -and -not $r.DryRun -and $script:ActionAfterRun) { & $script:ActionAfterRun $r $script:ActionContext }
     }
 }
@@ -1467,23 +1736,24 @@ function Invoke-AddToCollection {
     Start-BackgroundWork -Title 'Reading the device collections' -Step 'Connecting to the site...' -Arguments $arguments -Work {
         param($A, $State)
         try { $State.Result = @(Get-DeviceInspectorCollectionList -SiteServer $A.Server -SiteCode $A.Code) }
-        catch { $State.ErrorMsg = $_.Exception.Message }
+        catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
         Update-StatusBarSummary
         if ($State.ErrorMsg) {
-            Add-LogLine ('Add to collection: the collections cannot be read: {0}' -f $State.ErrorMsg)
-            [void](Show-ThemedMessage -Owner $window -Title 'Add to collection' -Message ([string]$State.ErrorMsg) -Icon Error)
+            Write-ErrorLog ('Add to collection: the collections cannot be read: {0}' -f $State.ErrorMsg)
+            Add-LogLine 'Add to collection: the collections cannot be read. The log file has the reason.'
+            [void](Show-ThemedMessage -Owner $window -Title 'Add to Collection' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The collections cannot be read. Check the site server, the site code and your account rights. The log file has the reason.' }) -Icon Error)
             return
         }
         $choices = @(Select-DeviceInspectorAddableCollection -Collections @($State.Result) -Rows @($gridCollections.ItemsSource))
         Add-LogLine ('Add to collection: {0} device collections, {1} to pick from.' -f @($State.Result).Count, $choices.Count)
         if ($choices.Count -eq 0) {
-            [void](Show-ThemedMessage -Owner $window -Title 'Add to collection' -Message 'The site has no device collection to pick: each one is built in or already has a direct rule for the device.' -Icon Info)
+            [void](Show-ThemedMessage -Owner $window -Title 'Add to Collection' -Message 'The site has no device collection to pick: each one is built in or already has a direct rule for the device.' -Icon Info)
             return
         }
-        $picked = Show-CollectionPickerDialog -Owner $window -Collections $choices -Folders @() -Title 'Add to collection' -IncludeBuiltIn $false
+        $picked = Show-CollectionPickerDialog -Owner $window -Collections $choices -Folders @() -Title 'Add to Collection' -IncludeBuiltIn $false
         if (-not $picked) { Add-LogLine 'Add to collection: no collection picked.'; return }
         Invoke-DeviceAction -SiteAction -Name 'Add to collection' -Function 'Invoke-DeviceInspectorCollectionChange' `
             -Parameters @{ CollectionId = [string]$picked.CollectionID; Operation = 'Add'; ExpectedResourceId = [int]$script:Inspection.Site.ResourceId } `
@@ -1511,7 +1781,7 @@ function Invoke-DeviceListSearch {
     if ($collection -and $collection -notmatch '^[A-Z0-9]{8}$') { $problems += 'A collection ID has eight letters and digits, for example SMS00001.' }
     if ($problems.Count -gt 0) {
         Add-LogLine ('Device list: {0}' -f ($problems -join ' '))
-        [void](Show-ThemedMessage -Owner $window -Title 'Device list' -Message ($problems -join [Environment]::NewLine) -Icon Warn)
+        [void](Show-ThemedMessage -Owner $window -Title 'Device List' -Message ($problems -join [Environment]::NewLine) -Icon Warn)
         return
     }
     $arguments = @{ Server = $check.SiteServer; Code = $check.SiteCode; Pattern = $pattern; Collection = $collection }
@@ -1519,17 +1789,18 @@ function Invoke-DeviceListSearch {
     Start-BackgroundWork -Title 'Reading the device list' -Step 'Connecting to the site...' -Arguments $arguments -Work {
         param($A, $State)
         try { $State.Result = Get-DeviceInspectorDeviceList -SiteServer $A.Server -SiteCode $A.Code -NamePattern $A.Pattern -CollectionId $A.Collection }
-        catch { $State.ErrorMsg = $_.Exception.Message }
+        catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
         Update-StatusBarSummary
         if ($State.ErrorMsg) {
-            Add-LogLine ('Device list failed: {0}' -f $State.ErrorMsg)
+            Write-ErrorLog ('Device list failed: {0}' -f $State.ErrorMsg)
+            Add-LogLine 'Device list failed. The log file has the reason.'
             $gridDeviceList.ItemsSource = @()
-            $txtListSummary.Text = 'The search failed. See the log.'
+            $txtListSummary.Text = 'The search failed. The log file has the reason.'
             Update-ControlState
-            [void](Show-ThemedMessage -Owner $window -Title 'Device list' -Message ([string]$State.ErrorMsg) -Icon Error)
+            [void](Show-ThemedMessage -Owner $window -Title 'Device List' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The search failed. Check the site server, the site code and your account rights. The log file has the reason.' }) -Icon Error)
             return
         }
         $list = $State.Result
@@ -1568,7 +1839,10 @@ $gridDeviceList.Add_SelectionChanged({ Update-ControlState })
 $btnOpenLog.Add_Click({
     if (-not (Test-Path -LiteralPath $script:ToolLogPath)) { Add-LogLine ('The log file does not exist yet: {0}' -f $script:ToolLogPath); return }
     try { Invoke-Item -LiteralPath $script:ToolLogPath -ErrorAction Stop; Add-LogLine ('Opened the log file: {0}' -f $script:ToolLogPath) }
-    catch { Add-LogLine ('The log file cannot be opened: {0}' -f $_.Exception.Message) }
+    catch {
+        Write-ErrorLog ('The log file cannot be opened: {0}' -f $_.Exception.Message)
+        Add-LogLine 'The log file cannot be opened with the default program of Windows.'
+    }
 })
 
 # === Window state (geometry logic: SuiteCommon) ===
@@ -1616,7 +1890,7 @@ $window.Add_Loaded({
     $chkSiteOnly.IsChecked = [bool]$global:Prefs['SiteOnly']
     Update-ControlState
     Update-StatusBarSummary
-    Add-LogLine 'Device Inspector ready. Enter a device name and a site server, then click Inspect. The tool only reads until you turn on Enable actions.'
+    Add-LogLine 'Device Inspector ready. Enter a device name and a site server, then click Inspect. The tool only reads until you turn on Enable Actions.'
     Add-LogLine ('Log file: {0}' -f $script:ToolLogPath)
 })
 

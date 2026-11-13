@@ -35,8 +35,14 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $lib = Join-Path $PWD 'Lib'
-          $files = Get-ChildItem -Recurse -File -Include *.ps1, *.psm1, *.psd1 | Where-Object { -not $_.FullName.StartsWith($lib, [System.StringComparison]::OrdinalIgnoreCase) }
+          # The filter works on the path relative to the repository root: Lib, .git and .claude are never walked.
+          $root = $PWD.Path.TrimEnd('\')
+          $skip = @('Lib', '.git', '.claude')
+          $files = foreach ($top in Get-ChildItem -LiteralPath $root -Force) {
+            if ($skip -contains $top.Name) { continue }
+            if ($top.PSIsContainer) { Get-ChildItem -LiteralPath $top.FullName -Recurse -File -Include *.ps1, *.psm1, *.psd1 }
+            elseif ($top.Extension -in '.ps1', '.psm1', '.psd1') { $top }
+          }
           $findings = foreach ($file in $files) {
             for ($attempt = 1; $attempt -le 3; $attempt++) {
               try { Invoke-ScriptAnalyzer -Path $file.FullName -Settings (Join-Path $PWD 'PSScriptAnalyzerSettings.psd1') -ErrorAction Stop; break }

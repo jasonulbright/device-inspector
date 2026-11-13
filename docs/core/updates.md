@@ -21,7 +21,9 @@ An inspection that read the site, the device or both.
 1. Select **Updates** in the sidebar.
 2. Read the columns: **Source**, **Article**, **Severity**, **State**, **Deadline (UTC)** and **Title**.
 
-![The Updates panel of the workstation](../images/updates-panel.png)
+![The Updates panel of the workstation, which has no required update](../images/updates-panel.png)
+
+The workstation in the image has no required update, so the list is empty. The next image shows a server with rows.
 
 A **Site** row with the state `Required (superseded)` is an update that a newer update replaces. The site still lists it. Expired updates are left out.
 
@@ -31,7 +33,7 @@ A **Device** row has the evaluation state of the client, for example `None`. The
 
 ### The right-click menu
 
-A right-click on a row opens **Install selected pending updates...** and **Install all pending updates...**. They need **Enable actions**. An entry that is off shows the reason as its tooltip. See [Actions](actions.md#install-pending-updates).
+A right-click on a row opens **Install Selected Pending Updates...** and **Install All Pending Updates...**. They need **Enable Actions**. An entry that is off shows the reason as its tooltip. See [Actions](actions.md#install-pending-updates).
 
 ![The right-click menu of the Updates grid. Both entries are off, because the device lists no missing update](../images/updates-context-menu.png)
 
@@ -50,7 +52,7 @@ A right-click on a row opens **Install selected pending updates...** and **Insta
 | **Deadline (UTC)** | The deadline, when one exists. |
 | **Title** | The update title. |
 
-The grid is read only. A right-click opens a menu with **Install selected pending updates...** and **Install all pending updates...**. They install updates on the device and need **Enable actions**. See [Actions](actions.md#install-pending-updates).
+The grid is read only. A right-click opens a menu with **Install Selected Pending Updates...** and **Install All Pending Updates...**. They install updates on the device and need **Enable Actions**. See [Actions](actions.md#install-pending-updates).
 
 ## Limits
 
@@ -61,8 +63,8 @@ The grid is read only. A right-click opens a menu with **Install selected pendin
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| Only **Device** rows show. | **Site only** was off and the site part failed, or the site server box was empty. | Read the **Problems** panel. Enter the site server. |
-| Only **Site** rows show. | **Site only** was on, or the device did not answer. | Clear **Site only**. Read the **Problems** panel. |
+| Only **Device** rows show. | **Site Only** was off and the site part failed, or the site server box was empty. | Read the **Problems** panel. Enter the site server. |
+| Only **Site** rows show. | **Site Only** was on, or the device did not answer. | Clear **Site Only**. Read the **Problems** panel. |
 
 ## Links
 

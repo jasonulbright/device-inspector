@@ -30,6 +30,24 @@ function Get-ContrastViolation {
                 }
             }
         }
+        # A selected row or item shows white text on the theme highlight, and the text keeps 4.5:1.
+        foreach ($r in @(if ($v.PSObject.Properties['Selected']) { $v.Selected })) {
+            if ($null -ne $r.TextRatio -and $r.TextRatio -lt 4.5) { [void]$lines.Add(('selected {0}: text = {1} ({2})' -f $r.Type, $r.TextRatio, $r.Detail)) }
+            if (-not $r.IsHighlight) { [void]$lines.Add(('selected {0}: the backdrop {1} is not the theme highlight' -f $r.Type, $r.Backdrop)) }
+        }
+        foreach ($r in @(if ($v.PSObject.Properties['ComboItems']) { $v.ComboItems })) {
+            if (-not $r.Applied) { [void]$lines.Add(('combo box {0}: the {1} state was not applied ({2})' -f $r.Name, $r.State, $r.Detail)); continue }
+            if ($null -ne $r.TextRatio -and $r.TextRatio -lt 4.5) { [void]$lines.Add(('combo box {0} {1} item: text = {2} ({3})' -f $r.Name, $r.State, $r.TextRatio, $r.Detail)) }
+            if (-not $r.IsHighlight) { [void]$lines.Add(('combo box {0} {1} item: the backdrop is not the theme highlight' -f $r.Name, $r.State)) }
+        }
+        # A button shows the hover border and the keyboard focus border (3:1), and keeps 4.5:1 text in the hover and the pressed state.
+        foreach ($r in @(if ($v.PSObject.Properties['ButtonStates']) { $v.ButtonStates })) {
+            if (-not ($r.Parts -and $r.Keys -and $r.HoverApplied -and $r.FocusApplied -and $r.PressedApplied)) { [void]$lines.Add(('{0}: the state probe did not run (parts {1}, keys {2}, hover {3}, focus {4}, pressed {5})' -f $r.Name, $r.Parts, $r.Keys, $r.HoverApplied, $r.FocusApplied, $r.PressedApplied)); continue }
+            if ($null -ne $r.HoverBorder -and $r.HoverBorder -lt 3.0) { [void]$lines.Add(('{0}:HoverBorder = {1}' -f $r.Name, $r.HoverBorder)) }
+            if ($null -ne $r.FocusBorder -and $r.FocusBorder -lt 3.0) { [void]$lines.Add(('{0}:FocusBorder = {1}' -f $r.Name, $r.FocusBorder)) }
+            if ($null -ne $r.HoverText -and $r.HoverText -lt 4.5) { [void]$lines.Add(('{0}:HoverText = {1}' -f $r.Name, $r.HoverText)) }
+            if ($null -ne $r.PressedText -and $r.PressedText -lt 4.5) { [void]$lines.Add(('{0}:PressedText = {1}' -f $r.Name, $r.PressedText)) }
+        }
         if ($v.TitleBar) {
             foreach ($state in 'Active', 'Inactive') {
                 $ratio = $v.TitleBar.$state
