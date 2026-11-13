@@ -1902,7 +1902,7 @@ $window.Add_Loaded({
     Update-FooterSite
     Update-ControlState
     Update-StatusBarSummary
-    Add-LogLine 'Device Inspector ready. Enter a device name and a site server, then click Inspect. The tool only reads until you turn on Enable Actions.'
+    Add-LogLine 'Device Inspector ready. Enter a device name, then click Inspect. Set the site server in Options. The tool only reads until you turn on Enable Actions.'
     Add-LogLine ('Log file: {0}' -f $script:ToolLogPath)
 })
 

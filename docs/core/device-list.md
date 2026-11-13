@@ -53,7 +53,7 @@ The search reads with `Get-CMDevice -Name <pattern> -Fast`, or with `Get-CMColle
 
 | Message | Cause | Fix |
 |---|---|---|
-| Set a site server in Options. ... | The site server is empty. | Set the site server and the site code in **Options**. |
+| Set a site server in Options. The device list reads the site. | The site server is empty. | Set the site server and the site code in **Options**. |
 | Enter a name pattern, a collection ID, or both. | Both boxes are empty. | Enter a pattern or a collection ID. |
 | A name pattern without a collection needs at least one letter or digit. | The pattern is only `*` or `?`. | Add a letter or a digit, or enter a collection ID. |
 | The search failed. The log file has the reason. | The site cannot be opened or read. | Check the site server, the site code and the account rights. |

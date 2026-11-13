@@ -392,6 +392,18 @@ Describe 'Footer guard' {
             }
         }
 
+        It 'still flags a read-only name inside a function, and exempts it at script scope' {
+            $saved = $script:FtConfig.ReadOnlyName
+            try {
+                $script:FtConfig.ReadOnlyName = @('txtWizSiteCode')
+                @(Get-FtCodeProblem -Text 'function Show-Other { $c = $w.FindName(''txtWizSiteCode'') }' -Source 'sample').Count | Should -Be 1
+                @(Get-FtCodeProblem -Text '$c = $w.FindName(''txtWizSiteCode'')' -Source 'sample') | Should -BeNullOrEmpty
+                $script:FtConfig.ReadOnlyName = @('txtWizSiteCode@Show-Other')
+                @(Get-FtCodeProblem -Text 'function Show-Other { $c = $w.FindName(''txtWizSiteCode'') }' -Source 'sample') | Should -BeNullOrEmpty
+            }
+            finally { $script:FtConfig.ReadOnlyName = $saved }
+        }
+
         It 'fails an editable site box in a XAML here-string outside the Options functions' {
             $nl = [Environment]::NewLine
             $bad = 'function Show-Other {' + $nl + '$x = @''' + $nl + '<StackPanel ' + $script:FtSampleNs + '><TextBox x:Name="txtProvider"/></StackPanel>' + $nl + '''@' + $nl + '}'

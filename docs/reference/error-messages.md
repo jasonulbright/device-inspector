@@ -24,7 +24,7 @@ None.
 | Message | Where | Cause | Fix |
 |---|---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | Dialog **Inspect** and log | The device box is empty or holds another character. | Enter a valid device name. |
-| The site server is a computer name or an FQDN. | Dialog **Inspect** and log | The site server holds another character. | Enter a computer name or an FQDN. |
+| The site server is a computer name or an FQDN. | Dialog **Inspect** and log | The saved site server has another character. | Correct it in **Options**. |
 | The site code is three letters or digits. | Dialog **Inspect** and log | The saved site code has another form. | Enter three letters or digits in **Options**. |
 | A site code needs a site server. | Dialog **Inspect** and log | A site code is set and the site server is empty. | Set the site server in **Options**, or clear the site code. |
 | A site server needs a site code. Enter it in Options. | Dialog **Inspect** and log | The site server is set and the site code is empty. | Enter the site code in **Options**. |

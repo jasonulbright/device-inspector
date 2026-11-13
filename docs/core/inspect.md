@@ -82,7 +82,7 @@ The **Enable Actions** switch at the bottom of the sidebar is off at each start.
 | Message | Cause | Fix |
 |---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | The trimmed name is empty, is longer than 255 characters, starts with a dot or holds another character. | Enter 1 to 255 letters, digits, dots, hyphens or underscores. Do not start with a dot. |
-| The site server is a computer name or an FQDN. | The site server box holds another character. | Enter a computer name or an FQDN. |
+| The site server is a computer name or an FQDN. | The saved site server has another character. | Correct it in **Options**. |
 | A site code needs a site server. | A site code is set in Options and the site server is empty. | Set a site server in **Options**, or clear the site code. |
 | A site server needs a site code. Enter it in Options. | The site server box holds a value and Options holds no site code. | Enter the site code in **Options**. |
 
