@@ -35,7 +35,7 @@ None. Some fixes need rights on the site or on the device.
 | **Export JSON** and **Export HTML** are off. | No inspection exists yet. | Select **Inspect**. |
 | A message says "A site server needs a site code. Enter it in Options." | The site server is set and the site code is empty. | Enter the site code in **Options**. |
 | **OK** in **Options** opens a message box with the title **Device Inspector**, and the dialog stays open. | The site server or the site code has a wrong value. | Read the message. Correct the value. See [Options dialog](core/options.md). |
-| The status bar shows "Enter a site server, or clear Site Only." | **Site Only** is on and the site server box is empty. | Enter the site server, or clear **Site Only** to inspect the device. |
+| The status bar shows "Set a site server in Options, or clear Site Only." | **Site Only** is on and the site server is empty. | Set the site server in **Options**, or clear **Site Only** to inspect the device. |
 
 ## Problems panel
 

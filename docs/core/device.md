@@ -78,7 +78,7 @@ The group **Inventory check** shows the state of the site inventory against the 
 | Message or symptom | Cause | Fix |
 |---|---|---|
 | The device groups are missing. | **Site Only** was on, or the device did not answer. | Clear **Site Only**. Read the **Problems** panel. |
-| The site record is missing. | The site server box was empty, or the site has no record. | Enter the site server. Check the device name. |
+| The site record is missing. | The site server was empty, or the site has no record. | Set the site server in **Options**. Check the device name. |
 
 ## Links
 

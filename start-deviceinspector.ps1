@@ -183,7 +183,7 @@ $null = $txtAppTitle
 # Shows the saved site code and site server at the right end of the footer. The footer is read-only text.
 function Update-FooterSite {
     try { Update-SuiteFooter -Window $window -SiteCode ([string]$global:Prefs.SiteCode) -SiteServer ([string]$global:Prefs.SMSProvider) }
-    catch { Add-LogLine 'The footer was not updated.' }
+    catch { Write-ErrorLog ('The footer was not updated: {0}' -f $_.Exception.Message) }
 }
 
 function Add-LogLine {
@@ -1888,7 +1888,7 @@ $window.Add_Loaded({
     try {
         Initialize-SuiteFooter -Window $window -StatusName 'txtStatus' -OnOpenOptions { Show-OptionsDialog; Update-FooterSite } | Out-Null
     }
-    catch { Add-LogLine 'The footer was not set up.' }
+    catch { Write-ErrorLog ('The footer was not set up: {0}' -f $_.Exception.Message) }
     Restore-WindowState -Window $window -Path $global:WindowStatePath -OnStateLoaded {
         param($s)
         if ($s.ActiveView -in @('Device list', 'Device', 'Applications', 'Updates', 'Collections', 'Problems')) { Set-ActiveView -View ([string]$s.ActiveView) }

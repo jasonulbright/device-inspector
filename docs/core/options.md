@@ -54,7 +54,7 @@ Select **OK** in the message box, correct the value, and select **OK** in the di
 
 | Control | Default | Effect |
 |---|---|---|
-| **Site Server (SMS Provider FQDN)** | Empty, or the value that the suite launcher hands over | The SMS Provider computer. The site server box on the Inspect bar starts with this value. |
+| **Site Server (SMS Provider FQDN)** | Empty, or the value that the suite launcher hands over | The SMS Provider computer. The footer and the read-only site server box on the Inspect bar show this value, for example `Site MCM · cm01.contoso.com`. |
 | **Site Code** | Empty, or the value that the suite launcher hands over | A three-character site code. Required with a site server. The tool no longer asks the provider for it. |
 
 The text under the boxes says that the tool connects with the Windows account that runs it and stores no password, that the tool needs the Configuration Manager console on this computer, that the account needs local administrator rights on the device (WinRM), and that a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role, that an account with fewer rights on the site is not tested, and that the tool only reads. The rights statement was tested on the lab only. For another account, check the Configuration Manager roles and scopes in your site. An account with other rights is not tested.
