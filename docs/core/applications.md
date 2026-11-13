@@ -27,7 +27,7 @@ An inspection that read the device. A site is not needed.
 ### Read the list
 
 1. Select **Applications** in the sidebar.
-2. Read one row for each uninstall key. The columns are **Application**, **Version**, **Publisher**, **Install date**, **Type** and **View**.
+2. Read one row for each uninstall key. The columns are **Application**, **Version**, **Publisher**, **Install Date**, **Type** and **View**.
 
 ![The Applications panel with the filter micro](../images/apps-panel.png)
 
@@ -53,7 +53,7 @@ The two filters work together.
 
 ### The right-click menu
 
-A right-click on a row opens a menu with **Uninstall...** and **Repair...**. They work from the uninstall key of the row and need **Enable actions**. An entry that is off shows the reason as its tooltip. See [Actions](actions.md#uninstall-or-repair-an-application).
+A right-click on a row opens a menu with **Uninstall...** and **Repair...**. They work from the uninstall key of the row and need **Enable Actions**. An entry that is off shows the reason as its tooltip. See [Actions](actions.md#uninstall-or-repair-an-application).
 
 ![The right-click menu of the Applications grid on an MSI row, with Uninstall and Repair on](../images/apps-context-menu.png)
 
@@ -91,7 +91,7 @@ A right-click on a row opens a menu with **Uninstall...** and **Repair...**. The
 | Message or symptom | Cause | Fix |
 |---|---|---|
 | The list is empty. | No inspection yet, or the device part failed. | Select **Inspect**. Read the **Problems** panel. |
-| **Uninstall...** or **Repair...** is off. | **Enable actions** is off, no row is selected, or the entry does not allow the action. | Hover over the entry to read the reason. |
+| **Uninstall...** or **Repair...** is off. | **Enable Actions** is off, no row is selected, or the entry does not allow the action. | Hover over the entry to read the reason. |
 | An application is missing from the list. | It is a per-user install, or it has no `DisplayName`. | None. The tool lists machine-wide keys with a display name only. |
 
 ## Links

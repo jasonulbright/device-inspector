@@ -49,7 +49,12 @@ $script:SampleRows = @{
 $script:MainMeasureScript = {
     $cfg = $Arguments.Config
     $w = Open-TestWindow -XamlPath (Join-Path $Root $cfg.Xaml) -Dark $Arguments.Dark -Width $Arguments.W -Height $Arguments.H
-    foreach ($grid in $Arguments.Rows.Keys) { $w.FindName($grid).ItemsSource = @($Arguments.Rows[$grid]) }
+    foreach ($grid in $Arguments.Rows.Keys) {
+        $g = $w.FindName($grid)
+        $g.ItemsSource = @($Arguments.Rows[$grid])
+        # The first row is selected, so that the selected state (white text on the highlight) is measured too.
+        if (@($Arguments.Rows[$grid]).Count -gt 0) { $g.SelectedIndex = 0 }
+    }
     # Entered text, so the contrast of the input text is measured too.
     $w.FindName('txtDevice').Text = 'device-a'
     $w.FindName('txtSiteServer').Text = 'site.example.test'
@@ -64,6 +69,9 @@ $script:MainMeasureScript = {
         foreach ($v in $cfg.Views) { $w.FindName($v.Container).Visibility = if ($v.Name -eq $view.Name) { 'Visible' } else { 'Collapsed' } }
         Initialize-ShellTheme -Window $w -Dark $Arguments.Dark -Views $cfg.Views `
             -OptionsButtonName $cfg.OptionsButton -LogLabelName $cfg.LogLabel -ActiveView $view.Name
+        # An assignment keeps a single result an array. An if expression in the object below would unroll it.
+        $selected = @(); $comboItems = @(); $buttonStates = @()
+        if ($full) { $selected = @(Get-SelectedItemContrast $w); $comboItems = @(Get-ComboItemContrast $w); $buttonStates = @(Get-ButtonStateContrast $w) }
         $out += [PSCustomObject]@{
             View        = $view.Name
             Text        = if ($full) { @(Get-TextContrast $w) } else { @() }
@@ -71,6 +79,9 @@ $script:MainMeasureScript = {
             Offscreen   = @(Get-OffscreenControls $w)
             Interactive = if ($full) { @(Get-InteractiveContrast $w) } else { @() }
             TitleBar    = if ($full) { Get-TitleBarContrast $w } else { $null }
+            Selected    = $selected
+            ComboItems  = $comboItems
+            ButtonStates = $buttonStates
         }
     }
     $w.Close()
@@ -105,6 +116,7 @@ $script:DialogMeasureScript = {
                 Text = @(Get-TextContrast $w); Interactive = @(Get-InteractiveContrast $w)
                 Clipped = @(Get-ClippedText $w); Offscreen = @(Get-OffscreenControls $w)
                 Overflow = @(Get-VerticalOverflow $w $panes)
+                ButtonStates = @(Get-ButtonStateContrast $w)
                 TitleBar = Get-TitleBarContrast $w
             }
         }
@@ -129,6 +141,7 @@ $script:ActionDialogMeasureScript = {
         View = 'Action confirmation'
         Text = @(Get-TextContrast $w); Interactive = @(Get-InteractiveContrast $w)
         Clipped = @(Get-ClippedText $w); Offscreen = @(Get-OffscreenControls $w)
+        ButtonStates = @(Get-ButtonStateContrast $w)
         TitleBar = Get-TitleBarContrast $w
     }
     $w.Close()

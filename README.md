@@ -5,7 +5,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D4)](#requirements)
 [![License](https://img.shields.io/github/license/jasonulbright/device-inspector)](LICENSE)
 
-Read the facts of one device from a Configuration Manager site and from the device itself, in one window: operating system, client health, site record, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report. The inspection is read only. Actions, such as a client policy update, run only when **Enable actions** is on, after a confirmation with a dry run, and each one goes to an action log.
+Read the facts of one device from a Configuration Manager site and from the device itself, in one window: operating system, client health, site record, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report. The inspection is read only. Actions, such as a client policy update, run only when **Enable Actions** is on, after a confirmation with a dry run, and each one goes to an action log.
 
 ![Device Inspector](docs/images/device-panel.png)
 
@@ -15,14 +15,14 @@ The user guide is in [docs/index.md](docs/index.md). It has one page for each pa
 
 ## Features
 
-- One window, six panels: Device list, Device, Applications, Updates, Collections, Problems.
-- Shows the applications that the device lists in its uninstall registry keys now (64-bit and 32-bit). Each row has a type, MSI or EXE. A right-click uninstalls or repairs an entry from its key, behind Enable actions.
+- One window, six panels: Device List, Device, Applications, Updates, Collections, Problems.
+- Shows the applications that the device lists in its uninstall registry keys now (64-bit and 32-bit). Each row has a type, MSI or EXE. A right-click uninstalls or repairs an entry from its key, behind Enable Actions.
 - Lists the updates that the site requires for the device and the updates pending in the client policy on the device.
 - Lists the collections of the device and the deployments that target them.
 - Keeps going when one part fails. A part that fails (a device that is off, a device the site does not know) is listed under Problems. The other parts still run.
 - Exports the inspection as JSON or as a self-contained HTML report.
 - Read only. The tool reads the site with ConfigurationManager cmdlets (and `SELECT` queries through `Invoke-CMWmiQuery` where no cmdlet exists) and reads the device with one remote script block. The inspection never changes the site or the device. A test checks the inspection code and the window script for state-changing commands.
-- Actions behind a switch. **Enable actions** is off at each start. Each action asks for a confirmation that shows the device count, offers a dry run, and writes to `Logs\DeviceInspector-actions.log` with an action ID. An action on a device runs in the background, so you can work on other devices; a device runs one action at a time. See [docs/core/actions.md](docs/core/actions.md).
+- Actions behind a switch. **Enable Actions** is off at each start. Each action asks for a confirmation that shows the device count, offers a dry run, and writes to `Logs\DeviceInspector-actions.log` with an action ID. An action on a device runs in the background, so you can work on other devices; a device runs one action at a time. See [docs/core/actions.md](docs/core/actions.md).
 - Dark and light themes with a runtime toggle, like the other tools of the AppPackager Suite.
 
 ## Requirements
@@ -48,7 +48,7 @@ The window connects with the Windows account that runs it. It stores no password
 3. Enter the device name and the site server (the SMS Provider FQDN). **Options** sets the site server and the site code. The site code is required when a site server is set.
 4. Click **Inspect**.
 
-Leave the site server empty to read only the device. Select **Site only** to read only the site. Inside the AppPackager Suite, the launcher hands its site code and provider to the tool.
+Leave the site server empty to read only the device. Select **Site Only** to read only the site. Inside the AppPackager Suite, the launcher hands its site code and provider to the tool.
 
 ## Panels
 
@@ -90,7 +90,7 @@ The window wraps the same module as the script `Invoke-DeviceInspector.ps1`. The
 
 | File | Purpose |
 |------|---------|
-| `DeviceInspector.prefs.json` | Theme, site code, site server, the last device name, Site only |
+| `DeviceInspector.prefs.json` | Theme, site code, site server, the last device name, Site Only |
 | `DeviceInspector.windowstate.json` | Window size, position and last-used panel |
 | `Logs\DeviceInspector-*.log` | Per-session tool log |
 | `Logs\DeviceInspector-startup-*.txt`, `Logs\DeviceInspector-crash-*.txt` | Start transcript; details of an unhandled error |

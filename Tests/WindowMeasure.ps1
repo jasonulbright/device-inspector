@@ -235,4 +235,137 @@ $script:MeasureFunctions = {
         }
         return $rows
     }
+
+    function Get-PropertyKeyOf {
+        # A read-only dependency property has a key that is not public (IsMouseOver, IsPressed, IsHighlighted).
+        # The test sets the property through the key, so that the real triggers of the template run.
+        param([type]$Type, [string]$Name)
+        $flags = [System.Reflection.BindingFlags]'Static, Public, NonPublic, DeclaredOnly'
+        $t = $Type
+        while ($t) {
+            $f = $t.GetField($Name, $flags)
+            if ($f) { return $f.GetValue($null) }
+            $t = $t.BaseType
+        }
+        return $null
+    }
+
+    function Get-SelectedItemContrast {
+        # One row per selected data grid row and list item in the visible tree: the text contrast on its
+        # backdrop, and whether the backdrop is the theme highlight (white text on blue).
+        param($Window)
+        $hl = $Window.TryFindResource('MahApps.Brushes.Highlight')
+        $hlColor = if ($hl -is [System.Windows.Media.SolidColorBrush]) { $hl.Color } else { $null }
+        $rows = @()
+        foreach ($e in (Get-VisualDescendants $Window)) {
+            $isItem = ($e -is [System.Windows.Controls.DataGridRow]) -or ($e -is [System.Windows.Controls.ListBoxItem]) -or ($e -is [System.Windows.Controls.TreeViewItem])
+            if (-not $isItem -or -not $e.IsSelected -or -not (Test-VisibleInTree $e) -or $e.ActualWidth -le 0) { continue }
+            $c = Get-ControlColors $e $Window
+            $own = Get-SolidColor $e.Background
+            $rows += [PSCustomObject]@{
+                Type = $e.GetType().Name; TextRatio = $c.TextRatio; Backdrop = $c.Backdrop; Detail = $c.WorstText
+                IsHighlight = [bool]($hlColor -and $own -and $own.Color -eq $hlColor)
+            }
+        }
+        return $rows
+    }
+
+    function Get-ComboItemContrast {
+        # Opens each visible combo box and measures the selected item and a highlighted item (the highlight is set
+        # through the key of the read-only property, so that the trigger of the item style runs).
+        param($Window)
+        $keyHighlight = Get-PropertyKeyOf ([System.Windows.Controls.ComboBoxItem]) 'IsHighlightedPropertyKey'
+        $hl = $Window.TryFindResource('MahApps.Brushes.Highlight')
+        $hlColor = if ($hl -is [System.Windows.Media.SolidColorBrush]) { $hl.Color } else { $null }
+        $rows = @()
+        foreach ($cb in @(Get-VisualDescendants $Window | Where-Object { $_ -is [System.Windows.Controls.ComboBox] -and $_.Name -and (Test-VisibleInTree $_) -and $_.ActualWidth -gt 0 })) {
+            $cb.IsDropDownOpen = $true
+            Wait-Layout $Window 3
+            try {
+                for ($i = 0; $i -lt $cb.Items.Count; $i++) {
+                    $item = $cb.ItemContainerGenerator.ContainerFromIndex($i)
+                    if (-not $item) { continue }
+                    if ($item.IsSelected) {
+                        $c = Get-ControlColors $item $Window
+                        $own = Get-SolidColor $item.Background
+                        $rows += [PSCustomObject]@{ Name = $cb.Name; State = 'selected'; Applied = $true; TextRatio = $c.TextRatio; Detail = $c.WorstText; IsHighlight = [bool]($hlColor -and $own -and $own.Color -eq $hlColor) }
+                    }
+                    elseif ($keyHighlight) {
+                        $item.SetValue($keyHighlight, $true)
+                        Wait-Layout $Window 2
+                        $c = Get-ControlColors $item $Window
+                        $own = Get-SolidColor $item.Background
+                        $rows += [PSCustomObject]@{ Name = $cb.Name; State = 'highlighted'; Applied = [bool]$item.GetValue([System.Windows.Controls.ComboBoxItem]::IsHighlightedProperty); TextRatio = $c.TextRatio; Detail = $c.WorstText; IsHighlight = [bool]($hlColor -and $own -and $own.Color -eq $hlColor) }
+                        $item.ClearValue($keyHighlight)
+                        break
+                    }
+                    else { $rows += [PSCustomObject]@{ Name = $cb.Name; State = 'highlighted'; Applied = $false; TextRatio = $null; Detail = 'no key'; IsHighlight = $false } }
+                }
+            }
+            finally { $cb.IsDropDownOpen = $false; Wait-Layout $Window 2 }
+        }
+        return $rows
+    }
+
+    function Get-ButtonStateColors {
+        # Text and border ratios of the parts of the button template (Bd, Cp) in the state that is now set.
+        param($Button, $Window, $Outside)
+        $bd = $Button.Template.FindName('Bd', $Button)
+        $cp = $Button.Template.FindName('Cp', $Button)
+        if (-not $bd -or -not $cp) { return $null }
+        $fillBrush = Get-SolidColor $bd.Background
+        $fill = if ($fillBrush -and ($fillBrush.Color.A * $fillBrush.Opacity) -gt 0) { Merge-Color $fillBrush.Color $fillBrush.Opacity $Outside } else { $Outside }
+        $textBrush = Get-SolidColor ([System.Windows.Documents.TextElement]::GetForeground($cp))
+        $text = if ($textBrush) { Merge-Color $textBrush.Color $textBrush.Opacity $fill } else { $null }
+        $borderBrush = Get-SolidColor $bd.BorderBrush
+        $border = if ($borderBrush) { Merge-Color $borderBrush.Color $borderBrush.Opacity $Outside } else { $null }
+        return [PSCustomObject]@{
+            Text = if ($text) { [math]::Round((Get-ContrastRatio $text $fill), 2) } else { $null }
+            Border = if ($border) { [math]::Round((Get-ContrastRatio $border $Outside), 2) } else { $null }
+            BorderColor = if ($border) { $border.ToString() } else { '' }
+        }
+    }
+
+    function Get-ButtonStateContrast {
+        # Probes the hover, keyboard focus and pressed state of every visible enabled named button. The states are set
+        # through the keys of the read-only properties (IsMouseOver, IsKeyboardFocused, IsPressed), so that the real
+        # triggers of the button template run. Each row holds the ratios of the state and whether the state was applied.
+        param($Window)
+        $keyOver = Get-PropertyKeyOf ([System.Windows.UIElement]) 'IsMouseOverPropertyKey'
+        $keyFocus = Get-PropertyKeyOf ([System.Windows.UIElement]) 'IsKeyboardFocusedPropertyKey'
+        $keyPressed = Get-PropertyKeyOf ([System.Windows.Controls.Primitives.ButtonBase]) 'IsPressedPropertyKey'
+        $winBg = (Get-SolidColor $Window.Background)
+        $under = if ($winBg) { Merge-Color $winBg.Color $winBg.Opacity ([System.Windows.Media.Colors]::Black) } else { [System.Windows.Media.Colors]::White }
+        $rows = @()
+        $buttons = @(Get-VisualDescendants $Window | Where-Object { $_ -is [System.Windows.Controls.Button] -and $_.Name -and $_.Name -notlike 'PART_*' -and $_.IsEnabled -and (Test-VisibleInTree $_) -and $_.ActualWidth -gt 0 })
+        foreach ($b in $buttons) {
+            $outside = Get-BackdropColor $b $under $Window
+            $idle = Get-ButtonStateColors $b $Window $outside
+            $row = [ordered]@{ Name = $b.Name; Parts = [bool]$idle; Keys = [bool]($keyOver -and $keyFocus -and $keyPressed); IdleText = $null; IdleBorder = $null; HoverApplied = $false; HoverText = $null; HoverBorder = $null; HoverBorderColor = ''; FocusApplied = $false; FocusBorder = $null; PressedApplied = $false; PressedText = $null }
+            if ($idle) { $row.IdleText = $idle.Text; $row.IdleBorder = $idle.Border }
+            if ($idle -and $keyOver -and $keyFocus -and $keyPressed) {
+                try {
+                    $b.SetValue($keyOver, $true); Wait-Layout $Window 2
+                    $row.HoverApplied = [bool]$b.GetValue([System.Windows.UIElement]::IsMouseOverProperty)
+                    $s = Get-ButtonStateColors $b $Window $outside
+                    $row.HoverText = $s.Text; $row.HoverBorder = $s.Border; $row.HoverBorderColor = $s.BorderColor
+                    $b.SetValue($keyFocus, $true); Wait-Layout $Window 2
+                    $row.FocusApplied = [bool]$b.GetValue([System.Windows.UIElement]::IsKeyboardFocusedProperty)
+                    $s = Get-ButtonStateColors $b $Window $outside
+                    $row.FocusBorder = $s.Border
+                    $b.ClearValue($keyFocus)
+                    $b.SetValue($keyPressed, $true); Wait-Layout $Window 2
+                    $row.PressedApplied = [bool]$b.GetValue([System.Windows.Controls.Primitives.ButtonBase]::IsPressedProperty)
+                    $s = Get-ButtonStateColors $b $Window $outside
+                    $row.PressedText = $s.Text
+                }
+                finally {
+                    $b.ClearValue($keyPressed); $b.ClearValue($keyFocus); $b.ClearValue($keyOver)
+                    Wait-Layout $Window 2
+                }
+            }
+            $rows += [PSCustomObject]$row
+        }
+        return $rows
+    }
 }

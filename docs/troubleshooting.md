@@ -4,7 +4,7 @@ This page lists the most common problems of Device Inspector with their cause an
 
 ## What it does
 
-The page helps you find the fix for a message in a dialog, in the log or on the **Problems** panel. See [Error messages](reference/error-messages.md) for the dialog and command-line messages, and [Problems panel](core/problems.md) for the inspection problems.
+Use this page to find the fix for a message in a dialog, in the log or on the **Problems** panel. See [Error messages](reference/error-messages.md) for the dialog and command-line messages, and [Problems panel](core/problems.md) for the inspection problems.
 
 ## When to use it
 
@@ -35,7 +35,7 @@ None. Some fixes need rights on the site or on the device.
 | **Export JSON** and **Export HTML** are off. | No inspection exists yet. | Select **Inspect**. |
 | A message says "A site server needs a site code. Enter it in Options." | The site server is set and the site code is empty. | Enter the site code in **Options**. |
 | **OK** in **Options** opens a message box with the title **Device Inspector**, and the dialog stays open. | The site server or the site code has a wrong value. | Read the message. Correct the value. See [Options dialog](core/options.md). |
-| The status bar shows "Enter a site server, or clear Site only." | **Site only** is on and the site server box is empty. | Enter the site server, or clear **Site only** to inspect the device. |
+| The status bar shows "Enter a site server, or clear Site Only." | **Site Only** is on and the site server box is empty. | Enter the site server, or clear **Site Only** to inspect the device. |
 
 ## Problems panel
 
@@ -60,7 +60,7 @@ None. Some fixes need rights on the site or on the device.
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| The Applications list is empty. | The device part failed or **Site only** was on. | Read the **Problems** panel. Clear **Site only** and inspect again. |
+| The Applications list is empty. | The device part failed or **Site Only** was on. | Read the **Problems** panel. Clear **Site Only** and inspect again. |
 | **Uninstall...** or **Repair...** is off for an application. | The entry is a system component, or an EXE entry without a quiet uninstall string. Repair is off for every EXE entry. | Hover over the entry. The tooltip gives the reason. See [Applications](core/applications.md#when-uninstall-and-repair-are-on). |
 | A new install is not in the Applications list. | The list shows the state at the time of the inspection. | Inspect the device again. |
 

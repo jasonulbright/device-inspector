@@ -29,8 +29,15 @@ Set-StrictMode -Version Latest
 
 $strSettingsPath = Join-Path -Path $PSScriptRoot -ChildPath 'PSScriptAnalyzerSettings.psd1'
 $strTestPath = Join-Path -Path $PSScriptRoot -ChildPath 'Tests'
-$strLibPath = Join-Path -Path $PSScriptRoot -ChildPath 'Lib'
-$arrFile = @(Get-ChildItem -LiteralPath $PSScriptRoot -Recurse -Include '*.ps1', '*.psm1', '*.psd1' -File | Where-Object { -not $_.FullName.StartsWith($strLibPath, [System.StringComparison]::OrdinalIgnoreCase) })
+# The filter works on the path relative to the repository root. The vendored Lib folder, .git and .claude
+# (it holds worktrees of this repository) are not analyzed, and the walk never enters them.
+$strRoot = $PSScriptRoot.TrimEnd('\')
+$arrSkipTop = @('Lib', '.git', '.claude')
+$arrFile = @(foreach ($objTop in @(Get-ChildItem -LiteralPath $strRoot -Force)) {
+        if ($arrSkipTop -contains $objTop.Name) { continue }
+        if ($objTop.PSIsContainer) { Get-ChildItem -LiteralPath $objTop.FullName -Recurse -Include '*.ps1', '*.psm1', '*.psd1' -File }
+        elseif ($objTop.Extension -in '.ps1', '.psm1', '.psd1') { $objTop }
+    })
 
 $listFinding = New-Object -TypeName 'System.Collections.Generic.List[object]'
 $intAnalyzerFailure = 0

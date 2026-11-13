@@ -1,4 +1,5 @@
-﻿[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake computer names.')]
+﻿#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
+[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake computer names.')]
 param ()
 
 BeforeAll {
@@ -229,10 +230,13 @@ Describe 'Update facts' {
                 if ($Query -like '*SMS_UpdateComplianceStatus*') { throw 'compliance failed' }
             }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
-            $objSite = Get-SiteFact -ComputerName 'A' -Problems $listProblem
+            $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'A' -Problems $listProblem -ProblemDetail $listDetail
             $objSite.Found | Should -BeTrue
             @($objSite.RequiredUpdates).Count | Should -Be 0
-            @($listProblem | Where-Object { $_ -like 'Site required updates:*compliance failed*' }).Count | Should -Be 1
+            @($listProblem | Where-Object { $_ -eq 'Site required updates: the read failed. The log file has the reason.' }).Count | Should -Be 1
+            @($listProblem | Where-Object { $_ -like '*compliance failed*' }).Count | Should -Be 0
+            @($listDetail | Where-Object { $_ -like 'Site required updates:*compliance failed*' }).Count | Should -Be 1
         }
     }
 

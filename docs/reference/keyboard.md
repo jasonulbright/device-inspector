@@ -27,10 +27,10 @@ None.
 
 ### Tab order
 
-1. The sidebar: **Device list**, **Device**, **Applications**, **Updates**, **Collections**, **Problems**, **Options**.
-2. The Inspect bar: **Inspect**, the device box, the site server box, **Site only**, **Export JSON**, **Export HTML**. A button that is off is skipped.
+1. The sidebar: **Device List**, **Device**, **Applications**, **Updates**, **Collections**, **Problems**, **Options**.
+2. The Inspect bar: **Inspect**, the device box, the site server box, **Site Only**, **Export JSON**, **Export HTML**. A button that is off is skipped.
 3. The open panel: on the Device panel, the action buttons, then the grid.
-4. **Open log file**, then the log.
+4. **Open Log File**, then the log.
 
 The focus shows as a thin white frame on a button. A tooltip shows for the button that has the focus.
 

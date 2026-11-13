@@ -4,8 +4,21 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Show white text on every blue control in the light theme: the sidebar buttons, the Inspect and Search buttons, the primary button of each dialog, a selected row or cell of a grid, and a selected or highlighted item of the application type box. Vendor SuiteCommon from app-packager-suite 4f97a06.
+- Show a title before the device box and before the site server box in the Inspect bar. The Site Server title, and the Site Server and Site Code titles in Options, are bold 14 pt in both themes. The values keep the normal weight and size.
+- Show no raw exception text in the window. Each failure shows a fixed sentence that says where the reason is. The reason goes to the log file (`Write-Log` at level ERROR), to the `Detail` lines of the action log and to the Problem detail section of the report and of the exports. The JSON export has the new property `ProblemDetail`. Each action result has the new property `Detail`.
+- Use one themed button style for every button, and one secondary and one primary style in each dialog. No button style has a color literal or an Opacity. Hover and keyboard focus show the theme foreground as the border. A pressed button swaps the theme foreground and the theme background.
+
 ### Changed
 
+- Write every title, header, button, menu item and window title in Title Case, for example Device List, Open Log File, Enable Actions and Running Actions. Write every title in bold. Rewrite each tooltip as one short sentence in Configuration Manager terms.
+- Add `Tests\Theme.Guard.Tests.ps1` and `Tests\ThemeGuardHelpers.ps1`: guard tests for the white text on blue, the fonts, the banned words, the shared button styles, the Title Case of the window and the guide, and the exception text. Require Pester 5.1.0 in every test file.
+- Probe a selected row, a selected and a highlighted combo box item, and the hover, keyboard focus and pressed state of every button in the window tests.
+- Make the capture of the guide images safe for a shared lab computer: one capture lock `C:\guide\capture.lock`, an own folder and an own scheduled task, a clean-up of the task, the processes, the folder and the lock in the `finally` block, and no removal of `C:\guide`.
+- Filter the files of `Invoke-Checks.ps1` and of the lint job on the path relative to the repository root, and skip `Lib`, `.git` and `.claude`.
+- Retake the guide images of the changed screens in both themes.
 - Retake the guide images that show the **Last hardware inventory** fact of the site record (`device-panel`, `device-light`, `device-server`, `device-site-only`, `actions-device-buttons`, `actions-running-list`, `exported` and `focus-inspect`) from release 2026.11.11.0010. The row reads "Last hardware inventory" and its value ends with "(device local time)".
 - Add `-Section` and `-Image` to `tools/guide-capture/Invoke-GuideCapture.ps1`. `-Section` runs only the named sections of the guide steps. `-Image` copies only the named images. The uninstall images moved to their own section, `action menus`, so that a run can leave them out.
 

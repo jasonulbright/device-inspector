@@ -29,8 +29,8 @@ None.
 | A site code needs a site server. | Dialog **Inspect** and log | A site code is set and the site server box is empty. | Enter a site server, or clear the site code in **Options**. |
 | A site server needs a site code. Enter it in Options. | Dialog **Inspect** and log | The site server is set and the site code is empty. | Enter the site code in **Options**. |
 | The Configuration Manager console is not installed on this computer. Device Inspector reads the site with the ConfigurationManager PowerShell module, which comes only with the console. Install the console, then start Device Inspector again. | Message box **Device Inspector** at start | The module is not found. | Install the console. |
-| Inspect: Site only needs a site server. | Log. The status bar says "Enter a site server, or clear Site only." | **Site only** is on and the site server box is empty. | Enter a site server, or clear **Site only**. |
-| Inspect failed: `<text>` | Log. The dialog **Inspect** shows `<text>`. The status bar says "Inspect failed. See the log." | The inspection stopped on an error that no part caught. | Read the text. |
+| Inspect: Site Only needs a site server. | Log. The status bar says "Enter a site server, or clear Site Only." | **Site Only** is on and the site server box is empty. | Enter a site server, or clear **Site Only**. |
+| The inspection failed. Check the site server, the site code and your account rights in Options. The log file has the reason. | Dialog **Inspect**. The log says "Inspect failed. The log file has the reason." The status bar says "Inspect failed. The log file has the reason." | The inspection stopped on an error that no part caught. | Select **Open Log File**, find the line "Inspect failed:" in the file, and read the reason. |
 
 ### Options dialog
 
@@ -51,7 +51,7 @@ See [Problems panel](../core/problems.md) for the lines of the failed parts.
 
 | Message | Where | Cause | Fix |
 |---|---|---|---|
-| Export `<kind>` failed: `<text>` | Dialog **Export** and log | The file could not be written. | Choose a folder that your account can write to. |
+| The `<kind>` export failed. Check the folder and the file name. The log file has the reason. | Dialog **Export**. The log says "Export `<kind>` failed. The log file has the reason." | The file could not be written. | Choose a folder that your account can write to. |
 
 ### Command line
 
@@ -75,7 +75,7 @@ The report can also start with a warning of the ConfigurationManager module abou
 
 ## Limits
 
-The tool shows the error text of the site and of WinRM as it is. This page cannot list those texts.
+The window shows a fixed message for each failure. The tool writes the error text of the site and of WinRM to the log file only, and the Problem detail section of the exports holds the reason of a failed part. This page cannot list those texts.
 
 ## Troubleshooting
 

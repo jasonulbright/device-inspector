@@ -1,4 +1,5 @@
-﻿[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake device names.')]
+﻿#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
+[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake device names.')]
 param ()
 
 BeforeAll {
@@ -52,7 +53,9 @@ Describe 'Invoke-DeviceInspectorPolicyUpdate' {
         Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { throw 'WinRM cannot complete the operation.' }
         $objResult = Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01'
         $objResult.Succeeded | Should -BeFalse
-        $objResult.Summary | Should -Match 'WinRM cannot complete'
+        $objResult.Summary | Should -Be 'Cannot run the action on WS01. The action log has the reason. The connection can fail after a step ran. Inspect the device to see its state.'
+        $objResult.Summary | Should -Not -Match 'WinRM cannot complete'
+        @($objResult.Detail) | Should -Be @('WinRM cannot complete the operation.')
     }
 
     It 'returns a failed result when the device returns nothing' {
@@ -119,7 +122,9 @@ Describe 'Policy update script on the device' {
             $objRaw.Succeeded | Should -BeFalse
             $objRaw.Summary | Should -Match 'The earlier steps, if any, ran'
             $objRaw.Steps[1] | Should -Match '^Triggered .*000000000021'
-            $objRaw.Steps[2] | Should -Match 'failed: Generic failure'
+            $objRaw.Steps[2] | Should -Match 'failed\.$'
+            $objRaw.Steps[2] | Should -Not -Match 'Generic failure'
+            @($objRaw.Detail) | Should -Contain 'Machine policy evaluation (Machine Policy Evaluation): Generic failure'
         }
     }
 
@@ -199,7 +204,7 @@ Describe 'Action gate in the window' {
         $script:strXaml = Get-Content -LiteralPath $script:strXamlPath -Raw
     }
 
-    It 'starts with Enable actions off and does not save the switch' {
+    It 'starts with Enable Actions off and does not save the switch' {
         $script:strXaml | Should -Match '(?s)x:Name="toggleActions".*?IsOn="False"'
         $script:strStart | Should -Match '\$script:ActionsEnabled = \$false'
         $script:strStart | Should -Not -Match "Prefs\[.?ActionsEnabled"
@@ -286,7 +291,7 @@ Describe 'Full output log file' {
     }
 
     It 'has an Open log file button that opens the log of this session' {
-        $script:strXaml | Should -Match 'x:Name="btnOpenLog"[^>]*Content="Open log file"'
+        $script:strXaml | Should -Match 'x:Name="btnOpenLog"[^>]*Content="Open Log File"'
         $script:strStart | Should -Match '(?s)\$btnOpenLog\.Add_Click\(\{.*?Invoke-Item -LiteralPath \$script:ToolLogPath -ErrorAction Stop'
     }
 }
@@ -1416,7 +1421,8 @@ Describe 'Remove from collection' {
         Should -Invoke -ModuleName DeviceInspectorCommon Invoke-CMClientAction -Times 1 -Exactly
         Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 12 -Exactly
         Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { throw 'query failed' }
-        ((Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Steps -join "`n") | Should -Match 'Last read error: query failed'
+        ((Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Steps -join "`n") | Should -Match 'The last read failed\. The action log has the reason\.'
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Detail | Should -Contain 'Membership read: query failed'
     }
 
     It 'refuses a missing collection, a failed rule read and a new resource ID, and disconnects each time' {
@@ -1424,14 +1430,14 @@ Describe 'Remove from collection' {
         (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Match 'no device collection XYZ0001F'
         Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot' } }
         Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollectionDirectMembershipRule { throw 'provider error' }
-        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Match 'Cannot run the action on site XYZ: provider error'
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove).Summary | Should -Be 'Cannot run the action on site XYZ. The action log has the reason.'
         (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove -ExpectedResourceId 16777999).Summary | Should -Match 'has resource ID 16777221, not 16777999'
         Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 3 -Exactly
         Should -Invoke -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule -Times 0 -Exactly
     }
 
     It 'gives the reason why an action cannot start, for <Case>' -ForEach @(
-        @{ Case = 'switch off'; Enabled = $false; Busy = $false; Kind = 'Site'; Inspection = $null; Expected = 'Turn on Enable actions first.' }
+        @{ Case = 'switch off'; Enabled = $false; Busy = $false; Kind = 'Site'; Inspection = $null; Expected = 'Turn on Enable Actions first.' }
         @{ Case = 'busy'; Enabled = $true; Busy = $true; Kind = 'Site'; Inspection = $null; Expected = 'Wait for the running task to end.' }
         @{ Case = 'no inspection'; Enabled = $true; Busy = $false; Kind = 'Site'; Inspection = $null; Expected = 'Inspect a device that the site knows first.' }
         @{ Case = 'site not found'; Enabled = $true; Busy = $false; Kind = 'Site'; Inspection = [pscustomobject]@{ SiteServer = 's'; Site = [pscustomobject]@{ Found = $false }; Device = $null }; Expected = 'Inspect a device that the site knows first.' }
@@ -1519,7 +1525,7 @@ Describe 'Add to collection' {
         Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 0 -Exactly
         Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ00030'; Name = 'Pilot 2'; MemberCount = 3; LimitToCollectionID = 'SMS00001' } }
         Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { throw 'access denied' }
-        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ00030' -Operation Add -DryRun).Summary | Should -Match 'Cannot run the action on site XYZ: access denied'
+        (Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ00030' -Operation Add -DryRun).Summary | Should -Be 'Cannot run the action on site XYZ. The action log has the reason.'
         Should -Invoke -ModuleName DeviceInspectorCommon Add-CMDeviceCollectionDirectMembershipRule -Times 0 -Exactly
     }
 
@@ -1654,7 +1660,7 @@ Describe 'Device list' {
     }
 
     It 'has a Device list panel that searches the site and inspects the selected device' {
-        $script:strXaml | Should -Match 'x:Name="btnViewDeviceList"[^>]*Content="Device list"'
+        $script:strXaml | Should -Match 'x:Name="btnViewDeviceList"[^>]*Content="Device List"'
         $script:strXaml | Should -Match 'x:Name="viewDeviceList"'
         $script:strXaml | Should -Match 'x:Name="gridDeviceList"'
         $script:strStart | Should -Match "(?s)function Invoke-DeviceListSearch \{.*?Get-DeviceInspectorDeviceList -SiteServer \`$A\.Server -SiteCode \`$A\.Code -NamePattern \`$A\.Pattern -CollectionId \`$A\.Collection"
@@ -2042,7 +2048,8 @@ Describe 'End of a run' {
             $strProblem | Should -Match 'The pipeline stopped\.'
             $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result $hashtableState.Result -ErrorMessage $strProblem -Detail @()
             $objRecord.Outcome | Should -Be 'FAILED'
-            $objRecord.Summary | Should -Match 'The pipeline stopped\.'
+            $objRecord.Summary | Should -Be 'The action stopped with an error. The action log has the reason.'
+            @($objRecord.Detail) | Should -Be @($strProblem)
         } finally {
             $objPs.Dispose()
         }
@@ -2063,7 +2070,7 @@ Describe 'End of a run' {
         @{ Case = 'an empty array'; Result = @(); Message = ''; Expected = 'The action returned no result.' }
         @{ Case = 'two results'; Result = @([pscustomobject]@{ Succeeded = $true }, [pscustomobject]@{ Succeeded = $true }); Message = ''; Expected = 'The action returned 2 results instead of one.' }
         @{ Case = 'an object that is not an action result'; Result = 'text'; Message = ''; Expected = 'The action returned an object that is not an action result.' }
-        @{ Case = 'an error'; Result = $null; Message = 'WinRM cannot complete the operation.'; Expected = 'WinRM cannot complete the operation.' }
+        @{ Case = 'an error'; Result = $null; Message = 'WinRM cannot complete the operation.'; Expected = 'The action stopped with an error. The action log has the reason.' }
     ) {
         $objRecord = Resolve-DeviceInspectorRunResult -Run $script:objRun -Result $Result -ErrorMessage $Message -Detail @('Application: X.')
         @($objRecord).Count | Should -Be 1
@@ -2086,5 +2093,365 @@ Describe 'End of a run' {
         $strText | Should -Match '(?s)try \{ Update-ControlState \} catch.*?try \{ Update-StatusBarSummary \} catch'
         $strStart | Should -Match '(?s)function Write-ActionResult \{.*?Write-DeviceInspectorActionLog.*?foreach \(\$line in .*?Add-LogLine'
         $strStart | Should -Match '(?s)function Update-DeviceActionRun \{.*?Test-DeviceInspectorRunFinished -State \$job\.State -Handle \$job\.Handle'
+    }
+}
+
+Describe 'Action record Detail property' {
+    It 'gives every record an empty Detail list by default and keeps the Detail that the caller passes' {
+        $objPlain = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $true -Summary 'Done.' -Steps @()
+        $objPlain.PSObject.Properties['Detail'] | Should -Not -BeNullOrEmpty
+        @($objPlain.Detail).Count | Should -Be 0
+        $objDetail = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Summary 'Failed.' -Steps @() -Detail @('reason one', 'reason two')
+        @($objDetail.Detail) | Should -Be @('reason one', 'reason two')
+    }
+
+    It 'keeps Detail when the window sets the action ID' {
+        $objDetail = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Summary 'Failed.' -Steps @() -Detail @('reason one')
+        $objWithId = Add-DeviceInspectorActionId -Result $objDetail -ActionId 'a1b2c3d4'
+        $objWithId.ActionId | Should -Be 'a1b2c3d4'
+        @($objWithId.Detail) | Should -Be @('reason one')
+    }
+
+    It 'prints Detail lines only with IncludeDetail, after the step lines' {
+        $objDetail = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Summary 'Failed.' -Steps @('step one') -Detail @('reason one', "reason`ntwo")
+        $arrWindow = @(ConvertTo-DeviceInspectorActionText -Result $objDetail)
+        $arrWindow.Count | Should -Be 2
+        ($arrWindow -join "`n") | Should -Not -Match 'reason'
+        $arrFile = @(ConvertTo-DeviceInspectorActionText -Result $objDetail -IncludeDetail)
+        $arrFile.Count | Should -Be 4
+        $arrFile[1] | Should -Be '    step one'
+        $arrFile[2] | Should -Be '    Detail: reason one'
+        $arrFile[3] | Should -Be '    Detail: reason two'
+    }
+
+    It 'accepts a result without a Detail property' {
+        $objOld = [pscustomobject]@{
+            Action = 'Client policy update'; ComputerName = 'WS01'; DryRun = $false; Mode = 'RUN'
+            StartedAt = '2026-11-10T20:00:00Z'; Account = 'EXAMPLE\admin'; Succeeded = $true; Summary = 'Done.'; Steps = @()
+        }
+        @(ConvertTo-DeviceInspectorActionText -Result $objOld -IncludeDetail).Count | Should -Be 1
+    }
+}
+
+Describe 'Raw exception text stays out of the window' {
+    BeforeAll {
+        # Builds an action record from the raw object that a device script block returns.
+        function ConvertTo-TestRecord {
+            param([Parameter(Mandatory = $true)][object]$Raw)
+            $arrDetail = @()
+            if ($null -ne $Raw.PSObject.Properties['Detail']) {
+                $arrDetail = @($Raw.Detail | ForEach-Object { [string]$_ })
+            }
+            New-DeviceInspectorActionRecord -Action 'Test action' -ComputerName 'WS01' -DryRun $false -Succeeded ([bool]$Raw.Succeeded) -Summary ([string]$Raw.Summary) -Steps ([string[]]@($Raw.Steps)) -Detail ([string[]]$arrDetail)
+        }
+
+        # The raw text must be absent from Summary, Steps and the window text. It must be present
+        # in Detail, in the text with IncludeDetail, and in the action log file.
+        function Assert-RawTextHidden {
+            param([Parameter(Mandatory = $true)][object]$Record, [Parameter(Mandatory = $true)][string]$Text)
+            ([string]$Record.Summary).Contains($Text) | Should -BeFalse -Because ('the Summary must not hold {0}' -f $Text)
+            (@($Record.Steps) -join "`n").Contains($Text) | Should -BeFalse -Because ('the Steps must not hold {0}' -f $Text)
+            (@(ConvertTo-DeviceInspectorActionText -Result $Record) -join "`n").Contains($Text) | Should -BeFalse -Because ('the window text must not hold {0}' -f $Text)
+            (@($Record.Detail) -join "`n").Contains($Text) | Should -BeTrue -Because ('the Detail must hold {0}' -f $Text)
+            (@(ConvertTo-DeviceInspectorActionText -Result $Record -IncludeDetail) -join "`n").Contains($Text) | Should -BeTrue -Because ('the text with IncludeDetail must hold {0}' -f $Text)
+            $strPath = Join-Path -Path $TestDrive -ChildPath ('Logs\{0}.log' -f [guid]::NewGuid().ToString('N'))
+            $null = Write-DeviceInspectorActionLog -Path $strPath -Result $Record
+            [System.IO.File]::ReadAllText($strPath).Contains($Text) | Should -BeTrue -Because ('the action log file must hold {0}' -f $Text)
+        }
+    }
+
+    Context 'Policy update script' {
+        It 'hides the text of a failed client read' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                Mock Get-CimInstance { throw 'secret-boom-1' }
+                & $script:scriptBlockPolicyUpdate $false
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Be 'The Configuration Manager client does not answer. The action log has the reason.'
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-1'
+        }
+
+        It 'hides the text of a failed schedule trigger' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00.9146.1009' } }
+                Mock Invoke-CimMethod { throw 'secret-boom-2' }
+                & $script:scriptBlockPolicyUpdate $false
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Match 'The action log has the reason\.$'
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-2'
+        }
+    }
+
+    Context 'Full inventory script' {
+        It 'hides the text of a failed client read' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                Mock Get-CimInstance { throw 'secret-boom-3' }
+                & $script:scriptBlockFullInventory $false
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-3'
+        }
+
+        It 'hides the text of a failed status read' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+                Mock Get-CimInstance { throw 'secret-boom-4' } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+                & $script:scriptBlockFullInventory $false
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Be 'The hardware inventory status cannot be read. The action log has the reason.'
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-4'
+        }
+
+        It 'hides the text of a failed delete of the status record' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                $objStatus = New-CimInstance -ClassName 'InventoryActionStatus' -Namespace 'root/ccm/invagt' -ClientOnly -Property @{ InventoryActionID = '{00000000-0000-0000-0000-000000000001}'; LastMajorReportVersion = [uint32]1; LastMinorReportVersion = [uint32]0 }
+                Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+                Mock Get-CimInstance { $objStatus } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+                Mock Remove-CimInstance { throw 'secret-boom-5' }
+                Mock Invoke-CimMethod { }
+                & $script:scriptBlockFullInventory $false
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-5'
+        }
+
+        It 'hides the text of a failed trigger' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+                Mock Get-CimInstance { } -ParameterFilter { $ClassName -eq 'InventoryActionStatus' }
+                Mock Invoke-CimMethod { throw 'secret-boom-6' }
+                & $script:scriptBlockFullInventory $false
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-6'
+        }
+    }
+
+    Context 'Update install script' {
+        It 'hides the text of a failed client read' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                Mock Get-CimInstance { throw 'secret-boom-7' }
+                & $script:scriptBlockUpdateInstall $false @()
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-7'
+        }
+
+        It 'hides the text of a failed read of the updates' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+                Mock Get-CimInstance { throw 'secret-boom-8' } -ParameterFilter { $ClassName -eq 'CCM_SoftwareUpdate' }
+                & $script:scriptBlockUpdateInstall $false @()
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Be 'The updates of the client policy cannot be read. The action log has the reason.'
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-8'
+        }
+
+        It 'hides the text of a failed install request, and of a failed read after a good request' {
+            $objRaw = InModuleScope DeviceInspectorCommon {
+                $script:arrTestUpdate = @(New-CimInstance -ClassName 'CCM_SoftwareUpdate' -Namespace 'root/ccm/ClientSDK' -ClientOnly -Property @{
+                        UpdateID = 'Site_X/SUM_1'; ArticleID = '5001'; Name = 'Update KB5001'; ComplianceState = [uint32]0; EvaluationState = [uint32]0; PercentComplete = [uint32]0 })
+                Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+                Mock Get-CimInstance { $script:arrTestUpdate } -ParameterFilter { $ClassName -eq 'CCM_SoftwareUpdate' }
+                Mock Start-Sleep { }
+                Mock Invoke-CimMethod { throw 'secret-boom-9' }
+                & $script:scriptBlockUpdateInstall $false @()
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Be 'The client did not accept the install request. The action log has the reason.'
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-9'
+
+            $objAfter = InModuleScope DeviceInspectorCommon {
+                $script:intUpdateRead = 0
+                Mock Get-CimInstance { [pscustomobject]@{ ClientVersion = '5.00' } } -ParameterFilter { $ClassName -eq 'SMS_Client' }
+                Mock Get-CimInstance { $script:intUpdateRead++; if ($script:intUpdateRead -ge 2) { throw 'secret-boom-10' }; $script:arrTestUpdate } -ParameterFilter { $ClassName -eq 'CCM_SoftwareUpdate' }
+                Mock Start-Sleep { }
+                Mock Invoke-CimMethod { [pscustomobject]@{ ReturnValue = 0 } }
+                & $script:scriptBlockUpdateInstall $false @()
+            }
+            $objAfter.Succeeded | Should -BeTrue
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objAfter) -Text 'secret-boom-10'
+        }
+    }
+
+    Context 'Application action script' {
+        BeforeAll {
+            $script:strTestKeyName = 'DeviceInspectorTest-{0}' -f [guid]::NewGuid().ToString('N')
+            $script:strTestKeyPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{0}' -f $script:strTestKeyName
+            $null = New-Item -Path $script:strTestKeyPath -Force
+            $null = New-ItemProperty -LiteralPath $script:strTestKeyPath -Name 'DisplayName' -Value 'Device Inspector test entry' -PropertyType 'String' -Force
+            $null = New-ItemProperty -LiteralPath $script:strTestKeyPath -Name 'QuietUninstallString' -Value 'cmd.exe /c exit 0' -PropertyType 'String' -Force
+        }
+
+        AfterAll {
+            Remove-Item -LiteralPath $script:strTestKeyPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        It 'hides the text of a command that does not start' {
+            $objRaw = InModuleScope DeviceInspectorCommon -Parameters @{ KeyName = $script:strTestKeyName } {
+                param($KeyName)
+                Mock Start-Process { throw 'secret-boom-11' }
+                & $script:scriptBlockApplicationAction $false 'Uninstall' '64-bit' $KeyName
+            }
+            $objRaw.Succeeded | Should -BeFalse
+            $objRaw.Summary | Should -Be 'The uninstall did not start. The action log has the reason.'
+            Assert-RawTextHidden -Record (ConvertTo-TestRecord -Raw $objRaw) -Text 'secret-boom-11'
+        }
+    }
+
+    Context 'Invoke-ActionOnDevice' {
+        It 'hides the text of a connection failure, for a run and for a dry run' {
+            Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { throw 'secret-boom-12' }
+            $objRun = Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01'
+            $objRun.Summary | Should -Be 'Cannot run the action on WS01. The action log has the reason. The connection can fail after a step ran. Inspect the device to see its state.'
+            Assert-RawTextHidden -Record $objRun -Text 'secret-boom-12'
+            $objDry = Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01' -DryRun
+            $objDry.Summary | Should -Be 'Cannot run the action on WS01. The action log has the reason.'
+            Assert-RawTextHidden -Record $objDry -Text 'secret-boom-12'
+        }
+
+        It 'copies the Detail that the device returns, and gives an empty Detail when it returns none' {
+            Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $false; Summary = 'The client did not accept the install request. The action log has the reason.'; Steps = @('step one'); Detail = @('secret-boom-13') } }
+            $objFailed = Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01'
+            Assert-RawTextHidden -Record $objFailed -Text 'secret-boom-13'
+            Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $true; Summary = 'ok'; Steps = @() } }
+            $objPlain = Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01'
+            @($objPlain.Detail).Count | Should -Be 0
+        }
+    }
+
+    Context 'Resolve-DeviceInspectorRunResult' {
+        It 'puts the error text in Detail and keeps it out of the Summary' {
+            $objRun = New-DeviceInspectorActionRun -ActionId 'a1b2c3d4' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false
+            $objRecord = Resolve-DeviceInspectorRunResult -Run $objRun -Result $null -ErrorMessage 'secret-boom-14' -Detail @('Application: X.')
+            $objRecord.Outcome | Should -Be 'FAILED'
+            $objRecord.Summary | Should -Be 'The action stopped with an error. The action log has the reason.'
+            @($objRecord.Steps) | Should -Be @('Application: X.')
+            Assert-RawTextHidden -Record $objRecord -Text 'secret-boom-14'
+        }
+
+        It 'keeps the Detail of a device result' {
+            $objRun = New-DeviceInspectorActionRun -ActionId 'a1b2c3d4' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false
+            $objResult = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Summary 'Failed.' -Steps @() -Detail @('secret-boom-15')
+            $objRecord = Resolve-DeviceInspectorRunResult -Run $objRun -Result @($objResult) -ErrorMessage '' -Detail @()
+            Assert-RawTextHidden -Record $objRecord -Text 'secret-boom-15'
+        }
+    }
+
+    Context 'Collection change' {
+        BeforeEach {
+            InModuleScope DeviceInspectorCommon {
+                Mock Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
+                Mock Disconnect-InspectorSite { }
+                Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 16777221; Name = 'WS01' } }
+                Mock Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot'; LimitToCollectionID = '' } }
+                Mock Get-CMDeviceCollectionDirectMembershipRule { [pscustomobject]@{ ResourceID = 16777221; RuleName = 'WS01' } }
+                Mock Remove-CMDeviceCollectionDirectMembershipRule { }
+                Mock Add-CMDeviceCollectionDirectMembershipRule { }
+                Mock Invoke-CMCollectionUpdate { }
+                Mock Invoke-CMClientAction { }
+                Mock Get-CMCollectionMember { }
+                Mock Start-Sleep { }
+            }
+        }
+
+        It 'hides the text of a failed rule change' {
+            Mock -ModuleName DeviceInspectorCommon Remove-CMDeviceCollectionDirectMembershipRule { throw 'secret-boom-16' }
+            $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+            $objResult.Succeeded | Should -BeFalse
+            $objResult.Summary | Should -Be 'The site did not change the rule. The action log has the reason.'
+            Assert-RawTextHidden -Record $objResult -Text 'secret-boom-16'
+        }
+
+        It 'hides the text of a failed membership update' {
+            Mock -ModuleName DeviceInspectorCommon Invoke-CMCollectionUpdate { throw 'secret-boom-17' }
+            $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+            $objResult.Succeeded | Should -BeTrue
+            Assert-RawTextHidden -Record $objResult -Text 'secret-boom-17'
+        }
+
+        It 'hides the text of a failed client notification' {
+            Mock -ModuleName DeviceInspectorCommon Invoke-CMClientAction { throw 'secret-boom-18' }
+            $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+            $objResult.Succeeded | Should -BeTrue
+            Assert-RawTextHidden -Record $objResult -Text 'secret-boom-18'
+        }
+
+        It 'hides the text of a failed membership read' {
+            Mock -ModuleName DeviceInspectorCommon Get-CMCollectionMember { throw 'secret-boom-19' }
+            $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+            $objResult.Succeeded | Should -BeTrue
+            (@($objResult.Steps) -join "`n") | Should -Match 'The last read failed\. The action log has the reason\.'
+            Assert-RawTextHidden -Record $objResult -Text 'secret-boom-19'
+        }
+
+        It 'hides the text of a failed connection and of a failed read of the rules' {
+            Mock -ModuleName DeviceInspectorCommon Connect-InspectorSite { throw 'secret-boom-20' }
+            $objConnect = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+            $objConnect.Succeeded | Should -BeFalse
+            $objConnect.Summary | Should -Be 'Cannot run the action on site XYZ. The action log has the reason.'
+            Assert-RawTextHidden -Record $objConnect -Text 'secret-boom-20'
+            Mock -ModuleName DeviceInspectorCommon Connect-InspectorSite { [pscustomobject]@{ SiteCode = 'XYZ'; SiteServer = 'sms01'; PreviousLocation = 'C:\'; CreatedDrive = $false } }
+            Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollectionDirectMembershipRule { throw 'secret-boom-21' }
+            $objRule = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Add
+            $objRule.Succeeded | Should -BeFalse
+            Assert-RawTextHidden -Record $objRule -Text 'secret-boom-21'
+        }
+    }
+}
+
+Describe 'No exception text in Summary or Steps (static check)' {
+    BeforeAll {
+        # Returns one text line for each place in a catch block that builds Summary, Steps or a
+        # step line from the error. Detail and Write-Debug may use the error.
+        function Find-ExceptionTextLeak {
+            param([Parameter(Mandatory = $true)][System.Management.Automation.Language.Ast]$Ast)
+            $strRaw = '\$_(?![A-Za-z0-9_])|Exception|\$PSItem|\$Error\b'
+            $listLeak = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $arrCatch = @($Ast.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CatchClauseAst] }, $true))
+            foreach ($objCatch in $arrCatch) {
+                foreach ($objNode in @($objCatch.Body.FindAll({ param($objAny) $true }, $true))) {
+                    $strText = $objNode.Extent.Text
+                    if ($strText -notmatch $strRaw) {
+                        continue
+                    }
+                    $boolLeak = $false
+                    if ($objNode -is [System.Management.Automation.Language.CommandAst]) {
+                        $boolLeak = ($objNode.GetCommandName() -ne 'Write-Debug')
+                    } elseif ($objNode -is [System.Management.Automation.Language.InvokeMemberExpressionAst]) {
+                        $boolLeak = ($objNode.Member.Extent.Text -eq 'Add' -and $objNode.Expression.Extent.Text -ne '$listDetail')
+                    } elseif ($objNode -is [System.Management.Automation.Language.AssignmentStatementAst]) {
+                        $boolLeak = ($objNode.Left.Extent.Text -match '(?i)summary|steps|liststep' -and $objNode.Right.Extent.Text -match $strRaw)
+                    } elseif ($objNode -is [System.Management.Automation.Language.HashtableAst]) {
+                        foreach ($objPair in $objNode.KeyValuePairs) {
+                            if ($objPair.Item1.Extent.Text -match '^(?i)(Summary|Steps)$' -and $objPair.Item2.Extent.Text -match $strRaw) {
+                                $boolLeak = $true
+                            }
+                        }
+                    }
+                    if ($boolLeak) {
+                        $listLeak.Add(('line {0}: {1}' -f $objNode.Extent.StartLineNumber, $strText))
+                    }
+                }
+            }
+            $listLeak.ToArray()
+        }
+    }
+
+    It 'finds a leak in a catch block of a test snippet, so the check is not empty' {
+        $objSnippet = [System.Management.Automation.Language.Parser]::ParseInput('try { 1 } catch { $listStep.Add(("failed: {0}" -f $_.Exception.Message)); return [pscustomobject]@{ Summary = ("x {0}" -f $_); Steps = @() } }', [ref]$null, [ref]$null)
+        @(Find-ExceptionTextLeak -Ast $objSnippet).Count | Should -BeGreaterThan 1
+        $objGood = [System.Management.Automation.Language.Parser]::ParseInput('try { 1 } catch { $listDetail.Add(("x: {0}" -f $_.Exception.Message)); Write-Debug -Message $_.Exception.Message; return [pscustomobject]@{ Summary = "Fixed."; Steps = @($listStep) } }', [ref]$null, [ref]$null)
+        @(Find-ExceptionTextLeak -Ast $objGood).Count | Should -Be 0
+    }
+
+    It 'builds no Summary, Steps or step line from an error inside a catch block of the action module' {
+        $objAst = [System.Management.Automation.Language.Parser]::ParseFile($script:strActionsFile, [ref]$null, [ref]$null)
+        @($objAst.FindAll({ param($objNode) $objNode -is [System.Management.Automation.Language.CatchClauseAst] }, $true)).Count | Should -BeGreaterThan 15
+        $arrLeak = @(Find-ExceptionTextLeak -Ast $objAst)
+        $arrLeak | Should -BeNullOrEmpty -Because ($arrLeak -join [Environment]::NewLine)
     }
 }

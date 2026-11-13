@@ -22,7 +22,7 @@ Write access for your account to the folder of the script.
 | Site server | **Options**, or the site server box | `SMSProvider` | Empty, or `SUITE_CM_PROVIDER` | **OK** in Options, and **Inspect** when the box is not empty |
 | Site code | **Options** | `SiteCode` | Empty, or `SUITE_CM_SITECODE`. Required when a site server is set. | **OK** in Options |
 | Last device | The device box | `LastDevice` | Empty | **Inspect** |
-| Site only | **Site only** | `SiteOnly` | `false` | **Inspect** |
+| Site Only | **Site Only** | `SiteOnly` | `false` | **Inspect** |
 
 ### Window state
 

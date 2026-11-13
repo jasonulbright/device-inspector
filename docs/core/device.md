@@ -46,9 +46,9 @@ Two "last hardware inventory" values exist on purpose. The device value is the s
 
 ### The action buttons
 
-Under the summary line, three buttons start actions on the device: **Client policy update...**, **Full hardware inventory...** and **Repair inventory...**. They are off until **Enable actions** is on and an inspection reached the device. **Repair inventory...** is on only when the inventory check says **Corrupt**. A button that is off while an action runs on the device shows the reason as its tooltip. See [Actions](actions.md).
+Under the summary line, three buttons start actions on the device: **Client Policy Update...**, **Full Hardware Inventory...** and **Repair Inventory...**. They are off until **Enable Actions** is on and an inspection reached the device. **Repair Inventory...** is on only when the inventory check says **Corrupt**. A button that is off while an action runs on the device shows the reason as its tooltip. See [Actions](actions.md).
 
-![The Device panel with Enable actions on: the three action buttons are on and the status bar says actions on](../images/actions-device-buttons.png)
+![The Device panel with Enable Actions on: the three action buttons are on and the status bar says actions on](../images/actions-device-buttons.png)
 
 ### Device panel in the light theme
 
@@ -77,7 +77,7 @@ The group **Inventory check** shows the state of the site inventory against the 
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| The device groups are missing. | **Site only** was on, or the device did not answer. | Clear **Site only**. Read the **Problems** panel. |
+| The device groups are missing. | **Site Only** was on, or the device did not answer. | Clear **Site Only**. Read the **Problems** panel. |
 | The site record is missing. | The site server box was empty, or the site has no record. | Enter the site server. Check the device name. |
 
 ## Links

@@ -26,13 +26,13 @@ None.
 
 The tool needs the Configuration Manager console on this computer. It checks for the ConfigurationManager module at start. The tool uses the Windows account that runs it. It stores no password. The command-line script accepts `-Credential` for both connections.
 
-The inspection needs no right to change anything. It never changes the site or the device. The actions need the rights in the table, and run only when **Enable actions** is on.
+The inspection needs no right to change anything. It never changes the site or the device. The actions need the rights in the table, and run only when **Enable Actions** is on.
 
 ## Steps
 
 ### Check an account
 
-1. Start the tool as the account. Clear **Site only**, and read the **Problems** panel first: a missing group can also come from **Site only** or from a device that did not answer.
+1. Start the tool as the account. Clear **Site Only**, and read the **Problems** panel first: a missing group can also come from **Site Only** or from a device that did not answer.
 2. Inspect a device with a site server. On the **Device** panel, missing **Operating system (device)** and **Client health (device)** groups mean that the device read failed. A missing **Site record** group means that the site read failed. The **Problems** panel names the part and shows the error text, for example "Access is denied".
 
 ## Limits

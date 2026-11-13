@@ -1,4 +1,4 @@
-#Requires -Modules Pester
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
 # The guard that keeps window tests from opening a window unless the opt-in is set. This file opens no window.
 # It checks the guard function with injected values, and checks that every test file that can open a window uses the guard.
 

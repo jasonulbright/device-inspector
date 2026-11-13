@@ -1,4 +1,4 @@
-#Requires -Modules Pester
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
 # Static checks of the capture scripts in tools\guide-capture. The scripts run on a lab
 # workstation and are never run here: this file only parses them. It opens no window.
 
@@ -10,6 +10,9 @@ BeforeAll {
     $script:Root = Split-Path -Parent $PSScriptRoot
     $script:CaptureDir = Join-Path $script:Root 'tools\guide-capture'
     $script:ImageDir = Join-Path $script:Root 'docs\images'
+    $script:InvokePath = Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1'
+    $script:InvokeText = [System.IO.File]::ReadAllText($script:InvokePath)
+    $script:InvokeAst = [System.Management.Automation.Language.Parser]::ParseFile($script:InvokePath, [ref]$null, [ref]$null)
     # The default names that the public lab builder ships: the machines, the domain, the site code and the
     # 192.168.50.x addresses. They are public and can show in tracked files, guides and images.
     $script:PublicLabPattern = '(?i)^(CM01|DC01|CLIENT01|MCM|contoso\.com|[A-Za-z0-9-]+\.contoso\.com|192\.168\.50\.\d{1,3})$'
@@ -64,35 +67,115 @@ Describe 'Capture scripts' {
         }
     }
 
-    It 'stops before it replaces an image when the run log has an error or an image is missing' {
-        $text = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1'))
-        $text | Should -Match "-match 'ERROR'"
-        $text | Should -Match 'No image was replaced'
-        $text.IndexOf('No image was replaced') | Should -BeLessThan $text.IndexOf('Copy-Item $png.FullName')
+    It 'stops before it replaces an image when a step failed, an error is in the run log or an image is missing' {
+        $iThrow = $script:InvokeText.IndexOf('if ($failed.Count) { throw')
+        $iStage = $script:InvokeText.IndexOf('$staging = ')
+        $iCopy = $script:InvokeText.IndexOf('Copy-Item $png.FullName')
+        $iThrow | Should -BeGreaterThan 0
+        $iStage | Should -BeGreaterThan $iThrow
+        $iCopy | Should -BeGreaterThan $iThrow
+        $script:InvokeText | Should -Match "ERROR'"
+        $script:InvokeText | Should -Match 'No image was replaced'
+        $script:InvokeText.IndexOf('No image was replaced') | Should -BeLessThan $iStage
+        $script:InvokeText | Should -Match 'catch \{\s*foreach \(\$name in \$placed\)'
     }
 
-    It 'quotes the app folder name in the command line of the scheduled task' {
-        $text = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1'))
-        $text | Should -Match '-App `"\$a`"'
-        $text | Should -Not -Match '-App \$a\b'
+    It 'quotes the guide root in the command line of the scheduled task and passes it to the runner' {
+        $script:InvokeText | Should -Match '-GuideRoot `"\$r`"'
+        $script:InvokeText | Should -Match '-File `"\$r\\ui\\main\.ps1`"'
+        $script:InvokeText | Should -Not -Match '-App '
+        $main = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'main.ps1'))
+        $main | Should -Match 'param\(\[string\]\$GuideRoot\)'
+        $main | Should -Not -Match "C:\\guide"
     }
 
-    It 'stops the app on the lab computer and reports a failed cleanup of C:\guide' {
-        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $script:CaptureDir 'Invoke-GuideCapture.ps1'), [ref]$null, [ref]$null)
-        $try = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.TryStatementAst] -and $n.Finally }, $false))[0]
-        $try | Should -Not -BeNullOrEmpty
-        $finally = $try.Finally.Extent.Text
-        # The finally block runs after a timeout and after a failure. It stops the app before it removes the folder.
-        $finally | Should -Match 'Invoke-Command \$session \$stopCapture'
-        $finally.IndexOf('$stopCapture') | Should -BeLessThan $finally.IndexOf('Remove-Item C:\guide')
-        $finally | Should -Match 'Remove-Item C:\\guide -Recurse -Force -ErrorAction Stop'
-        $finally | Should -Not -Match 'Remove-Item C:\\guide[^\r\n]*SilentlyContinue'
-        $finally | Should -Match 'The cleanup of C:\\guide on the lab computer failed'
-        $stop = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -eq '$stopCapture' }, $true))[0]
-        $stop | Should -Not -BeNullOrEmpty
-        $stop.Right.Extent.Text | Should -Match 'Stop-ScheduledTask'
-        $stop.Right.Extent.Text | Should -Match 'Stop-Process'
-        $stop.Right.Extent.Text | Should -Match 'throw'
+    It 'connects and schedules the task with the values of the caller' {
+        $calls = @($script:InvokeAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -in 'New-PSSession', 'New-ScheduledTaskPrincipal' }, $true))
+        $calls.Count | Should -Be 2
+        foreach ($c in $calls) {
+            $text = $c.Extent.Text
+            if ($c.GetCommandName() -eq 'New-PSSession') {
+                $text | Should -Match '-ComputerName \$Target\b'
+                $text | Should -Match '-Credential \$LabCredential\b'
+            }
+            else { $text | Should -Match '-UserId \$user\b' }
+        }
+        $script:InvokeText | Should -Match '-ArgumentList \$root, \$LogonUser, \$captureJson, \$taskName'
+    }
+
+    It 'takes the capture lock with New-Item and an IOException catch, and treats a lock older than 60 minutes as stale' {
+        $newItem = @($script:InvokeAst.FindAll({
+                    param($n)
+                    $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'New-Item' -and
+                    $n.Extent.Text -match '-ItemType File' -and $n.Extent.Text -match '-ErrorAction Stop'
+                }, $true))
+        $newItem.Count | Should -Be 1
+        $catch = @($script:InvokeAst.FindAll({
+                    param($n)
+                    $n -is [System.Management.Automation.Language.CatchClauseAst] -and
+                    @($n.CatchTypes | Where-Object { $_.TypeName.FullName -eq 'System.IO.IOException' }).Count -gt 0
+                }, $true))
+        $catch.Count | Should -Be 1
+        $script:InvokeText | Should -Match "\`$lockPath = 'C:\\guide\\capture\.lock'"
+        $script:InvokeText | Should -Match '-ArgumentList \$lockPath, \$lockToken, 60, \$LockWaitMinutes'
+        $script:InvokeText | Should -Match 'TotalMinutes -gt \$staleMinutes'
+    }
+
+    It 'works in its own folder and its own task, removes only its own files and the lock, and never removes C:\guide' {
+        $script:InvokeText | Should -Match '\$root = "C:\\guide\\\$app"'
+        $script:InvokeText | Should -Match '\$taskName = "GuideShots-\$app"'
+        $script:InvokeText | Should -Match "\`$app = 'device-inspector'"
+        $script:InvokeText | Should -Not -Match 'TaskName GuideShots\b'
+        $removals = @($script:InvokeAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Remove-Item' }, $true))
+        $removals.Count | Should -BeGreaterThan 4
+        foreach ($c in $removals) { $c.Extent.Text | Should -Not -Match "C:\\guide\b(?!\\)" -Because $c.Extent.Text }
+    }
+
+    It 'stops a running capture in the finally block before it removes the task, the folder and the lock' {
+        $iFinally = $script:InvokeText.LastIndexOf('finally {')
+        $iFinally | Should -BeGreaterThan 0
+        $tail = $script:InvokeText.Substring($iFinally)
+        $iStop = $tail.IndexOf('Stop-ScheduledTask')
+        $iKill = $tail.IndexOf('Stop-Process')
+        $iUnregister = $tail.IndexOf('Unregister-ScheduledTask')
+        $iFolder = $tail.IndexOf('Remove-Item $r -Recurse')
+        $iLock = $tail.IndexOf('Remove-Item -LiteralPath $path -Force')
+        $tail | Should -Match 'Get-Content -LiteralPath \$path -Raw -ErrorAction SilentlyContinue\)\)\.Trim\(\)'
+        $iStop | Should -BeGreaterThan -1
+        $iKill | Should -BeGreaterThan $iStop
+        $tail | Should -Match 'if \(\$session -and \$haveLock\) \{ try \{' -Because 'only a capture that holds the lock stops the task and removes the folder'
+        $iUnregister | Should -BeGreaterThan $iKill
+        $iFolder | Should -BeGreaterThan $iUnregister
+        $iLock | Should -BeGreaterThan $iFolder
+    }
+
+    It 'creates the session before the try block ends the work, and closes it in the finally block' {
+        $iTry = $script:InvokeText.IndexOf("try {`n    `$session = New-PSSession")
+        if ($iTry -lt 0) { $iTry = $script:InvokeText.IndexOf("try {`r`n    `$session = New-PSSession") }
+        $iTry | Should -BeGreaterThan 0 -Because 'New-PSSession is the first call inside the try block'
+        $script:InvokeText.Substring($script:InvokeText.LastIndexOf('finally {')) | Should -Match 'Remove-PSSession \$session'
+    }
+
+    It 'does not spin on a stale lock, re-reads the age before the delete and touches the lock while it runs' {
+        $script:InvokeText | Should -Match '\$again = Get-Item -LiteralPath \$path'
+        $script:InvokeText | Should -Match 'Move-Item -LiteralPath \$path -Destination \$stale -ErrorAction Stop'
+        $script:InvokeText | Should -Match '\$stale = "\$path\.stale\.\$token"'
+        # After the rename the age of the moved file is read again. A live lock moves back. Only a stale one is deleted.
+        $script:InvokeText | Should -Match '\$moved = Get-Item -LiteralPath \$stale -ErrorAction Stop'
+        $script:InvokeText | Should -Match '\$moved\.LastWriteTime\)\.TotalMinutes -gt \$staleMinutes'
+        $script:InvokeText | Should -Match 'Move-Item -LiteralPath \$stale -Destination \$path -ErrorAction Stop'
+        $iRead = $script:InvokeText.IndexOf('$moved = Get-Item')
+        $iDelete = $script:InvokeText.IndexOf('Remove-Item -LiteralPath $stale')
+        $iRead | Should -BeGreaterThan 0
+        $iDelete | Should -BeGreaterThan $iRead -Because 'the delete follows the age check of the moved file'
+        $script:InvokeText | Should -Not -Match '(?s)\$again = Get-Item.{0,400}Remove-Item -LiteralPath \$path\b'
+        $script:InvokeText | Should -Match 'if \(-not \(Test-Path -LiteralPath \$path\)\) \{ continue \}'
+        $script:InvokeText | Should -Match 'Start-Sleep -Seconds 15'
+        # The token is written after the IOException catch, and a lost lock stops the capture.
+        $script:InvokeText | Should -Match '\$created = \$true'
+        $script:InvokeText | Should -Match 'if \(\$created\) \{'
+        $script:InvokeText | Should -Match 'The capture lock is lost\.'
+        $script:InvokeText | Should -Match '\.LastWriteTime = Get-Date'
     }
 
     It 'makes every image of the guide' {
@@ -113,6 +196,17 @@ Describe 'Capture scripts' {
             # A button chosen by its name: Run passed to Find-Role, Find-Item or Click-El.
             $text | Should -Not -Match '(?i)\b(Find-Role|Find-Item|Click-El)\b[^\r\n]*[''"]Run[''"]' -Because $file.Name
         }
+    }
+
+    It 'takes an optional UninstallApp name and hands it to the steps, which use it for the filter and the row' {
+        $cmd = Get-Command $script:InvokePath
+        $cmd.Parameters.ContainsKey('UninstallApp') | Should -BeTrue
+        $cmd.Parameters['UninstallApp'].ParameterType | Should -Be ([string])
+        @($cmd.Parameters['UninstallApp'].Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] -and $_.Mandatory }).Count | Should -Be 0
+        $script:InvokeText | Should -Match 'UninstallApp = \$UninstallApp'
+        $steps = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'steps-guide.ps1'))
+        $steps | Should -Match '\$Capture\.UninstallApp'
+        $steps | Should -Match 'Find-NamedItem \(Get-El \$win ''gridApps''\) \(''\*'' \+ \$uninstallApp \+ ''\*''\)'
     }
 
     It 'takes optional Section and Image parameters that select sections and images' {

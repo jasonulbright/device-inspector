@@ -1,6 +1,6 @@
 # Inspect bar
 
-The Inspect bar is the row above every panel. It holds the device name, the site server, Site only, Inspect and the two export buttons.
+The Inspect bar is the row above every panel. It holds the device name, the site server, Site Only, Inspect and the two export buttons.
 
 ## What it does
 
@@ -33,15 +33,15 @@ The summary line on the **Device** panel counts the applications, the update row
 
 ### Read only the site
 
-1. Select **Site only**.
+1. Select **Site Only**.
 2. Select **Inspect**. The tool does not contact the device. The device groups are missing from the **Device** panel.
 
-![The Device panel after an inspection with Site only](../images/device-site-only.png)
+![The Device panel after an inspection with Site Only](../images/device-site-only.png)
 
 ### Read only the device
 
 1. In **Options**, clear the site server and the **Site Code**, then select **OK**. The site server box on the Inspect bar is then empty. With a site code left in **Options**, **OK** opens the message "A site code needs a site server." and the dialog stays open. When you clear only the site server box on the Inspect bar and a site code is set in **Options**, **Inspect** stops with the same message.
-2. Clear **Site only** and enter a valid device name.
+2. Clear **Site Only** and enter a valid device name.
 3. Select **Inspect**. The tool does not contact the site. The site record is missing from the **Device** panel, and the Site server row says "not queried".
 
 ![The Device panel after an inspection with no site server](../images/device-device-only.png)
@@ -54,9 +54,9 @@ The tool checks the boxes before it reads anything. A wrong value opens a messag
 
 ![The message for a device name that is not valid](../images/inspect-bad-device.png)
 
-**Site only** with no site server does not open a message. The log writes "Inspect: Site only needs a site server." and the status bar shows "Enter a site server, or clear Site only."
+**Site Only** with no site server does not open a message. The log writes "Inspect: Site Only needs a site server." and the status bar shows "Enter a site server, or clear Site Only."
 
-![The status bar after Site only with no site server](../images/inspect-site-only-no-server.png)
+![The status bar after Site Only with no site server](../images/inspect-site-only-no-server.png)
 
 ## Options and settings of this page
 
@@ -64,13 +64,13 @@ The tool checks the boxes before it reads anything. A wrong value opens a messag
 |---|---|
 | Device box | The device name. The watermark shows `Device name, e.g. WS01`. |
 | Site server box | The SMS Provider computer. The watermark shows `Site server, e.g. sms01.example.com`. |
-| **Site only** | Skips the connection to the device. |
+| **Site Only** | Skips the connection to the device. |
 | **Inspect** | Reads the device and the site. |
 | **Export JSON**, **Export HTML** | Save the inspection. See [Export](export.md). They turn on when an inspection exists. |
 
-The site code comes from **Options**. It is required whenever a site server is set. The tool saves the device name and **Site only** when you select **Inspect** with valid inputs. It saves the site server on **Inspect** only when the box is not empty, and when you select **OK** in Options.
+The site code comes from **Options**. It is required whenever a site server is set. The tool saves the device name and **Site Only** when you select **Inspect** with valid inputs. It saves the site server on **Inspect** only when the box is not empty, and when you select **OK** in Options.
 
-The **Enable actions** switch at the bottom of the sidebar is off at each start. While it is off, the tool only reads. See [Actions](actions.md).
+The **Enable Actions** switch at the bottom of the sidebar is off at each start. While it is off, the tool only reads. See [Actions](actions.md).
 
 ## Limits
 

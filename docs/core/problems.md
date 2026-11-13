@@ -26,7 +26,7 @@ An inspection.
 
 The same lines are in the log, each with the word `problem:`.
 
-With no problem, the panel says "No problems. Every part of the inspection ran." This covers only the sources that you selected. **Site only** skips the device checks. An inspection with no site server skips the site checks.
+With no problem, the panel says "No problems. Every part of the inspection ran." This covers only the sources that you selected. **Site Only** skips the device checks. An inspection with no site server skips the site checks.
 
 ![The Problems panel of a device with no problem](../images/problems-panel.png)
 
@@ -42,23 +42,23 @@ With no problem, the panel says "No problems. Every part of the inspection ran."
 |---|---|
 | `Site: no device named <name> exists in site <code>.` | The site has no resource with that name. |
 | `Site: <n> resource records share the name <name>. The first one is used.` | Several records have the same name. |
-| `Device: Connecting to remote server <name> failed ...` | The device did not answer. The text is the WinRM error. |
-| `Device: Operating system:`, `Device: Client details:`, `Device: Client health:`, `Device: Installed applications:`, `Device: Client application policy:`, `Device: Pending updates:` | One part of the device read failed. |
+| `Device: the read failed. The log file has the reason.` | The device did not answer. The log file, and the **Problem detail** section of an export, hold the WinRM error. |
+| `Device: Operating system: the read failed.`, `Device: Client details: the read failed.`, `Device: Client health: the read failed.`, `Device: Installed applications: the read failed.`, `Device: Client application policy: the read failed.`, `Device: Pending updates: the read failed.` | One part of the device read failed. Each line ends with "The log file has the reason." |
 | `Device: Client health: the CcmExec service does not exist.` | The device has no ConfigMgr client. |
 | `Site: Cannot open site <code> on <server>. ...` | The site drive did not open. No site fact was read. |
-| `Site: <text>` | The device lookup on the site (`Get-CMDevice`) failed. No site fact was read. |
-| `Site installed applications (<class>):`, `Site collection membership:`, `Site collection names:`, `Site deployments:`, `Site required updates:` | One part of the site read failed. |
+| `Site: the read failed. The log file has the reason.` | The device lookup on the site (`Get-CMDevice`) failed. No site fact was read. |
+| `Site installed applications (<class>): the read failed.`, `Site collection membership: the read failed.`, `Site collection names: the read failed.`, `Site deployments: the read failed.`, `Site required updates: the read failed.` | One part of the site read failed. Each line ends with "The log file has the reason." |
 
 ## Limits
 
-- The panel lists the text of the error as the site or WinRM gives it.
+- The panel shows a fixed sentence for each failed part. The error text of the site or of WinRM goes to the log file and to the **Problem detail** section of the exports.
 
 ## Troubleshooting
 
 | Message | Cause | Fix |
 |---|---|---|
-| The WinRM client cannot process the request because the server name cannot be resolved. | The device name is wrong or the name does not resolve. | Check the name and the DNS. |
-| Access is denied. | The account has no remote management right on the device, or no read right on the site. | Run the tool as an account with the rights in [Permissions](../reference/permissions.md). |
+| The WinRM client cannot process the request because the server name cannot be resolved. (in the log file) | The device name is wrong or the name does not resolve. | Check the name and the DNS. |
+| Access is denied. (in the log file) | The account has no remote management right on the device, or no read right on the site. | Run the tool as an account with the rights in [Permissions](../reference/permissions.md). |
 
 ## Links
 
