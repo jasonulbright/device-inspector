@@ -21,7 +21,7 @@ Use it each time you want the facts of a device, or when you want them again aft
 ### Inspect a device
 
 1. In the first box, enter the device name. Use letters, digits, dots, hyphens and underscores.
-2. In the second box, enter the site server (the SMS Provider computer).
+2. Check the second box. It shows the site server from **Options** as read-only text. To change it, select **Options**. The footer shows the same site server and the site code at the right end: `Site XYZ · sms01.example.com`.
 3. Select **Inspect**. You can also press Enter in the device box.
 4. Wait for the overlay to end. The log writes "Inspection of <device> finished: <n> problems." and the status bar shows the device, the time and the problem count.
 
@@ -40,7 +40,7 @@ The summary line on the **Device** panel counts the applications, the update row
 
 ### Read only the device
 
-1. In **Options**, clear the site server and the **Site Code**, then select **OK**. The site server box on the Inspect bar is then empty. With a site code left in **Options**, **OK** opens the message "A site code needs a site server." and the dialog stays open. When you clear only the site server box on the Inspect bar and a site code is set in **Options**, **Inspect** stops with the same message.
+1. In **Options**, clear the site server and the **Site Code**, then select **OK**. The site server box on the Inspect bar is then empty. With a site code left in **Options**, **OK** opens the message "A site code needs a site server." and the dialog stays open. The site server box on the Inspect bar is read-only. You change the site server only in **Options**.
 2. Clear **Site Only** and enter a valid device name.
 3. Select **Inspect**. The tool does not contact the site. The site record is missing from the **Device** panel, and the Site server row says "not queried".
 
@@ -54,7 +54,7 @@ The tool checks the boxes before it reads anything. A wrong value opens a messag
 
 ![The message for a device name that is not valid](../images/inspect-bad-device.png)
 
-**Site Only** with no site server does not open a message. The log writes "Inspect: Site Only needs a site server." and the status bar shows "Enter a site server, or clear Site Only."
+**Site Only** with no site server does not open a message. The log writes "Inspect: Site Only needs a site server." and the status bar shows "Set a site server in Options, or clear Site Only."
 
 ![The status bar after Site Only with no site server](../images/inspect-site-only-no-server.png)
 
@@ -63,7 +63,7 @@ The tool checks the boxes before it reads anything. A wrong value opens a messag
 | Control | Effect |
 |---|---|
 | Device box | The device name. The watermark shows `Device name, e.g. WS01`. |
-| Site server box | The SMS Provider computer. The watermark shows `Site server, e.g. sms01.example.com`. |
+| Site server box | The SMS Provider computer from **Options**. The box is read-only. When it is empty, the watermark shows `Set in Options`. |
 | **Site Only** | Skips the connection to the device. |
 | **Inspect** | Reads the device and the site. |
 | **Export JSON**, **Export HTML** | Save the inspection. See [Export](export.md). They turn on when an inspection exists. |
@@ -83,7 +83,7 @@ The **Enable Actions** switch at the bottom of the sidebar is off at each start.
 |---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | The trimmed name is empty, is longer than 255 characters, starts with a dot or holds another character. | Enter 1 to 255 letters, digits, dots, hyphens or underscores. Do not start with a dot. |
 | The site server is a computer name or an FQDN. | The site server box holds another character. | Enter a computer name or an FQDN. |
-| A site code needs a site server. | A site code is set in Options and the site server box is empty. | Enter a site server, or clear the site code in **Options**. |
+| A site code needs a site server. | A site code is set in Options and the site server is empty. | Enter a site server, or clear the site code in **Options**. |
 | A site server needs a site code. Enter it in Options. | The site server box holds a value and Options holds no site code. | Enter the site code in **Options**. |
 
 ## Links

@@ -180,6 +180,12 @@ $txtStatus    = $window.FindName('txtStatus')
 
 $null = $txtAppTitle
 
+# Shows the saved site code and site server at the right end of the footer. The footer is read-only text.
+function Update-FooterSite {
+    try { Update-SuiteFooter -Window $window -SiteCode ([string]$global:Prefs.SiteCode) -SiteServer ([string]$global:Prefs.SMSProvider) }
+    catch { Add-LogLine 'The footer was not updated.' }
+}
+
 function Add-LogLine {
     param([Parameter(Mandatory)][string]$Message)
     $ts = (Get-Date).ToString('HH:mm:ss')
@@ -562,7 +568,7 @@ function Invoke-Inspect {
     $siteOnly = [bool]$chkSiteOnly.IsChecked
     if ($siteOnly -and -not $check.SiteServer) {
         Add-LogLine 'Inspect: Site Only needs a site server.'
-        Set-StatusText 'Enter a site server, or clear Site Only.'
+        Set-StatusText 'Set a site server in Options, or clear Site Only.'
         return
     }
     $global:Prefs['LastDevice'] = $check.ComputerName
@@ -585,6 +591,7 @@ function Invoke-Inspect {
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
+        Update-FooterSite
         if ($State.ErrorMsg) {
             Write-ErrorLog ('Inspect failed: {0}' -f $State.ErrorMsg)
             Add-LogLine 'Inspect failed. The log file has the reason.'
@@ -831,7 +838,7 @@ function Show-OptionsDialog {
     [void]$dlg.ShowDialog()
     Update-StatusBarSummary
 }
-$btnOptions.Add_Click({ Show-OptionsDialog })
+$btnOptions.Add_Click({ Show-OptionsDialog; Update-FooterSite })
 
 # === Actions ===
 # Every action follows the same path: the switch must be on, a dialog names the action
@@ -1774,7 +1781,7 @@ function Invoke-DeviceListSearch {
     $check = Test-DeviceInspectorInput -ComputerName $neutralName -SiteServer ([string]$txtSiteServer.Text) -SiteCode ([string]$global:Prefs.SiteCode)
     $problems = @()
     if (-not $check.IsValid) { $problems += $check.Errors }
-    if (-not $check.SiteServer -and $problems.Count -eq 0) { $problems += 'Enter a site server in the Inspect bar. The device list reads the site.' }
+    if (-not $check.SiteServer -and $problems.Count -eq 0) { $problems += 'Set a site server in Options. The device list reads the site.' }
     if (-not $pattern -and -not $collection) { $problems += 'Enter a name pattern, a collection ID, or both.' }
     if ($pattern -and -not $collection -and $pattern -notmatch '[A-Za-z0-9]') { $problems += 'A name pattern without a collection needs at least one letter or digit.' }
     if ($pattern -and $pattern -notmatch '^[A-Za-z0-9_.*?-]{1,63}$') { $problems += 'The name pattern can hold letters, digits, hyphen, underscore, dot, * and ?.' }
@@ -1878,6 +1885,10 @@ $window.Add_Closing({
 })
 
 $window.Add_Loaded({
+    try {
+        Initialize-SuiteFooter -Window $window -StatusName 'txtStatus' -OnOpenOptions { Show-OptionsDialog; Update-FooterSite } | Out-Null
+    }
+    catch { Add-LogLine 'The footer was not set up.' }
     Restore-WindowState -Window $window -Path $global:WindowStatePath -OnStateLoaded {
         param($s)
         if ($s.ActiveView -in @('Device list', 'Device', 'Applications', 'Updates', 'Collections', 'Problems')) { Set-ActiveView -View ([string]$s.ActiveView) }
@@ -1888,6 +1899,7 @@ $window.Add_Loaded({
     $txtDevice.Text     = [string]$global:Prefs['LastDevice']
     $txtSiteServer.Text = [string]$global:Prefs['SMSProvider']
     $chkSiteOnly.IsChecked = [bool]$global:Prefs['SiteOnly']
+    Update-FooterSite
     Update-ControlState
     Update-StatusBarSummary
     Add-LogLine 'Device Inspector ready. Enter a device name and a site server, then click Inspect. The tool only reads until you turn on Enable Actions.'
