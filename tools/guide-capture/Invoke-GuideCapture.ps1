@@ -129,10 +129,10 @@ try {
         New-Item -ItemType Directory -Path (Split-Path -Path $path -Parent) -Force | Out-Null
         $deadline = (Get-Date).AddMinutes($waitMinutes)
         while ($true) {
-            $created = $false
             try {
-                $null = New-Item -ItemType File -Path $path -ErrorAction Stop
-                $created = $true
+                # One call creates the file and writes the token. It fails with an IOException when the file exists.
+                $null = New-Item -ItemType File -Path $path -Value $token -ErrorAction Stop
+                return $true
             }
             catch [System.IO.IOException] {
                 $held = Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
@@ -153,7 +153,9 @@ try {
                                 Remove-Item -LiteralPath $stale -Force -ErrorAction SilentlyContinue
                             }
                             else {
-                                Move-Item -LiteralPath $stale -Destination $path -ErrorAction Stop
+                                # A live lock goes back. When it cannot go back, delete the stale-named file and count the lock as busy.
+                                try { Move-Item -LiteralPath $stale -Destination $path -ErrorAction Stop }
+                                catch { Remove-Item -LiteralPath $stale -Force -ErrorAction SilentlyContinue }
                             }
                         }
                         catch { $null = $_ }
@@ -162,12 +164,6 @@ try {
                 }
                 if ((Get-Date) -gt $deadline) { return $false }
                 Start-Sleep -Seconds 15
-            }
-            if ($created) {
-                # The write of the token is outside the IOException catch: a failed write is not a lock of another capture.
-                try { Set-Content -LiteralPath $path -Value $token -ErrorAction Stop }
-                catch { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue; throw }
-                return $true
             }
         }
     } -ArgumentList $lockPath, $lockToken, 60, $LockWaitMinutes
@@ -206,6 +202,7 @@ try {
         do {
             Start-Sleep 5
             # The poll also touches the lock, so that a long capture is never taken for a stale one.
+            try {
             $state = Invoke-Command $session {
                 param($r, $path, $task, $token)
                 # The capture stops when its lock is gone or belongs to another capture.
@@ -214,6 +211,12 @@ try {
                 $lock.LastWriteTime = Get-Date
                 [pscustomobject]@{ Done = (Test-Path (Join-Path $r 'ui\out\finished.flag')); Task = (Get-ScheduledTask $task -ErrorAction SilentlyContinue).State; Result = (Get-ScheduledTaskInfo $task -ErrorAction SilentlyContinue).LastTaskResult }
             } -ArgumentList $root, $lockPath, $taskName, $lockToken
+            }
+            catch {
+                # A lost lock is not ours: the clean-up must not touch the task, the processes and the folder of another capture.
+                if ($_.Exception.Message -match 'The capture lock is lost') { $haveLock = $false }
+                throw
+            }
             $done = $state.Done
             # The task is not running any more, no finished flag exists and the last result is an error: stop now.
             if (-not $done -and $state.Task -eq 'Ready' -and $state.Result -notin 0, 267009, 267011) { throw ('The capture task stopped with result {0}: {1}' -f $state.Result, $steps) }

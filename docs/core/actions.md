@@ -12,13 +12,13 @@ Each action follows the same steps:
 4. You select **Run**, **Dry Run** or **Cancel**. **Cancel** is the default button, so Enter and Esc change nothing.
 5. The action gets an action ID: eight characters, for example `a1b2c3d4`. A dry run gets an ID too.
 6. The action runs in the background. **Dry Run** reads the current state and lists the steps, and changes nothing.
-7. Before a run, the tool writes a `STARTED` line with the ID to the action log. If it cannot write the line, the run does not start. When the run ends, the result line with the same ID goes to the action log, and the result goes to the window log and to the tool log. A result window shows the result. See [Running actions](#running-actions).
+7. Before a run, the tool writes a `STARTED` line with the ID to the action log. If it cannot write the line, the run does not start. When the run ends, the result line with the same ID goes to the action log, and the result goes to the window log and to the tool log. A result window shows the result. See [Running Actions](#running-actions).
 
 ![The Device panel with Enable Actions on: the three action buttons are on and the status bar says actions on](../images/actions-device-buttons.png)
 
 ![The confirmation dialog of the client policy update, with the Run, Dry Run and Cancel buttons](../images/actions-confirm-dialog.png)
 
-## Running actions
+## Running Actions
 
 An action on a device runs in its own background task. The window stays free while it runs:
 
@@ -156,7 +156,7 @@ The entry is off, with the reason as its tooltip:
 - after a removal, until the next inspection;
 - for a built-in collection (ID that starts with `SMS`): it has no direct membership rules.
 
-![The right-click menu of the Collections grid on a row with a query rule: Remove from collection is off, Add to collection is on](../images/collections-context-menu.png)
+![The right-click menu of the Collections grid on a row with a query rule: Remove from Collection... is off, Add to Collection... is on](../images/collections-context-menu.png)
 
 1. Turn on **Enable Actions**.
 2. Inspect the device with the site.

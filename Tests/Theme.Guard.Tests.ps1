@@ -416,14 +416,14 @@ Describe 'Fonts do not depend on the theme (b)' {
     It 'finds the site code, SMS Provider and site server boxes in the documents' {
         $arrName = foreach ($objDoc in @($script:arrOwnXamlDoc)) {
             [xml]$xml = $objDoc.Text
-            foreach ($strName in 'txtSiteCode', 'txtSmsProvider', 'txtSiteServer') { if ($xml.SelectSingleNode(("//*[@*[local-name()='Name']='{0}']" -f $strName))) { $strName } }
+            foreach ($strName in 'txtDevice', 'txtSiteCode', 'txtSmsProvider', 'txtSiteServer') { if ($xml.SelectSingleNode(("//*[@*[local-name()='Name']='{0}']" -f $strName))) { $strName } }
         }
-        (@($arrName | Sort-Object -Unique) -join ',') | Should -Be 'txtSiteCode,txtSiteServer,txtSmsProvider'
+        (@($arrName | Sort-Object -Unique) -join ',') | Should -Be 'txtDevice,txtSiteCode,txtSiteServer,txtSmsProvider'
     }
 
     It 'sets the title of each connection box that <_.Source> has to bold 14 pt or more, and the value to normal weight and a size below 14 pt' -ForEach $script:arrOwnXamlDocD {
         [xml]$xml = $_.Text
-        foreach ($strName in 'txtSiteCode', 'txtSmsProvider', 'txtProvider', 'txtSiteServer') {
+        foreach ($strName in 'txtDevice', 'txtSiteCode', 'txtSmsProvider', 'txtProvider', 'txtSiteServer') {
             $objElement = $xml.SelectSingleNode(("//*[@*[local-name()='Name']='{0}']" -f $strName))
             if (-not $objElement) { continue }
             $objTitle = $objElement.PreviousSibling
@@ -448,7 +448,7 @@ Describe 'Fonts do not depend on the theme (b)' {
             [xml]$xml = $objDoc.Text
             $intCount += @($xml.SelectNodes("//*[local-name()='TextBlock'][contains(@Style,'FieldLabelStyle') or contains(@Style,'OptLabel')]")).Count
         }
-        $intCount | Should -BeGreaterOrEqual 6
+        $intCount | Should -BeGreaterOrEqual 4
     }
 
     It 'flags a field label that is not bold, and resolves its style through the context' {
@@ -600,7 +600,7 @@ Describe 'Button template, single definition and dialog buttons (d)' {
         $strPressed = '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/><Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>'
         $scriptMake = {
             param($strHoverSetter, $strPressedSetter, $strExtra)
-            '<Grid ' + $script:strXamlHead + '><Grid.Resources><ControlTemplate x:Key="ThemedButtonTemplate" TargetType="Button"><Border Name="Bd" Background="{TemplateBinding Background}"><ContentPresenter Name="Cp"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True">' + $strHoverSetter + '</Trigger><Trigger Property="IsPressed" Value="True">' + $strPressedSetter + '</Trigger></ControlTemplate.Triggers></ControlTemplate>' + $strExtra + '</Grid.Resources></Grid>'
+            '<Grid ' + $script:strXamlHead + '><Grid.Resources><ControlTemplate x:Key="ThemedButtonTemplate" TargetType="Button"><Border Name="Bd" Background="{TemplateBinding Background}"><ContentPresenter Name="Cp"/></Border><ControlTemplate.Triggers><MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="IsEnabled" Value="True"/></MultiTrigger.Conditions>' + $strHoverSetter + '</MultiTrigger><Trigger Property="IsPressed" Value="True">' + $strPressedSetter + '</Trigger></ControlTemplate.Triggers></ControlTemplate>' + $strExtra + '</Grid.Resources></Grid>'
         }
         @(Get-ButtonTemplateViolation -Text (& $scriptMake $strHover $strPressed '') -Source 's').Count | Should -Be 0
         $strOpacity = '<Setter Property="Opacity" Value="0.5"/>'
@@ -896,6 +896,13 @@ Describe 'Titles are in Title Case (d)' {
         $script:arrDocFile.Count | Should -BeGreaterThan 5
         $arrBad = foreach ($objFile in $script:arrDocFile) { Get-DocLabelViolation -Text (Get-Content -LiteralPath $objFile.FullName -Raw) -Name $objFile.Name -Title $script:hashTitle }
         @($arrBad) | Should -BeNullOrEmpty
+        $arrHeading = foreach ($objFile in $script:arrDocFile) { Get-DocHeadingViolation -Text (Get-Content -LiteralPath $objFile.FullName -Raw) -Name $objFile.Name -Title $script:hashTitle }
+        @($arrHeading) | Should -BeNullOrEmpty
+    }
+
+    It 'flags a heading of a page that has another case than the window' {
+        $hashTitle = @{ 'running actions' = 'Running Actions' }
+        @(Get-DocHeadingViolation -Text "## Running actions`n## Running Actions`n## Other words`n" -Name 'p.md' -Title $hashTitle).Count | Should -Be 1
     }
 
     It 'flags a bold label of a page that has another case than the window' {
@@ -939,6 +946,20 @@ Describe 'No raw exception text in the window (e)' {
         }
         $intChecked | Should -BeGreaterOrEqual 5
         @($arrBad) | Should -BeNullOrEmpty
+    }
+
+    It 'treats a background exception with the marker Data RawText as a message of the tool, in every catch of the script' {
+        $objAst = Get-ScriptAst -Path $script:strShellPath
+        $arrCatch = @($objAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.CatchClauseAst] -and $n.Body.Extent.Text -match 'State\.ErrorMsg\s*=' }, $true))
+        $arrCatch.Count | Should -BeGreaterOrEqual 5
+        $arrBad = foreach ($objCatch in $arrCatch) {
+            $strText = $objCatch.Body.Extent.Text
+            if ($strText -notmatch 'Data\.Contains\(''RawText''\)' -or $strText -notmatch 'State\.ToolMessage\s*=\s*\$State\.ErrorMsg' -or $strText -notmatch 'State\.ErrorMsg\s*=\s*\[string\]\$_\.Exception\.Data\[''RawText''\]') { 'line {0}: {1}' -f $objCatch.Extent.StartLineNumber, $strText }
+        }
+        @($arrBad) | Should -BeNullOrEmpty
+        # The windows that show a failure of such a read show the message of the tool when there is one.
+        $objAst.Extent.Text | Should -Match 'if \(\$State\.ToolMessage\) \{ \[string\]\$State\.ToolMessage \} else'
+        ([regex]::Matches($objAst.Extent.Text, 'if \(\$State\.ToolMessage\)')).Count | Should -BeGreaterOrEqual 3
     }
 
     It 'has a Write-ErrorLog that writes to the log file only, and the script uses it for each failure' {

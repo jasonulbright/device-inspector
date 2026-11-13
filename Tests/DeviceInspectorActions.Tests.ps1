@@ -2388,6 +2388,19 @@ Describe 'Raw exception text stays out of the window' {
             Assert-RawTextHidden -Record $objResult -Text 'secret-boom-19'
         }
 
+        It 'shows the message that the tool threw itself and keeps the raw reason in Detail' {
+            Mock -ModuleName DeviceInspectorCommon Connect-InspectorSite {
+                $objError = New-Object -TypeName 'System.InvalidOperationException' -ArgumentList 'Enter the name of this computer as the site server.'
+                $objError.Data['RawText'] = 'secret-boom-30'
+                throw $objError
+            }
+            $objResult = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove
+            $objResult.Succeeded | Should -BeFalse
+            $objResult.Summary | Should -Be 'Enter the name of this computer as the site server.'
+            $objResult.Summary | Should -Not -Match 'secret-boom-30'
+            (@($objResult.Detail) -join "`n") | Should -Match 'secret-boom-30'
+        }
+
         It 'hides the text of a failed connection and of a failed read of the rules' {
             Mock -ModuleName DeviceInspectorCommon Connect-InspectorSite { throw 'secret-boom-20' }
             $objConnect = Invoke-DeviceInspectorCollectionChange -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -Operation Remove

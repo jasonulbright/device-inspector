@@ -22,7 +22,7 @@ Set the same version in these places:
 - `Invoke-DeviceInspector.ps1`, the `Version:` note
 - `CHANGELOG.md`, the top heading `## [<ver>] - <date>`
 
-Add the new `CHANGELOG.md` entry at the top. Do not edit the entries of earlier releases. A test checks that the manifest, the start script and the changelog carry the same version.
+Turn the `## [Unreleased]` heading of `CHANGELOG.md` into the entry `## [<ver>] - <date>`, and keep a new empty `## [Unreleased]` heading above it. Do not edit the entries of earlier releases. A test checks that the manifest, the start script and the changelog carry the same version.
 
 ## 3. Shared module
 

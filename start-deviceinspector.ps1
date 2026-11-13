@@ -581,7 +581,7 @@ function Invoke-Inspect {
             if ($A.SiteOnly) { $p['SkipDevice'] = $true }
             $State.Result = Get-DeviceInspection @p
         }
-        catch { $State.ErrorMsg = $(if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { [string]$_.Exception.Data['RawText'] } else { $_.Exception.Message }) }
+        catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
@@ -589,7 +589,7 @@ function Invoke-Inspect {
             Write-ErrorLog ('Inspect failed: {0}' -f $State.ErrorMsg)
             Add-LogLine 'Inspect failed. The log file has the reason.'
             Set-StatusText 'Inspect failed. The log file has the reason.'
-            [void](Show-ThemedMessage -Owner $window -Title 'Inspect' -Message 'The inspection failed. Check the site server, the site code and your account rights in Options. The log file has the reason.' -Icon Error)
+            [void](Show-ThemedMessage -Owner $window -Title 'Inspect' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The inspection failed. Check the site server, the site code and your account rights in Options. The log file has the reason.' }) -Icon Error)
             return
         }
         $r = $State.Result
@@ -669,9 +669,13 @@ function Show-OptionsDialog {
                                       SnapsToDevicePixels="True"/>
                 </Border>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                    </Trigger>
+                    </MultiTrigger>
                     <Trigger Property="IsKeyboardFocused" Value="True">
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
@@ -884,9 +888,13 @@ function Show-ActionConfirmDialog {
                                       SnapsToDevicePixels="True"/>
                 </Border>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                    </Trigger>
+                    </MultiTrigger>
                     <Trigger Property="IsKeyboardFocused" Value="True">
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
@@ -998,6 +1006,7 @@ function Write-ActionResult {
         foreach ($line in @(ConvertTo-DeviceInspectorActionText -Result $Result)) { Add-LogLine $line }
         if ($logError) {
             Write-ErrorLog ('The action log could not be written: {0}' -f $logError)
+            foreach ($detailLine in @($Result.Detail)) { if ($detailLine) { Write-ErrorLog ('Detail of {0}: {1}' -f $Result.ActionId, $detailLine) } }
             Add-LogLine 'The action log could not be written. The log file has the reason.'
         }
     }
@@ -1049,9 +1058,13 @@ function Show-ActionResultNotice {
                                       SnapsToDevicePixels="True"/>
                 </Border>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                    </Trigger>
+                    </MultiTrigger>
                     <Trigger Property="IsKeyboardFocused" Value="True">
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
@@ -1188,9 +1201,13 @@ function Show-CloseWarningDialog {
                                       SnapsToDevicePixels="True"/>
                 </Border>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                    </Trigger>
+                    </MultiTrigger>
                     <Trigger Property="IsKeyboardFocused" Value="True">
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
@@ -1424,7 +1441,7 @@ function Start-DeviceActionRun {
                 $p = $A.Parameters
                 $State.Result = & $A.Function @p
             }
-            catch { $State.ErrorMsg = $(if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { [string]$_.Exception.Data['RawText'] } else { $_.Exception.Message }) }
+            catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
             finally { $State.Done = $true }
         }).AddArgument($Arguments).AddArgument($state)
         $handle = $ps.BeginInvoke()
@@ -1524,7 +1541,7 @@ function Start-ActionWork {
             $p = $A.Parameters
             $State.Result = & $A.Function @p
         }
-        catch { $State.ErrorMsg = $(if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { [string]$_.Exception.Data['RawText'] } else { $_.Exception.Message }) }
+        catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
@@ -1719,7 +1736,7 @@ function Invoke-AddToCollection {
     Start-BackgroundWork -Title 'Reading the device collections' -Step 'Connecting to the site...' -Arguments $arguments -Work {
         param($A, $State)
         try { $State.Result = @(Get-DeviceInspectorCollectionList -SiteServer $A.Server -SiteCode $A.Code) }
-        catch { $State.ErrorMsg = $(if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { [string]$_.Exception.Data['RawText'] } else { $_.Exception.Message }) }
+        catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
@@ -1727,7 +1744,7 @@ function Invoke-AddToCollection {
         if ($State.ErrorMsg) {
             Write-ErrorLog ('Add to collection: the collections cannot be read: {0}' -f $State.ErrorMsg)
             Add-LogLine 'Add to collection: the collections cannot be read. The log file has the reason.'
-            [void](Show-ThemedMessage -Owner $window -Title 'Add to Collection' -Message 'The collections cannot be read. Check the site server, the site code and your account rights. The log file has the reason.' -Icon Error)
+            [void](Show-ThemedMessage -Owner $window -Title 'Add to Collection' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The collections cannot be read. Check the site server, the site code and your account rights. The log file has the reason.' }) -Icon Error)
             return
         }
         $choices = @(Select-DeviceInspectorAddableCollection -Collections @($State.Result) -Rows @($gridCollections.ItemsSource))
@@ -1772,7 +1789,7 @@ function Invoke-DeviceListSearch {
     Start-BackgroundWork -Title 'Reading the device list' -Step 'Connecting to the site...' -Arguments $arguments -Work {
         param($A, $State)
         try { $State.Result = Get-DeviceInspectorDeviceList -SiteServer $A.Server -SiteCode $A.Code -NamePattern $A.Pattern -CollectionId $A.Collection }
-        catch { $State.ErrorMsg = $(if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { [string]$_.Exception.Data['RawText'] } else { $_.Exception.Message }) }
+        catch { $State.ErrorMsg = [string]$_.Exception.Message; if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $State.ToolMessage = $State.ErrorMsg; $State.ErrorMsg = [string]$_.Exception.Data['RawText'] } }
         finally { $State.Done = $true }
     } -OnDone {
         param($State)
@@ -1783,7 +1800,7 @@ function Invoke-DeviceListSearch {
             $gridDeviceList.ItemsSource = @()
             $txtListSummary.Text = 'The search failed. The log file has the reason.'
             Update-ControlState
-            [void](Show-ThemedMessage -Owner $window -Title 'Device List' -Message 'The search failed. Check the site server, the site code and your account rights. The log file has the reason.' -Icon Error)
+            [void](Show-ThemedMessage -Owner $window -Title 'Device List' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The search failed. Check the site server, the site code and your account rights. The log file has the reason.' }) -Icon Error)
             return
         }
         $list = $State.Result

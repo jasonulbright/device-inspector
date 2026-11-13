@@ -1425,10 +1425,16 @@ function Invoke-DeviceInspectorCollectionChange {
         } catch {
             Write-Debug -Message $_.Exception.Message
             # Connect-InspectorSite throws a fixed text and keeps the raw reason in the Data of the exception.
+            # One marker rule: an exception with Data['RawText'] carries a message that the tool wrote for the person. The window shows
+            # that message and the action log keeps the raw reason. Any other exception shows a fixed sentence.
             $strRaw = $_.Exception.Message
-            if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) { $strRaw = [string]$_.Exception.Data['RawText'] }
+            $strShown = ('Cannot run the action on site {0}. The action log has the reason.' -f $SiteCode)
+            if ($_.Exception.Data -and $_.Exception.Data.Contains('RawText')) {
+                $strShown = $_.Exception.Message
+                $strRaw = [string]$_.Exception.Data['RawText']
+            }
             $listDetail.Add(('Site {0}: {1}' -f $SiteCode, $strRaw))
-            return (& $scriptBlockEnd $false ('Cannot run the action on site {0}. The action log has the reason.' -f $SiteCode))
+            return (& $scriptBlockEnd $false $strShown)
         } finally {
             Disconnect-InspectorSite -Connection $objConnection
         }

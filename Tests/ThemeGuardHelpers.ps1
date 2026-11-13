@@ -501,9 +501,10 @@ function Get-ButtonTemplateViolation {
     foreach ($objNode in @($objTemplate.SelectNodes('.//*[@Opacity]'))) {
         [void]$listFound.Add(('{0}: <{1}> in ThemedButtonTemplate sets Opacity' -f $Source, $objNode.LocalName))
     }
-    $objHover = $objTemplate.SelectSingleNode(".//*[local-name()='Trigger'][@Property='IsMouseOver']")
+    # The hover rule is a MultiTrigger on IsMouseOver and IsEnabled: a disabled button shows no hover border.
+    $objHover = $objTemplate.SelectSingleNode(".//*[local-name()='MultiTrigger'][*[local-name()='MultiTrigger.Conditions']/*[local-name()='Condition'][@Property='IsMouseOver'][@Value='True']][*[local-name()='MultiTrigger.Conditions']/*[local-name()='Condition'][@Property='IsEnabled'][@Value='True']]")
     if (-not $objHover) {
-        [void]$listFound.Add(('{0}: ThemedButtonTemplate has no IsMouseOver trigger' -f $Source))
+        [void]$listFound.Add(('{0}: ThemedButtonTemplate has no hover MultiTrigger on IsMouseOver and IsEnabled' -f $Source))
     }
     else {
         $arrBorder = @(Get-SetterChild -Node $objHover -LeafPattern '^BorderBrush$')
@@ -846,5 +847,20 @@ function Get-DocLabelViolation {
             $strKey = $strLabel.ToLowerInvariant()
             if ($Title.ContainsKey($strKey) -and $Title[$strKey] -cne $strLabel) { '{0}:{1}: {2} should be {3}' -f $Name, $intLine, $strLabel, $Title[$strKey] }
         }
+    }
+}
+
+# One text per heading of a Markdown page that names a UI title in another case: '## Running actions' where the window says
+# Running Actions. A heading may hold other words, so only a heading that equals a title ignoring case is checked.
+function Get-DocHeadingViolation {
+    param([string]$Text, [string]$Name, [hashtable]$Title)
+    $intLine = 0
+    foreach ($strLine in ($Text -split "\r?\n")) {
+        $intLine++
+        $objMatch = [regex]::Match($strLine, '^#{1,6}\s+(.+?)\s*$')
+        if (-not $objMatch.Success) { continue }
+        $strLabel = $objMatch.Groups[1].Value.Trim()
+        $strKey = $strLabel.ToLowerInvariant()
+        if ($Title.ContainsKey($strKey) -and $Title[$strKey] -cne $strLabel) { '{0}:{1}: heading {2} should be {3}' -f $Name, $intLine, $strLabel, $Title[$strKey] }
     }
 }

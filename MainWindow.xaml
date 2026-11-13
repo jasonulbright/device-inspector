@@ -48,9 +48,13 @@
                                       SnapsToDevicePixels="True"/>
                 </Border>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True"/>
+                            <Condition Property="IsEnabled" Value="True"/>
+                        </MultiTrigger.Conditions>
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                    </Trigger>
+                    </MultiTrigger>
                     <Trigger Property="IsKeyboardFocused" Value="True">
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
@@ -315,7 +319,7 @@
                     <Button x:Name="btnInspect" Grid.Column="0" Content="Inspect"
                             Style="{StaticResource PrimaryButtonStyle}"
                             ToolTip="Read the device and the site without any change."/>
-                    <TextBlock Grid.Column="1" Text="Device" Style="{StaticResource FieldLabelStyle}"/>
+                    <TextBlock Grid.Column="1" Text="Device" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBox x:Name="txtDevice" Grid.Column="2" FontSize="12" Padding="6,4,6,4" Margin="0,0,12,0"
                              Controls:TextBoxHelper.Watermark="e.g. WS01"/>
                     <TextBlock Grid.Column="3" Text="Site Server" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>

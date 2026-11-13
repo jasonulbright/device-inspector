@@ -172,9 +172,13 @@ Describe 'Capture scripts' {
         $script:InvokeText | Should -Match 'if \(-not \(Test-Path -LiteralPath \$path\)\) \{ continue \}'
         $script:InvokeText | Should -Match 'Start-Sleep -Seconds 15'
         # The token is written after the IOException catch, and a lost lock stops the capture.
-        $script:InvokeText | Should -Match '\$created = \$true'
-        $script:InvokeText | Should -Match 'if \(\$created\) \{'
+        $script:InvokeText | Should -Match 'New-Item -ItemType File -Path \$path -Value \$token -ErrorAction Stop'
+        $script:InvokeText | Should -Not -Match 'Set-Content -LiteralPath \$path'
         $script:InvokeText | Should -Match 'The capture lock is lost\.'
+        # A lost lock clears the flag, so that the clean-up leaves the task and the folder of the other capture alone.
+        $script:InvokeText | Should -Match '-match ''The capture lock is lost''\) \{ \$haveLock = \$false \}'
+        # A live lock that cannot go back to its name is deleted under the stale name.
+        $script:InvokeText | Should -Match 'catch \{ Remove-Item -LiteralPath \$stale -Force -ErrorAction SilentlyContinue \}'
         $script:InvokeText | Should -Match '\.LastWriteTime = Get-Date'
     }
 
