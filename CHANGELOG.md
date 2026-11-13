@@ -4,6 +4,10 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+## [2026.11.13.0012] - 2026-11-13
+
+## 1 footer that shows the site and the site server
+
 ### Fixed
 
 - Restore the SemiBold weight of the page title, the progress title, the log header, the running actions header, the device count and the Options headers. The light theme change had made them bold. Only field titles and the app title are bold.
