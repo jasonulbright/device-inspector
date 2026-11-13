@@ -4,6 +4,14 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Restore the SemiBold weight of the page title, the progress title, the log header, the running actions header, the device count and the Options headers. The light theme change had made them bold. Only field titles and the app title are bold.
+
+### Added
+
+- Add FontWeight.Guard.Tests.ps1 and FontWeightGuardHelpers.ps1. They fail when a bold weight is set on a label that is not a field title or an app title, in XAML, in the XAML of the scripts and in code that sets a weight at run time.
+
 ## [2026.11.13.0011] - 2026-11-13
 
 ## 4 fixes for the light theme and the buttons

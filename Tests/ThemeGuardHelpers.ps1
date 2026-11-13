@@ -604,6 +604,8 @@ function Get-FieldLabelViolation {
     $hashStyle = Get-KeyedNodeTable -Text $Text -Context $Context -Name 'Style' -Target 'TextBlock'
     foreach ($objText in @($xml.SelectNodes("//*[local-name()='TextBlock'][contains(@Style,'FieldLabelStyle') or contains(@Style,'OptLabel')]"))) {
         $strKey = Get-ResourceKey $objText.GetAttribute('Style')
+        # A header keeps the SemiBold weight of its own. It is not a field label.
+        if ($objText.GetAttribute('FontWeight') -eq 'SemiBold') { continue }
         $boolBold = ($objText.GetAttribute('FontWeight') -eq 'Bold')
         if (-not $boolBold -and $hashStyle.ContainsKey($strKey)) {
             $boolBold = (@(Get-SetterChild -Node $hashStyle[$strKey] -LeafPattern '^FontWeight$' | Where-Object { $_.GetAttribute('Value') -eq 'Bold' }).Count -gt 0)

@@ -293,7 +293,7 @@
 
             <Border Grid.Row="0" Background="{DynamicResource MahApps.Brushes.Gray10}" Padding="16,12,16,10">
                 <StackPanel>
-                    <TextBlock x:Name="txtModuleTitle" Text="Device" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock x:Name="txtModuleTitle" Text="Device" FontSize="18" FontWeight="SemiBold"/>
                     <TextBlock x:Name="txtModuleSubtitle"
                                Text="Enter a device name, then click Inspect. The inspection only reads."
                                FontSize="11"
@@ -337,7 +337,7 @@
             <!-- Running actions: shown only while a device action runs. A run ends, its row goes away. -->
             <Border x:Name="panelRuns" Grid.Row="2" Visibility="Collapsed" Padding="16,0,16,6">
                 <StackPanel>
-                    <TextBlock x:Name="lblRuns" Text="Running Actions" FontSize="11" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="lblRuns" Text="Running Actions" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4"/>
                     <DataGrid x:Name="gridRuns" MaxHeight="100" SelectionMode="Single" ColumnHeaderHeight="24"
                               Style="{StaticResource ViewDataGrid}"
                               ColumnHeaderStyle="{StaticResource GridHeaderStyle}"
@@ -571,7 +571,7 @@
                                                Foreground="{DynamicResource MahApps.Brushes.Accent}"/>
                         <TextBlock x:Name="txtProgressTitle"
                                    Text="Inspecting..."
-                                   FontSize="18" FontWeight="Bold"
+                                   FontSize="18" FontWeight="SemiBold"
                                    HorizontalAlignment="Center"
                                    Margin="0,14,0,0"/>
                         <TextBlock x:Name="txtProgressStep"
@@ -592,7 +592,7 @@
                 <DockPanel>
                     <DockPanel DockPanel.Dock="Top" LastChildFill="False" Margin="0,2,4,2">
                         <TextBlock x:Name="lblLogOutput" DockPanel.Dock="Left" Text="Log Output"
-                                   FontSize="11" FontWeight="Bold" VerticalAlignment="Center"
+                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
                                    Margin="8,4,0,4"/>
                         <Button x:Name="btnOpenLog" DockPanel.Dock="Right" Content="Open Log File"
                                 Style="{StaticResource LogButtonStyle}"
