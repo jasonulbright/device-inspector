@@ -161,9 +161,10 @@ Section 'actions' {
     Wait-NoRun
     $res = Find-Top 'Action Result' 15; Shot $res 'actions-result'; Close-ResultWindows
     # The close warning: close the window right after a dry run starts, then choose Wait.
+    # Find the Close button before the dialog opens, and the dry run button at once: the dry run must still be open when the window closes.
+    $closeButton = Get-El $win 'Close'
     Invoke-El (Get-El $win 'btnFullInventory'); $dlg = Find-Top 'Full Hardware Inventory' 15
-    # Find both buttons first: the dry run must still be open when the window closes.
-    $dryButton = Get-El $dlg 'btnActionDryRun'; $closeButton = Get-El $win 'Close'
+    $dryButton = Get-El $dlg 'btnActionDryRun'
     Invoke-El $dryButton
     Invoke-El $closeButton
     $warn = Find-Top 'Actions Still Running' 15
