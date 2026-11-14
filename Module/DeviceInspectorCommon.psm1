@@ -1,4 +1,4 @@
-﻿# Logging and settings come from the vendored SuiteCommon copy. The guard keeps a
+# Logging and settings come from the vendored SuiteCommon copy. The guard keeps a
 # -Force import of this module (the background runspace does one) from resetting
 # SuiteCommon state during a session.
 if (-not (Get-Module -Name SuiteCommon)) {

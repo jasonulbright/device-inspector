@@ -1,4 +1,4 @@
-﻿# .SYNOPSIS
+# .SYNOPSIS
 # Prints a read-only report of one device and optionally writes the same facts as JSON.
 #
 # .DESCRIPTION

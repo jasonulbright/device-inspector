@@ -1,4 +1,4 @@
-﻿# Releasing Device Inspector
+# Releasing Device Inspector
 
 ## 1. Test
 

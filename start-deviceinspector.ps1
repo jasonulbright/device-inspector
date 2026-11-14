@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Main window of Device Inspector, a tool that shows the facts of one device from a Configuration Manager site and from the device itself, with optional actions.
 
