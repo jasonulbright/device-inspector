@@ -28,7 +28,7 @@
 
 .NOTES
     ScriptName : start-deviceinspector.ps1
-    Version    : 2026.11.13.0012
+    Version    : 2026.11.14.0013
     Updated    : 2026-11-10
 #>
 
