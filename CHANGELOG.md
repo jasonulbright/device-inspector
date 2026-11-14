@@ -8,7 +8,7 @@ All notable changes to Device Inspector are documented in this file.
 
 - The title bar of an inactive window has white text at 4.5:1 or more in both themes.
 - Text boxes, combo boxes and grid headers take the shared border and disabled-text styles in both themes.
-- Let the window tests show their windows at 80,80 when SUITE_VISIBLE_WINDOWS is 1, for the visible run in the labadmin session of CLIENT01. Without the variable the windows stay at -32000.
+- Let the window tests show their windows at 80,80 when SUITE_VISIBLE_WINDOWS is 1, for the visible run in the interactive lab session of CLIENT01. Without the variable the windows stay at -32000.
 
 ## [2026.11.13.0012] - 2026-11-13
 

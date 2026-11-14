@@ -45,7 +45,7 @@ $script:HarnessBootstrap = {
         $reader = New-Object System.Xml.XmlNodeReader $xaml
         $w = [System.Windows.Markup.XamlReader]::Load($reader)
         $w.WindowStartupLocation = 'Manual'
-        # SUITE_VISIBLE_WINDOWS=1 (the visible lab run in the labadmin session) shows the window on the desktop.
+        # SUITE_VISIBLE_WINDOWS=1 (the visible lab run in the interactive lab session) shows the window on the desktop.
         $visible = ($env:SUITE_VISIBLE_WINDOWS -eq '1')
         $w.Left = $(if ($visible) { 80 } else { -32000 }); $w.Top = $(if ($visible) { 80 } else { -32000 })
         $w.ShowInTaskbar = $visible
