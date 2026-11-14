@@ -45,7 +45,7 @@ The window connects with the Windows account that runs it. It stores no password
    ```powershell
    powershell -ExecutionPolicy Bypass -File start-deviceinspector.ps1
    ```
-3. Enter the device name. The site server box shows the saved site server and is read-only. **Options** is the only place that sets the site server (the SMS Provider FQDN) and the site code. The site code is required when a site server is set. The footer shows both at the right end, for example `Site XYZ · sms01.example.com`. Select the footer text to open **Options**.
+3. Enter the device name. The site server box shows the saved site server and is read-only. **Options** is the only place that sets the site server (the SMS Provider FQDN) and the site code. The site code is required when a site server is set. The footer shows both at the right end, for example `Site XYZ`, a middle dot, and `sms01.example.com`. Select the footer text to open **Options**.
 4. Click **Inspect**.
 
 Clear the site server in **Options** to read only the device. Select **Site Only** to read only the site. Inside the AppPackager Suite, the launcher hands its site code and provider to the tool.

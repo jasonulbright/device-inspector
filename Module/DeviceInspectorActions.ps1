@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 
 # Every change to a device or to the site goes through this file. Each action has a
 # dry run: the same code path reads the current state and lists the steps, and skips

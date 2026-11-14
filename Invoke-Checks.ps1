@@ -1,4 +1,4 @@
-﻿# .SYNOPSIS
+# .SYNOPSIS
 # Runs PSScriptAnalyzer and the Pester tests for this repository.
 #
 # .DESCRIPTION

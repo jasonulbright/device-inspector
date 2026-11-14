@@ -21,7 +21,7 @@ Use it each time you want the facts of a device, or when you want them again aft
 ### Inspect a device
 
 1. In the first box, enter the device name. Use letters, digits, dots, hyphens and underscores.
-2. Check the second box. It shows the site server from **Options** as read-only text. To change it, select **Options**. The footer shows the same site server and the site code at the right end: `Site XYZ · sms01.example.com`.
+2. Check the second box. It shows the site server from **Options** as read-only text. To change it, select **Options**. The footer shows the same site server and the site code at the right end: `Site XYZ`, a middle dot, and `sms01.example.com`.
 3. Select **Inspect**. You can also press Enter in the device box.
 4. Wait for the overlay to end. The log writes "Inspection of <device> finished: <n> problems." and the status bar shows the device, the time and the problem count.
 

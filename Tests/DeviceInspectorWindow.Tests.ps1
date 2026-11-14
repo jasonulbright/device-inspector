@@ -1,4 +1,4 @@
-﻿#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
+#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
 [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake computer names.')]
 param ()
 

@@ -4,7 +4,7 @@ The Device List panel finds devices on the site, by name or by collection, and i
 
 ## What it does
 
-The panel reads the devices of the site with the site server and the site code of **Options**. The footer shows both, for example `Site MCM · cm01.contoso.com`. It only reads. It shows one row for each device: the name, the resource ID, whether a client is installed and active, the client version, the operating system, the last logon user and the last active time (UTC).
+The panel reads the devices of the site with the site server and the site code of **Options**. The footer shows both, for example `Site MCM`, a middle dot, and `cm01.contoso.com`. It only reads. It shows one row for each device: the name, the resource ID, whether a client is installed and active, the client version, the operating system, the last logon user and the last active time (UTC).
 
 ## When to use it
 

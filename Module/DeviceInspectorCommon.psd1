@@ -1,4 +1,4 @@
-﻿@{
+@{
     RootModule        = 'DeviceInspectorCommon.psm1'
     ModuleVersion     = '2026.11.14.0013'
     GUID              = '5b0d6f0e-6f6c-4c52-9a53-3a0d2f4c9b11'
