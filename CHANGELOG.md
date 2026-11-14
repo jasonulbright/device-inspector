@@ -4,6 +4,11 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- The title bar of an inactive window has white text at 4.5:1 or more in both themes.
+- Text boxes, combo boxes and grid headers take the shared border and disabled-text styles in both themes.
+
 ## [2026.11.13.0012] - 2026-11-13
 
 ## 1 footer that shows the site and the site server
