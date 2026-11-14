@@ -66,6 +66,8 @@
             </ControlTemplate>
 
             <Style x:Key="ThemedButtonStyle" TargetType="Button" BasedOn="{StaticResource MahApps.Styles.Button.Square}">
+
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
                 <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                 <Setter Property="BorderThickness" Value="1"/>
@@ -132,7 +134,7 @@
                  The border is the theme foreground, because the highlight alone is 2.1:1 on the dark window. -->
             <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SquareInlineButtonStyle}">
                 <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
