@@ -4,6 +4,10 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+## [2026.11.15.0016] - 2026-11-15
+
+## 44 guide images retaken with blue pressed buttons
+
 ### Changed
 
 - Retake all guide images after the button and title bar changes.
