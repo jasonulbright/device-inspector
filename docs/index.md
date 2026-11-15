@@ -52,4 +52,6 @@ The credential script sets `$LabCredential`. Keep it outside the repository. The
 
 The images of the uninstall menu need an MSI row with the Uninstall entry on. Add `-UninstallApp` with the name of such an application when the workstation lists the default (Microsoft Visual C++ 2022 X86 Minimum Runtime) as a system component. The capture never runs the uninstall: it chooses **Cancel**.
 
+Every image that `README.md` shows is a file of `docs/images`. A README image that is only a copy of a capture image goes in `tools/guide-capture/readme-images.json` (README path to `docs/images` file). After a capture, run `tools/guide-capture/Sync-ReadmeImages.ps1` to copy the images over the README copies. `Tests/Readme.Images.Guard.Tests.ps1` checks that every README image is current.
+
 To retake a few images, add `-Section` with the names of the sections that make them, and `-Image` with the image names (without `.png`). Only the named sections run, and only the named images are copied. A section uses the state that the sections before it leave, so name every section that the images need, in the order of the steps file. The section `action menus` makes the uninstall images and needs an application row that the capture can uninstall: leave it out when the workstation has none. The script stops before it connects when a section name is wrong.

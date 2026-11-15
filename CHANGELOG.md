@@ -6,11 +6,14 @@ All notable changes to Device Inspector are documented in this file.
 
 ### Changed
 
+- Retake all guide images after the button and title bar changes.
+- Sync SuiteCommon: caption text and button templates in the message box and confirm dialog.
 - Sync SuiteCommon: light blue inactive title bar, explicit hover and pressed button fills.
 - Keep primary buttons blue and secondary buttons gray when pressed, in every window.
 
 ### Added
 
+- Add a README image guard and Sync-ReadmeImages.ps1 to keep README images current.
 - Check dialog bodies, inputs and title bars against the theme in Chrome.Window.Tests.ps1.
 - Measure pressed and hover fills of a dialog button in ButtonStates.Window.Tests.ps1.
 - Close stray windows after each window test call, with a headless guard for it.
