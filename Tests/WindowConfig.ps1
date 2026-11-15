@@ -49,6 +49,7 @@ $script:SampleRows = @{
 $script:MainMeasureScript = {
     $cfg = $Arguments.Config
     $w = Open-TestWindow -XamlPath (Join-Path $Root $cfg.Xaml) -Dark $Arguments.Dark -Width $Arguments.W -Height $Arguments.H
+    try {
     foreach ($grid in $Arguments.Rows.Keys) {
         $g = $w.FindName($grid)
         $g.ItemsSource = @($Arguments.Rows[$grid])
@@ -84,8 +85,9 @@ $script:MainMeasureScript = {
             ButtonStates = $buttonStates
         }
     }
-    $w.Close()
     , $out
+    }
+    finally { $w.Close() }
 }
 
 # Runs in the STA runspace. Opens the Options dialog from its XAML text at its declared and minimum
@@ -94,6 +96,7 @@ $script:MainMeasureScript = {
 $script:DialogMeasureScript = {
     $cfg = $Arguments.Config
     $main = Open-TestWindow -XamlPath (Join-Path $Root $cfg.Xaml) -Dark $Arguments.Dark -Width 1024 -Height 720
+    try {
     Initialize-ShellTheme -Window $main -Dark $Arguments.Dark -Views $cfg.Views -OptionsButtonName $cfg.OptionsButton -LogLabelName $cfg.LogLabel -ActiveView $cfg.Views[0].Name
     [xml]$x = $Arguments.Xaml
     $probe = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $x))
@@ -103,6 +106,7 @@ $script:DialogMeasureScript = {
     $panes = $cfg.DialogPanes
     $rows = foreach ($s in $sizes) {
         $w = Open-TestWindow -XamlText $Arguments.Xaml -Dark $Arguments.Dark -Width $s[0] -Height $s[1]
+        try {
         # Entered text, so the contrast of the input text is measured too.
         $w.FindName('txtSiteCode').Text = 'ABC'
         $w.FindName('txtSmsProvider').Text = 'site.example.test'
@@ -120,10 +124,12 @@ $script:DialogMeasureScript = {
                 TitleBar = Get-TitleBarContrast $w
             }
         }
-        $w.Close()
+        }
+        finally { $w.Close() }
     }
-    $main.Close()
     , @($rows)
+    }
+    finally { $main.Close() }
 }
 
 # Runs in the STA runspace. Opens the action confirmation from its XAML text, owned by the
@@ -133,6 +139,7 @@ $script:ActionDialogMeasureScript = {
     $main = Open-TestWindow -XamlPath (Join-Path $Root $cfg.Xaml) -Dark $Arguments.Dark -Width 1024 -Height 720
     Initialize-ShellTheme -Window $main -Dark $Arguments.Dark -Views $cfg.Views -OptionsButtonName $cfg.OptionsButton -LogLabelName $cfg.LogLabel -ActiveView $cfg.Views[0].Name
     $w = Open-TestWindow -XamlText $Arguments.Xaml -Dark $Arguments.Dark -Width 560 -Height 300
+    try {
     $w.FindName('txtDeviceCount').Text = 'This action changes 1 device: device-a'
     $w.FindName('txtActionMessage').Text = 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it.'
     Set-DialogTheme -Dialog $w -IsDark $Arguments.Dark
@@ -144,9 +151,9 @@ $script:ActionDialogMeasureScript = {
         ButtonStates = @(Get-ButtonStateContrast $w)
         TitleBar = Get-TitleBarContrast $w
     }
-    $w.Close()
-    $main.Close()
     $out
+    }
+    finally { $w.Close(); $main.Close() }
 }
 
 # Runs in the STA runspace. Opens the main window (and, for the Options case, the Options dialog
@@ -162,6 +169,7 @@ $script:MessageBoxMeasureScript = {
     Wait-Layout $main
     $owner = $main
     $dialog = $null
+    try {
     if ($Arguments.Xaml) {
         [xml]$x = $Arguments.Xaml
         $dialog = [System.Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $x))
@@ -196,7 +204,7 @@ $script:MessageBoxMeasureScript = {
     $timer.Start()
     try { [void](Show-ThemedMessage -Owner $owner -Title 'Device Inspector' -Message 'A site server needs a site code. Enter it in Options.' -Icon Warn) }
     finally { $timer.Stop() }
-    if ($dialog) { $dialog.Close() }
-    $main.Close()
     $global:HarnessBox
+    }
+    finally { if ($dialog) { $dialog.Close() }; $main.Close() }
 }

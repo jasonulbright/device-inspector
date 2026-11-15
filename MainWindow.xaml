@@ -22,16 +22,14 @@
 
             <!-- Contrast overrides. One value passes in both themes: #7F7F7F is 4.0:1 on white and 3.8:1 on #252525
                  (control borders need 3:1), and white title text is 7.0:1 on #595959 (the inactive title bar).
-                 The start script passes every resource whose key starts with 'SuiteTheme.' to Initialize-SuiteTheme:
-                 the default inactive light title bar #4BA3E0 gives white text 2.6:1. -->
-            <SolidColorBrush x:Key="SuiteTheme.TitleBarInactive" Color="#557595"/>
+                 The start script passes every resource whose key starts with 'SuiteTheme.' to Initialize-SuiteTheme. -->
             <SolidColorBrush x:Key="MahApps.Brushes.TextBox.Border" Color="#7F7F7F"/>
             <SolidColorBrush x:Key="MahApps.Brushes.WindowTitle.NonActive" Color="#595959"/>
 
             <!-- The one button template and the one button style. Every Button of the window takes ThemedButtonStyle
                  or a style that is based on it. No color literal and no Opacity is allowed here: the colors come from the
                  MahApps theme resources, so the same markup works in the dark and the light theme. Hover and keyboard focus
-                 show the theme foreground as border color. Pressed swaps the theme foreground and the theme background.
+                 show the theme foreground as border color. Pressed shows the accent blue with white text.
                  A disabled button shows MahApps.Brushes.Gray.MouseOver text (4.5:1 or more in both themes) and a Gray2
                  border, because the MahApps disabled state fades the text below 4.5:1. -->
             <ControlTemplate x:Key="ThemedButtonTemplate" TargetType="Button">
@@ -59,8 +57,8 @@
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
@@ -76,6 +74,7 @@
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
                     </Trigger>
@@ -118,6 +117,7 @@
             </Style>
 
             <Style x:Key="SquareInlineButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Template" Value="{DynamicResource SuiteNeutralButtonTemplate}"/>
                 <Setter Property="Height" Value="28"/>
                 <Setter Property="MinWidth" Value="120"/>
                 <Setter Property="Padding" Value="12,0,12,0"/>
@@ -130,10 +130,11 @@
                 <Setter Property="Margin" Value="0"/>
             </Style>
 
-            <!-- The one primary button style: the theme highlight (#4A5763 dark, #00589F light) with white text, 7:1 on both.
-                 The border is the theme foreground, because the highlight alone is 2.1:1 on the dark window. -->
+            <!-- The one primary button style: the accent base with white text. SuiteAccentButtonTemplate keeps it blue in
+                 hover and pressed: each state is one darker step. -->
             <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource SquareInlineButtonStyle}">
-                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Template" Value="{DynamicResource SuiteAccentButtonTemplate}"/>
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                 <Style.Triggers>

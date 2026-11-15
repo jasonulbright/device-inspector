@@ -478,13 +478,14 @@ function Get-ButtonThemeViolation {
 # Returns one text per problem in the button template ThemedButtonTemplate of a document:
 #  - no Setter on the Opacity property, in the template and in every Button style of the document (and no Opacity attribute in the template)
 #  - hover (IsMouseOver) sets BorderBrush to the theme foreground, and sets no Background or Foreground to a literal color
-#  - pressed (IsPressed) swaps: Background is the theme foreground, TextElement.Foreground is the theme background
+#  - pressed (IsPressed) is blue: Background is the accent base, TextElement.Foreground is the ideal (white) foreground
 function Get-ButtonTemplateViolation {
     param([string]$Text, [string]$Source)
     [xml]$xml = $Text
     $listFound = New-Object System.Collections.Generic.List[string]
     $strForeground = '^\{DynamicResource MahApps\.Brushes\.ThemeForeground\}$'
-    $strBackground = '^\{DynamicResource MahApps\.Brushes\.ThemeBackground\}$'
+    $strPressedFill = '^\{DynamicResource MahApps\.Brushes\.AccentBase\}$'
+    $strPressedText = '^\{DynamicResource MahApps\.Brushes\.IdealForeground\}$'
     $objTemplate = $xml.SelectSingleNode("//*[local-name()='ControlTemplate'][@*[local-name()='Key']='ThemedButtonTemplate']")
     if (-not $objTemplate) {
         [void]$listFound.Add(('{0}: has no ControlTemplate ThemedButtonTemplate' -f $Source))
@@ -521,10 +522,10 @@ function Get-ButtonTemplateViolation {
         [void]$listFound.Add(('{0}: ThemedButtonTemplate has no IsPressed trigger' -f $Source))
     }
     else {
-        $arrFill = @(Get-SetterChild -Node $objPressed -LeafPattern '^Background$' | Where-Object { $_.GetAttribute('Property') -eq 'Background' -and (Get-SetterValue $_) -match $strForeground })
-        if ($arrFill.Count -eq 0) { [void]$listFound.Add(('{0}: the IsPressed trigger does not set Background to MahApps.Brushes.ThemeForeground' -f $Source)) }
-        $arrText = @(Get-SetterChild -Node $objPressed -LeafPattern '^Foreground$' | Where-Object { $_.GetAttribute('Property') -eq 'TextElement.Foreground' -and (Get-SetterValue $_) -match $strBackground })
-        if ($arrText.Count -eq 0) { [void]$listFound.Add(('{0}: the IsPressed trigger does not set TextElement.Foreground to MahApps.Brushes.ThemeBackground' -f $Source)) }
+        $arrFill = @(Get-SetterChild -Node $objPressed -LeafPattern '^Background$' | Where-Object { $_.GetAttribute('Property') -eq 'Background' -and (Get-SetterValue $_) -match $strPressedFill })
+        if ($arrFill.Count -eq 0) { [void]$listFound.Add(('{0}: the IsPressed trigger does not set Background to MahApps.Brushes.AccentBase' -f $Source)) }
+        $arrText = @(Get-SetterChild -Node $objPressed -LeafPattern '^Foreground$' | Where-Object { $_.GetAttribute('Property') -eq 'TextElement.Foreground' -and (Get-SetterValue $_) -match $strPressedText })
+        if ($arrText.Count -eq 0) { [void]$listFound.Add(('{0}: the IsPressed trigger does not set TextElement.Foreground to MahApps.Brushes.IdealForeground' -f $Source)) }
     }
     return $listFound.ToArray()
 }

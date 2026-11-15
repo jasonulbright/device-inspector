@@ -687,8 +687,8 @@ function Show-OptionsDialog {
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
@@ -704,6 +704,7 @@ function Show-OptionsDialog {
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
                     </Trigger>
@@ -714,6 +715,7 @@ function Show-OptionsDialog {
                  other dialog button that is not the main answer use it. The primary dialog style is DialogAccentButton.
                  No other dialog button style sets a Background. -->
             <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Template" Value="{DynamicResource SuiteNeutralButtonTemplate}"/>
                 <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Gray10}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
@@ -722,11 +724,11 @@ function Show-OptionsDialog {
                 <Setter Property="Padding" Value="14,0,14,0"/>
                 <Setter Property="Margin" Value="0,0,8,0"/>
             </Style>
-            <!-- The accent fill is the theme highlight (#4A5763 dark, #00589F light): white text is 7:1 on both.
-                 The border is the theme foreground: the highlight alone is 2.1:1 on the dark dialog.
-                 The plain accent fill of the light theme is 4.49:1. -->
+            <!-- The accent fill is the accent base with white text. SuiteAccentButtonTemplate keeps it blue in hover and
+                 pressed: each state is one darker step. -->
             <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
-                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Template" Value="{DynamicResource SuiteAccentButtonTemplate}"/>
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="MinWidth" Value="90"/>
@@ -742,6 +744,7 @@ function Show-OptionsDialog {
                 </Style.Triggers>
             </Style>
             <Style x:Key="CategoryRowStyle" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Template" Value="{DynamicResource SuiteNeutralButtonTemplate}"/>
                 <Setter Property="Height" Value="36"/>
                 <Setter Property="HorizontalContentAlignment" Value="Left"/>
                 <Setter Property="Padding" Value="14,0,14,0"/>
@@ -908,8 +911,8 @@ function Show-ActionConfirmDialog {
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
@@ -925,6 +928,7 @@ function Show-ActionConfirmDialog {
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
                     </Trigger>
@@ -935,6 +939,7 @@ function Show-ActionConfirmDialog {
                  other dialog button that is not the main answer use it. The primary dialog style is DialogAccentButton.
                  No other dialog button style sets a Background. -->
             <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Template" Value="{DynamicResource SuiteNeutralButtonTemplate}"/>
                 <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Gray10}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
@@ -943,11 +948,11 @@ function Show-ActionConfirmDialog {
                 <Setter Property="Padding" Value="14,0,14,0"/>
                 <Setter Property="Margin" Value="0,0,8,0"/>
             </Style>
-            <!-- The accent fill is the theme highlight (#4A5763 dark, #00589F light): white text is 7:1 on both.
-                 The border is the theme foreground: the highlight alone is 2.1:1 on the dark dialog.
-                 The plain accent fill of the light theme is 4.49:1. -->
+            <!-- The accent fill is the accent base with white text. SuiteAccentButtonTemplate keeps it blue in hover and
+                 pressed: each state is one darker step. -->
             <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
-                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Template" Value="{DynamicResource SuiteAccentButtonTemplate}"/>
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="MinWidth" Value="90"/>
@@ -1080,8 +1085,8 @@ function Show-ActionResultNotice {
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
@@ -1097,6 +1102,7 @@ function Show-ActionResultNotice {
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
                     </Trigger>
@@ -1107,6 +1113,7 @@ function Show-ActionResultNotice {
                  other dialog button that is not the main answer use it. The primary dialog style is DialogAccentButton.
                  No other dialog button style sets a Background. -->
             <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Template" Value="{DynamicResource SuiteNeutralButtonTemplate}"/>
                 <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Gray10}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
@@ -1115,11 +1122,11 @@ function Show-ActionResultNotice {
                 <Setter Property="Padding" Value="14,0,14,0"/>
                 <Setter Property="Margin" Value="0,0,8,0"/>
             </Style>
-            <!-- The accent fill is the theme highlight (#4A5763 dark, #00589F light): white text is 7:1 on both.
-                 The border is the theme foreground: the highlight alone is 2.1:1 on the dark dialog.
-                 The plain accent fill of the light theme is 4.49:1. -->
+            <!-- The accent fill is the accent base with white text. SuiteAccentButtonTemplate keeps it blue in hover and
+                 pressed: each state is one darker step. -->
             <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
-                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Template" Value="{DynamicResource SuiteAccentButtonTemplate}"/>
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="MinWidth" Value="90"/>
@@ -1225,8 +1232,8 @@ function Show-CloseWarningDialog {
                         <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
-                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>
+                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
@@ -1242,6 +1249,7 @@ function Show-CloseWarningDialog {
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
                     </Trigger>
@@ -1252,6 +1260,7 @@ function Show-CloseWarningDialog {
                  other dialog button that is not the main answer use it. The primary dialog style is DialogAccentButton.
                  No other dialog button style sets a Background. -->
             <Style x:Key="DialogButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
+                <Setter Property="Template" Value="{DynamicResource SuiteNeutralButtonTemplate}"/>
                 <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Gray10}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
@@ -1260,11 +1269,11 @@ function Show-CloseWarningDialog {
                 <Setter Property="Padding" Value="14,0,14,0"/>
                 <Setter Property="Margin" Value="0,0,8,0"/>
             </Style>
-            <!-- The accent fill is the theme highlight (#4A5763 dark, #00589F light): white text is 7:1 on both.
-                 The border is the theme foreground: the highlight alone is 2.1:1 on the dark dialog.
-                 The plain accent fill of the light theme is 4.49:1. -->
+            <!-- The accent fill is the accent base with white text. SuiteAccentButtonTemplate keeps it blue in hover and
+                 pressed: each state is one darker step. -->
             <Style x:Key="DialogAccentButton" TargetType="Button" BasedOn="{StaticResource ThemedButtonStyle}">
-                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.Highlight}"/>
+                <Setter Property="Template" Value="{DynamicResource SuiteAccentButtonTemplate}"/>
+                <Setter Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                 <Setter Property="MinWidth" Value="90"/>

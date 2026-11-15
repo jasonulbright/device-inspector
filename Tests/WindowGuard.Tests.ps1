@@ -75,3 +75,62 @@ Describe 'Window test files' {
         { Close-WpfSession } | Should -Not -Throw
     }
 }
+
+Describe 'Window cleanup' {
+    BeforeAll {
+        # The nodes that open a window: Open-TestWindow, and a Show or ShowDialog call on a window object.
+        function Get-OpeningNode {
+            param($Ast)
+            @($Ast.FindAll({
+                        param($n)
+                        ($n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Open-TestWindow') -or
+                        ($n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and $n.Member.Value -in 'Show', 'ShowDialog')
+                    }, $true))
+        }
+        # True when the node is in the body of a try statement that has a finally block, or when a later statement of the
+        # same block is such a try statement (the window is opened, then the try that closes it starts).
+        function Test-CleanedUp {
+            param($Node)
+            for ($p = $Node.Parent; $p; $p = $p.Parent) {
+                if ($p -is [System.Management.Automation.Language.TryStatementAst] -and $p.Finally -and $p.Body.Extent.StartOffset -le $Node.Extent.StartOffset -and $p.Body.Extent.EndOffset -ge $Node.Extent.EndOffset) { return $true }
+            }
+            $stmt = $Node
+            while ($stmt.Parent -and $stmt.Parent -isnot [System.Management.Automation.Language.StatementBlockAst] -and $stmt.Parent -isnot [System.Management.Automation.Language.NamedBlockAst]) { $stmt = $stmt.Parent }
+            if (-not $stmt.Parent) { return $false }
+            foreach ($s in @($stmt.Parent.Statements)) {
+                if ($s.Extent.StartOffset -gt $stmt.Extent.StartOffset -and $s -is [System.Management.Automation.Language.TryStatementAst] -and $s.Finally) { return $true }
+            }
+            return $false
+        }
+        function Get-UncleanedOpening {
+            param([string]$Text)
+            $ast = [System.Management.Automation.Language.Parser]::ParseInput($Text, [ref]$null, [ref]$null)
+            @(Get-OpeningNode $ast | Where-Object { -not (Test-CleanedUp $_) } | ForEach-Object { 'line {0}: {1}' -f $_.Extent.StartLineNumber, $_.Extent.Text })
+        }
+    }
+
+    It 'closes the windows that a call left open, in the finally block of Invoke-WpfSta' {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'WindowHarness.ps1'), [ref]$null, [ref]$null)
+        $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-WpfSta' }, $true)
+        $fn | Should -Not -BeNullOrEmpty
+        $tries = @($fn.FindAll({ param($n) $n -is [System.Management.Automation.Language.TryStatementAst] -and $n.Finally }, $true))
+        @($tries | Where-Object { $_.Finally.Extent.Text -match 'Close-SuiteOpenWindow' }).Count | Should -BeGreaterThan 0
+    }
+
+    It 'opens no window outside a try statement with a finally block in <Name>' -ForEach @(
+        Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -File |
+            Where-Object { $_.Name -notin 'WindowHarness.ps1', 'WindowGuard.Tests.ps1' } |
+            ForEach-Object { @{ Name = $_.Name; Path = $_.FullName } }
+    ) {
+        $bad = Get-UncleanedOpening -Text ([System.IO.File]::ReadAllText($Path))
+        $bad | Should -BeNullOrEmpty
+    }
+
+    It 'finds an opening that is not cleaned up (bad sample) and accepts the cleaned ones' {
+        @(Get-UncleanedOpening -Text '$w = Open-TestWindow -XamlPath x; $w.Close()').Count | Should -Be 1
+        @(Get-UncleanedOpening -Text '$d.Show(); $d.Close()').Count | Should -Be 1
+        @(Get-UncleanedOpening -Text "`$w = Open-TestWindow -XamlPath x`ntry { 1 } finally { `$w.Close() }").Count | Should -Be 0
+        @(Get-UncleanedOpening -Text 'try { $d.Show() } finally { $d.Close() }').Count | Should -Be 0
+        @(Get-UncleanedOpening -Text 'try { 1 } finally { $d.Show() }').Count | Should -Be 1
+    }
+}
