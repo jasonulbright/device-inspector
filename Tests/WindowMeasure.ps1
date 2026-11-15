@@ -108,6 +108,7 @@ $script:MeasureFunctions = {
     function Get-TitleBarContrast {
         # Contrast of the caption text on the active and on the inactive title bar, each with the text of its own state
         # (SuiteCommon: dark gray on the light blue inactive bar of the light theme, white elsewhere).
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '', Justification = 'The theme state of the harness is a global (Initialize-ShellTheme sets it for the theme getter of SuiteCommon).')]
         param($Window)
         return Get-SuiteTitleBarContrast -Window $Window -IsDark ([bool]$global:HarnessDark)
     }

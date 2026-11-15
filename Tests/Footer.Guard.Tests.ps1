@@ -263,7 +263,7 @@ BeforeAll {
             if ($inner.Count -eq 0) { [void]$found.Add(('{0}: the function {1} does not call Update-SuiteFooter' -f $Source, $wrapper)) }
         }
         foreach ($u in $script:FtConfig.Update) {
-            $kind = [string]$u.Kind; $uname = [string]$u.Name; $member = [string]$u.Member; $target = [string]$u.Target; $after = [string]$u.After
+            $kind = [string]$u["Kind"]; $uname = [string]$u["Name"]; $member = [string]$u["Member"]; $target = [string]$u["Target"]; $after = [string]$u["After"]
             if ($kind -eq 'Function') {
                 $contexts = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $uname }, $true))
             }

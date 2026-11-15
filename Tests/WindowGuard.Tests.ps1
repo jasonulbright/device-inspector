@@ -127,10 +127,10 @@ Describe 'Window cleanup' {
     }
 
     It 'finds an opening that is not cleaned up (bad sample) and accepts the cleaned ones' {
-        (Get-UncleanedOpening -Text '$w = Open-TestWindow -XamlPath x; $w.Close()').Count | Should -Be 1
-        (Get-UncleanedOpening -Text '$d.Show(); $d.Close()').Count | Should -Be 1
-        (Get-UncleanedOpening -Text "`$w = Open-TestWindow -XamlPath x`ntry { 1 } finally { `$w.Close() }").Count | Should -Be 0
-        (Get-UncleanedOpening -Text 'try { $d.Show() } finally { $d.Close() }').Count | Should -Be 0
-        (Get-UncleanedOpening -Text 'try { 1 } finally { $d.Show() }').Count | Should -Be 1
+        @(Get-UncleanedOpening -Text '$w = Open-TestWindow -XamlPath x; $w.Close()').Count | Should -Be 1
+        @(Get-UncleanedOpening -Text '$d.Show(); $d.Close()').Count | Should -Be 1
+        @(Get-UncleanedOpening -Text "`$w = Open-TestWindow -XamlPath x`ntry { 1 } finally { `$w.Close() }").Count | Should -Be 0
+        @(Get-UncleanedOpening -Text 'try { $d.Show() } finally { $d.Close() }').Count | Should -Be 0
+        @(Get-UncleanedOpening -Text 'try { 1 } finally { $d.Show() }').Count | Should -Be 1
     }
 }
