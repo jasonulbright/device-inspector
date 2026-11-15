@@ -134,3 +134,29 @@ Describe 'Window cleanup' {
         @(Get-UncleanedOpening -Text 'try { 1 } finally { $d.Show() }').Count | Should -Be 1
     }
 }
+
+Describe 'Disabled controls in the contrast rules' {
+    BeforeAll {
+        . "$PSScriptRoot\ContrastRules.ps1"
+        function New-View {
+            param([double]$Enabled, [double]$Disabled, $EnabledBorder = 4.0, $DisabledBorder = 1.2)
+            [pscustomobject]@{ Text = @(); TitleBar = $null; Interactive = @([pscustomobject]@{ Name = 'btnX'; EnabledText = $Enabled; DisabledText = $Disabled; EnabledBorder = $EnabledBorder; DisabledBorder = $DisabledBorder; EnabledDetail = ''; DisabledDetail = '' }) }
+        }
+    }
+
+    It 'exempts a dimmed disabled control from the 4.5:1 text and 3:1 border rules (WCAG 1.4.3)' {
+        @(Get-ContrastViolation -Views @(New-View -Enabled 15 -Disabled 2.75)).Count | Should -Be 0
+    }
+
+    It 'flags a disabled control that does not look dimmed' {
+        @(Get-ContrastViolation -Views @(New-View -Enabled 15 -Disabled 14)) -join ';' | Should -Match 'btnX:DisabledNotDimmed'
+    }
+
+    It 'flags a disabled control whose label vanishes' {
+        @(Get-ContrastViolation -Views @(New-View -Enabled 15 -Disabled 1.2)) -join ';' | Should -Match 'btnX:DisabledUnreadable'
+    }
+
+    It 'still applies the enabled text and border rules' {
+        (@(Get-ContrastViolation -Views @(New-View -Enabled 4.0 -Disabled 2.0 -EnabledBorder 2.0)) -join ';') | Should -Match 'btnX:EnabledText = 4.*btnX:EnabledBorder = 2|btnX:EnabledBorder = 2.*btnX:EnabledText = 4'
+    }
+}

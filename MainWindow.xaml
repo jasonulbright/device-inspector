@@ -60,6 +60,9 @@
                         <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                         <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                    </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
 
@@ -74,9 +77,26 @@
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- A disabled text box shows dimmed text. WCAG 1.4.3 exempts a disabled control from the 4.5:1 rule, and the window tests require it to look dimmed. -->
+            <Style TargetType="TextBox" BasedOn="{StaticResource MahApps.Styles.TextBox}">
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- A disabled combo box shows dimmed text (see the text box style). -->
+            <Style TargetType="ComboBox" BasedOn="{StaticResource MahApps.Styles.ComboBox}">
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>
@@ -206,6 +226,11 @@
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="BorderThickness" Value="0"/>
                 <Setter Property="Padding" Value="8"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                    </Trigger>
+                </Style.Triggers>
             </Style>
 
             <!-- Field titles are bold, the same in both themes. The value next to a title keeps the normal body style. -->

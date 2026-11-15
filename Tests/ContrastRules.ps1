@@ -1,6 +1,8 @@
 # Contrast rules for the window tests. Text must reach 4.5:1 (3:1 for large text) and a
-# control border 3:1, enabled and disabled, in both themes. There is no list of known
-# defects: a test passes only with zero violations.
+# control border 3:1 for enabled controls, in both themes. A disabled (inactive) control is
+# exempt from the 4.5:1 text and 3:1 border rules (WCAG 1.4.3, inactive user interface
+# components). It must still look clearly dimmed and stay readable: see the dimmed rule below.
+# There is no list of known defects: a test passes only with zero violations.
 
 function Test-LargeText {
     # WCAG large text: 24 px, or 18.66 px and bold. It needs 3:1; other text needs 4.5:1.
@@ -20,14 +22,20 @@ function Get-ContrastViolation {
             if ($r.Ratio -lt $min) { [void]$lines.Add(('text "{0}" ({1}) {2} on {3} = {4}' -f $r.Text, $r.Name, $r.Foreground, $r.Backdrop, $r.Ratio)) }
         }
         foreach ($c in $v.Interactive) {
-            foreach ($metric in 'EnabledText', 'DisabledText', 'EnabledBorder', 'DisabledBorder') {
+            foreach ($metric in 'EnabledText', 'EnabledBorder') {
                 $value = $c.$metric
                 if ($null -eq $value) { continue }
                 $min = if ($metric -like '*Text') { 4.5 } else { 3.0 }
                 if ($value -lt $min) {
-                    $detail = if ($metric -eq 'EnabledText') { $c.EnabledDetail } elseif ($metric -eq 'DisabledText') { $c.DisabledDetail } else { $null }
+                    $detail = if ($metric -eq 'EnabledText') { $c.EnabledDetail } else { $null }
                     [void]$lines.Add(('{0}:{1} = {2}{3}' -f $c.Name, $metric, $value, $(if ($detail) { ' (' + $detail + ')' })))
                 }
+            }
+            # A disabled control must look dimmed (the enabled text is at least 1.25 times the disabled text) and stay
+            # readable (the disabled text is at least 1.5:1), so the label does not vanish.
+            if ($null -ne $c.EnabledText -and $null -ne $c.DisabledText -and $c.DisabledText -gt 0) {
+                if (($c.EnabledText / $c.DisabledText) -lt 1.25) { [void]$lines.Add(('{0}:DisabledNotDimmed = enabled {1}, disabled {2}' -f $c.Name, $c.EnabledText, $c.DisabledText)) }
+                if ($c.DisabledText -lt 1.5) { [void]$lines.Add(('{0}:DisabledUnreadable = {1}' -f $c.Name, $c.DisabledText)) }
             }
         }
         # A selected row or item shows white text on the theme highlight, and the text keeps 4.5:1.
