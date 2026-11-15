@@ -605,14 +605,14 @@ Describe 'Button template, single definition and dialog buttons (d)' {
         @($arrStyle | Sort-Object -Unique).Count | Should -Be 1
     }
 
-    It 'has no Opacity, a hover border and a swapped pressed state in the button template of <_.Source>' -ForEach $script:arrChromeDocD {
+    It 'has no Opacity, a hover border and a blue pressed state in the button template of <_.Source>' -ForEach $script:arrChromeDocD {
         $arrBad = @(Get-ButtonTemplateViolation -Text $_.Text -Source $_.Source)
         $arrBad | Should -BeNullOrEmpty
     }
 
-    It 'flags an Opacity setter, a literal hover color and a pressed state that does not swap' {
+    It 'flags an Opacity setter, a literal hover color and a pressed state that is not blue' {
         $strHover = '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>'
-        $strPressed = '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/><Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.ThemeBackground}"/>'
+        $strPressed = '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/><Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>'
         $scriptMake = {
             param($strHoverSetter, $strPressedSetter, $strExtra)
             '<Grid ' + $script:strXamlHead + '><Grid.Resources><ControlTemplate x:Key="ThemedButtonTemplate" TargetType="Button"><Border Name="Bd" Background="{TemplateBinding Background}"><ContentPresenter Name="Cp"/></Border><ControlTemplate.Triggers><MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True"/><Condition Property="IsEnabled" Value="True"/></MultiTrigger.Conditions>' + $strHoverSetter + '</MultiTrigger><Trigger Property="IsPressed" Value="True">' + $strPressedSetter + '</Trigger></ControlTemplate.Triggers></ControlTemplate>' + $strExtra + '</Grid.Resources></Grid>'
@@ -623,7 +623,7 @@ Describe 'Button template, single definition and dialog buttons (d)' {
         @(Get-ButtonTemplateViolation -Text (& $scriptMake $strHover $strPressed ('<Style x:Key="S" TargetType="Button">' + $strOpacity + '</Style>')) -Source 's').Count | Should -Be 1
         @(Get-ButtonTemplateViolation -Text (& $scriptMake ($strHover + '<Setter TargetName="Bd" Property="Background" Value="#3A3A3A"/>') $strPressed '') -Source 's').Count | Should -Be 1
         @(Get-ButtonTemplateViolation -Text (& $scriptMake '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Accent}"/>' $strPressed '') -Source 's').Count | Should -Be 1
-        @(Get-ButtonTemplateViolation -Text (& $scriptMake $strHover '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.ThemeForeground}"/>' '') -Source 's').Count | Should -Be 1
+        @(Get-ButtonTemplateViolation -Text (& $scriptMake $strHover '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>' '') -Source 's').Count | Should -Be 1
         @(Get-ButtonTemplateViolation -Text ('<Grid ' + $script:strXamlHead + '/>') -Source 's').Count | Should -Be 1
     }
 
@@ -709,11 +709,10 @@ Describe 'Static XAML guards: button size, Opacity, resource brushes, Pester req
     BeforeAll {
         # The hex colors that a brush resource may hold: contrast overrides of MahApps theme brushes and of the SuiteCommon palette.
         # Each key has one exact value. #7F7F7F is 4.0:1 on white and 3.8:1 on #252525 (a control border needs 3:1). #595959 is 7.0:1
-        # with white title text. #557595 is 4.9:1 with white title text (the SuiteCommon default #4BA3E0 is 2.6:1).
+        # with white title text. The inactive light title bar is the SuiteCommon default (#4BA3E0 with dark text).
         $script:hashBrushAllow = @{
             'MahApps.Brushes.TextBox.Border'        = '#7F7F7F'
             'MahApps.Brushes.WindowTitle.NonActive' = '#595959'
-            'SuiteTheme.TitleBarInactive'           = '#557595'
         }
     }
 
@@ -728,7 +727,7 @@ Describe 'Static XAML guards: button size, Opacity, resource brushes, Pester req
         }
         $intButton | Should -BeGreaterThan 25
         $intStyle | Should -BeGreaterThan 20
-        $intBrush | Should -BeGreaterOrEqual 9
+        $intBrush | Should -BeGreaterOrEqual 8
     }
 
     It 'sets no size or padding on a Button element in <_.Source>' -ForEach $script:arrOwnXamlDocD {
@@ -754,7 +753,6 @@ Describe 'Static XAML guards: button size, Opacity, resource brushes, Pester req
         }
         $arrFound | Should -Contain 'MahApps.Brushes.TextBox.Border'
         $arrFound | Should -Contain 'MahApps.Brushes.WindowTitle.NonActive'
-        $arrFound | Should -Contain 'SuiteTheme.TitleBarInactive'
         @($arrFound | Where-Object { -not $script:hashBrushAllow.ContainsKey($_) }) | Should -BeNullOrEmpty
     }
 

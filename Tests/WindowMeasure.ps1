@@ -106,20 +106,10 @@ $script:MeasureFunctions = {
     }
 
     function Get-TitleBarContrast {
-        # Contrast of the title text on the active and on the inactive title bar.
+        # Contrast of the caption text on the active and on the inactive title bar, each with the text of its own state
+        # (SuiteCommon: dark gray on the light blue inactive bar of the light theme, white elsewhere).
         param($Window)
-        $fg = Get-SolidColor $Window.TitleForeground
-        $result = [ordered]@{ Active = $null; Inactive = $null }
-        if (-not $fg) { return [PSCustomObject]$result }
-        foreach ($state in 'Active', 'Inactive') {
-            $brush = if ($state -eq 'Active') { $Window.WindowTitleBrush } else { $Window.NonActiveWindowTitleBrush }
-            $bg = Get-SolidColor $brush
-            if (-not $bg) { continue }
-            $back = Merge-Color $bg.Color $bg.Opacity ([System.Windows.Media.Colors]::Black)
-            $front = Merge-Color $fg.Color $fg.Opacity $back
-            $result[$state] = [math]::Round((Get-ContrastRatio $front $back), 2)
-        }
-        return [PSCustomObject]$result
+        return Get-SuiteTitleBarContrast -Window $Window -IsDark ([bool]$global:HarnessDark)
     }
 
     function Get-ClippedText {
@@ -308,10 +298,12 @@ $script:MeasureFunctions = {
     }
 
     function Get-ButtonStateColors {
-        # Text and border ratios of the parts of the button template (Bd, Cp) in the state that is now set.
+        # Text and border ratios of the parts of the button template (Bd and its content presenter) in the state that is now set.
         param($Button, $Window, $Outside)
         $bd = $Button.Template.FindName('Bd', $Button)
         $cp = $Button.Template.FindName('Cp', $Button)
+        # The templates of SuiteCommon do not name the content presenter: take the first one under Bd.
+        if (-not $cp -and $bd) { $cp = Get-VisualDescendants $bd | Where-Object { $_ -is [System.Windows.Controls.ContentPresenter] } | Select-Object -First 1 }
         if (-not $bd -or -not $cp) { return $null }
         $fillBrush = Get-SolidColor $bd.Background
         $fill = if ($fillBrush -and ($fillBrush.Color.A * $fillBrush.Opacity) -gt 0) { Merge-Color $fillBrush.Color $fillBrush.Opacity $Outside } else { $Outside }

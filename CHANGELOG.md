@@ -4,6 +4,17 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Sync SuiteCommon: light blue inactive title bar, explicit hover and pressed fills, title bar contrast helper.
+- Keep primary buttons blue and secondary buttons gray when pressed, in every window.
+
+### Added
+
+- Check dialog bodies, inputs and title bars against the theme in Chrome.Window.Tests.ps1.
+- Measure pressed and hover fills of a dialog button in ButtonStates.Window.Tests.ps1.
+- Close stray windows after each window test call, with a headless guard for it.
+
 ## [2026.11.14.0015] - 2026-11-14
 
 ## 45 guide images retaken with 1 px gray button borders

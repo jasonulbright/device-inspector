@@ -59,8 +59,8 @@ Describe 'Main window XAML' -Skip:(-not $script:WindowGuard.Allowed) {
     It 'loads as a MetroWindow with the app title and a minimum size that fits 1024x720' {
         $r = Invoke-WpfSta -Arguments @{ Xaml = $script:AppConfig.Xaml } -Script {
             $w = Open-TestWindow -XamlPath (Join-Path $Root $Arguments.Xaml)
-            $o = [PSCustomObject]@{ Type = $w.GetType().FullName; Title = $w.Title; MinW = $w.MinWidth; MinH = $w.MinHeight }
-            $w.Close(); $o
+            try { [PSCustomObject]@{ Type = $w.GetType().FullName; Title = $w.Title; MinW = $w.MinWidth; MinH = $w.MinHeight } }
+            finally { $w.Close() }
         }
         $r.Type | Should -Be 'MahApps.Metro.Controls.MetroWindow'
         $r.Title | Should -Be $script:AppConfig.Title
@@ -71,8 +71,8 @@ Describe 'Main window XAML' -Skip:(-not $script:WindowGuard.Allowed) {
     It 'shows the first view and keeps the others hidden' {
         $r = Invoke-WpfSta -Arguments @{ Config = $script:AppConfig } -Script {
             $w = Open-TestWindow -XamlPath (Join-Path $Root $Arguments.Config.Xaml)
-            $o = foreach ($v in $Arguments.Config.Views) { [PSCustomObject]@{ Name = $v.Name; Vis = [string]$w.FindName($v.Container).Visibility } }
-            $w.Close(); , @($o)
+            try { $o = foreach ($v in $Arguments.Config.Views) { [PSCustomObject]@{ Name = $v.Name; Vis = [string]$w.FindName($v.Container).Visibility } }; , @($o) }
+            finally { $w.Close() }
         }
         $first = $script:AppConfig.Views[0].Name
         ($r | Where-Object Name -eq $first).Vis | Should -Be 'Visible'
@@ -181,7 +181,8 @@ Describe 'Dialog windows' -Skip:(-not $script:WindowGuard.Allowed) {
             $v.Interactive.Count | Should -BeGreaterThan 2 -Because "pane $($v.Pane) shows buttons"
             $v.ButtonStates.Count | Should -BeGreaterThan 2 -Because "pane $($v.Pane) probes the hover, focus and pressed state of its buttons"
         }
-        Get-ContrastViolation -Views $views | Should -BeNullOrEmpty
+        $arrViolation = @(Get-ContrastViolation -Views $views)
+        $arrViolation | Should -BeNullOrEmpty -Because ($arrViolation -join ', ')
     }
 }
 
@@ -193,7 +194,8 @@ Describe 'Action confirmation' -Skip:(-not $script:WindowGuard.Allowed) {
         $m.ButtonStates.Count | Should -Be 3 -Because 'Run, Dry Run and Cancel are probed in the hover, focus and pressed state'
         $m.Clipped | ForEach-Object { '{0}: needs {1}px, has {2}px' -f $_.Text, $_.Needed, $_.Actual } | Should -BeNullOrEmpty
         $m.Offscreen | ForEach-Object { '{0} at {1},{2}' -f $_.Name, $_.X, $_.Y } | Should -BeNullOrEmpty
-        Get-ContrastViolation -Views @($m) | Should -BeNullOrEmpty
+        $arrViolation = @(Get-ContrastViolation -Views @($m))
+        $arrViolation | Should -BeNullOrEmpty -Because ($arrViolation -join ', ')
     }
 }
 
@@ -227,7 +229,8 @@ Describe 'Contrast <Theme>' -ForEach @(@{ Theme = 'dark' }, @{ Theme = 'light' }
         $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq $View)
         $m.Text.Count | Should -BeGreaterThan 3
         $m.Interactive.Count | Should -BeGreaterThan 5
-        Get-ContrastViolation -Views @($m) | Should -BeNullOrEmpty
+        $arrViolation = @(Get-ContrastViolation -Views @($m))
+        $arrViolation | Should -BeNullOrEmpty -Because ($arrViolation -join ', ')
     }
 }
 
@@ -258,12 +261,13 @@ Describe 'Selected rows, combo box items and button states <Theme>' -ForEach @(@
         # The seven sidebar buttons, Inspect, the two export buttons and the buttons of the view are probed.
         $m.ButtonStates.Count | Should -BeGreaterThan 9
         foreach ($r in $m.ButtonStates) {
-            $r.Parts | Should -BeTrue -Because ('{0} has the template parts Bd and Cp' -f $r.Name)
+            $r.Parts | Should -BeTrue -Because ('{0} has the template parts Bd and a content presenter' -f $r.Name)
             $r.Keys | Should -BeTrue -Because 'the keys of the read-only properties are found'
             $r.HoverApplied | Should -BeTrue -Because $r.Name
             $r.FocusApplied | Should -BeTrue -Because $r.Name
             $r.PressedApplied | Should -BeTrue -Because $r.Name
         }
-        Get-ContrastViolation -Views @($m) | Should -BeNullOrEmpty
+        $arrViolation = @(Get-ContrastViolation -Views @($m))
+        $arrViolation | Should -BeNullOrEmpty -Because ($arrViolation -join ', ')
     }
 }
