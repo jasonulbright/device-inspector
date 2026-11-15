@@ -4,6 +4,10 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Retake every guide image on the lab with 1 px gray button borders. The capture lists all application types when the chosen application is not an MSI, so the Uninstall confirmation can use a lab application of any type.
+
 ### Added
 
 - Add the window test `Tests/ButtonStates.Window.Tests.ps1`. It measures the hover, focus and pressed states of the sampled buttons of the main window in both themes with the real mouse: 4.5:1 text contrast and a 3:1 edge. It runs only in a visible run (`SUITE_VISIBLE_WINDOWS=1`).

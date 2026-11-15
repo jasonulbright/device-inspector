@@ -183,7 +183,8 @@ Section 'action menus' {
     # A harmless named row with the Uninstall entry on: the name of a row in UI Automation lists its properties.
     # Never the Configuration Manager console (POLICY 2a): the guard stops the capture before the right click.
     # This row is a system component on a plain lab device (no Uninstall entry), and then the capture stops with that message.
-    $appRow = Find-NamedItem (Get-El $win 'gridApps') ('*' + $uninstallApp + '*')
+    # A lab application of another type (EXE) is not in the MSI list: look in all types then.
+    try { $appRow = Find-NamedItem (Get-El $win 'gridApps') ('*' + $uninstallApp + '*') } catch { Select-AppType 'All'; Start-Sleep -Milliseconds 400; $appRow = Find-NamedItem (Get-El $win 'gridApps') ('*' + $uninstallApp + '*') }
     if ($appRow.Current.Name -like '*Configuration Manager*') { throw ('The capture selected a Configuration Manager row: ' + $appRow.Current.Name) }
     if ($appRow.Current.Name -notlike '*CanUninstall=True*') { throw ('The selected application row has no Uninstall entry: ' + $appRow.Current.Name) }
     RightClick-El $appRow; Shot $win 'apps-context-menu' -Hover
