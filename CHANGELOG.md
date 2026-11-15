@@ -6,7 +6,7 @@ All notable changes to Device Inspector are documented in this file.
 
 ### Changed
 
-- Sync SuiteCommon: light blue inactive title bar, explicit hover and pressed fills, title bar contrast helper.
+- Sync SuiteCommon: light blue inactive title bar, explicit hover and pressed button fills.
 - Keep primary buttons blue and secondary buttons gray when pressed, in every window.
 
 ### Added
