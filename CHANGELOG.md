@@ -4,6 +4,20 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add the window test `Tests/ButtonStates.Window.Tests.ps1`. It measures the hover, focus and pressed states of the sampled buttons of the main window in both themes with the real mouse: 4.5:1 text contrast and a 3:1 edge. It runs only in a visible run (`SUITE_VISIBLE_WINDOWS=1`).
+- Add the window test `Tests/Chrome.Window.Tests.ps1`. It checks the title bar brush, the title text contrast, bold button text and the button border of the main window and of every dialog and popup, in both themes.
+
+### Fixed
+
+- Give the buttons of the themed message box and of the collection picker a 1 px border in the theme border color. The Square button style of MahApps drew 2 px in the text color. The fix is a local edit of the vendored SuiteCommon until the suite carries it.
+
+### Changed
+
+- Vendor the window test helpers of SuiteCommon (`Get-SuiteButtonStateReport`, `Get-SuiteWindowChrome` and four more).
+- Share one STA session across all window test files of a Pester run. `Close-WpfSession` keeps the session open unless `-Force` is given.
+
 ## [2026.11.14.0014] - 2026-11-14
 
 ## 3 fixes for button borders, guards and plain ASCII sources
