@@ -4,6 +4,10 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+## [2026.11.15.0017] - 2026-11-15
+
+## 38 guide images retaken, disabled controls dim
+
 ### Changed
 
 - Treat disabled controls as exempt from 4.5:1 text contrast and require them to look dimmed.
