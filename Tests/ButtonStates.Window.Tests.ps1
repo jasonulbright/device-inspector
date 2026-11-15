@@ -1,6 +1,6 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
 # Window test for the hover, focus and pressed states of the buttons of the main window, in both themes.
-# It needs the real mouse, so it runs only in a visible run (SUITE_VISIBLE_WINDOWS=1, the labadmin session of CLIENT01).
+# It needs the real mouse, so it runs only in a visible run (SUITE_VISIBLE_WINDOWS=1, the visible lab session).
 # The measurement is Get-SuiteButtonStateReport of SuiteCommon. For each sampled button and each state it requires:
 #   - the button text has 4.5:1 contrast on the button fill (the backdrop of the button where the fill is transparent)
 #   - the button is told apart from its backdrop: its border or its fill has 3:1 contrast on it

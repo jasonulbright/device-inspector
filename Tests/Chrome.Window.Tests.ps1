@@ -9,6 +9,9 @@
 #   - every button has bold text (SemiBold or heavier, 600; a normal weight is a defect)
 #   - no button has a border thicker than 1 px, and no button border has the text color of the theme
 
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '', Justification = 'The timer handler of the dispatcher hands the measured chrome to the STA script through global variables.')]
+param()
+
 BeforeDiscovery {
     . "$PSScriptRoot\WindowHarness.ps1"
     $script:WindowGuard = Test-WindowTestsAllowed
