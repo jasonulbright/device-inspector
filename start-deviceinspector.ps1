@@ -690,6 +690,9 @@ function Show-OptionsDialog {
                         <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                         <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                    </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
 
@@ -704,9 +707,17 @@ function Show-OptionsDialog {
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- A disabled text box shows dimmed text. WCAG 1.4.3 exempts a disabled control from the 4.5:1 rule, and the window tests require it to look dimmed. -->
+            <Style TargetType="TextBox" BasedOn="{StaticResource MahApps.Styles.TextBox}">
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>
@@ -914,6 +925,9 @@ function Show-ActionConfirmDialog {
                         <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                         <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                    </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
 
@@ -928,9 +942,17 @@ function Show-ActionConfirmDialog {
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- A disabled text box shows dimmed text. WCAG 1.4.3 exempts a disabled control from the 4.5:1 rule, and the window tests require it to look dimmed. -->
+            <Style TargetType="TextBox" BasedOn="{StaticResource MahApps.Styles.TextBox}">
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>
@@ -1088,6 +1110,9 @@ function Show-ActionResultNotice {
                         <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                         <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                    </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
 
@@ -1102,9 +1127,17 @@ function Show-ActionResultNotice {
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- A disabled text box shows dimmed text. WCAG 1.4.3 exempts a disabled control from the 4.5:1 rule, and the window tests require it to look dimmed. -->
+            <Style TargetType="TextBox" BasedOn="{StaticResource MahApps.Styles.TextBox}">
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>
@@ -1235,6 +1268,9 @@ function Show-CloseWarningDialog {
                         <Setter TargetName="Bd" Property="Background" Value="{DynamicResource MahApps.Brushes.AccentBase}"/>
                         <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.IdealForeground}"/>
                     </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter TargetName="Cp" Property="TextElement.Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
+                    </Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate>
 
@@ -1249,9 +1285,17 @@ function Show-CloseWarningDialog {
                 <Setter Property="Controls:ControlsHelper.ContentCharacterCasing" Value="Normal"/>
                 <Style.Triggers>
                     <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Template" Value="{StaticResource ThemedButtonTemplate}"/>
                         <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                         <Setter Property="BorderBrush" Value="{DynamicResource MahApps.Brushes.Gray2}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- A disabled text box shows dimmed text. WCAG 1.4.3 exempts a disabled control from the 4.5:1 rule, and the window tests require it to look dimmed. -->
+            <Style TargetType="TextBox" BasedOn="{StaticResource MahApps.Styles.TextBox}">
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource MahApps.Brushes.Gray.MouseOver}"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>
