@@ -42,7 +42,7 @@
 # .NOTES
 # Positional parameters: position 0 is ComputerName.
 #
-# Version: 2026.11.14.0015
+# Version: 2026.11.15.0016
 [CmdletBinding(PositionalBinding = $false)]
 [OutputType([string])]
 param (
