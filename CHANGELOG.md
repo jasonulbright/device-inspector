@@ -15,7 +15,8 @@ All notable changes to Device Inspector are documented in this file.
 
 ### Fixed
 
-- Give the buttons of the themed message box and of the collection picker a 1 px border in the theme border color. The Square button style of MahApps drew 2 px in the text color. The fix is a local edit of the vendored SuiteCommon until the suite carries it.
+- Sync SuiteCommon so the confirm dialog buttons have 1 px borders.
+- Give the buttons of the themed message box and of the collection picker a 1 px border in the theme border color. The Square button style of MahApps drew 2 px in the text color.
 
 ### Changed
 
