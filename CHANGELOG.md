@@ -4,24 +4,25 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
-### Changed
+## [2026.11.14.0015] - 2026-11-14
 
-- Retake every guide image on the lab with 1 px gray button borders. The capture lists all application types when the chosen application is not an MSI, so the Uninstall confirmation can use a lab application of any type.
+## 45 guide images retaken with 1 px gray button borders
 
 ### Added
 
-- Add the window test `Tests/ButtonStates.Window.Tests.ps1`. It measures the hover, focus and pressed states of the sampled buttons of the main window in both themes with the real mouse: 4.5:1 text contrast and a 3:1 edge. It runs only in a visible run (`SUITE_VISIBLE_WINDOWS=1`).
-- Add the window test `Tests/Chrome.Window.Tests.ps1`. It checks the title bar brush, the title text contrast, bold button text and the button border of the main window and of every dialog and popup, in both themes.
-
-### Fixed
-
-- Sync SuiteCommon so the confirm dialog buttons have 1 px borders.
-- Give the buttons of the themed message box and of the collection picker a 1 px border in the theme border color. The Square button style of MahApps drew 2 px in the text color.
+- Add ButtonStates.Window.Tests.ps1: hover, focus and pressed button contrast in both themes.
+- Add Chrome.Window.Tests.ps1: title bar, bold button text and button borders of every window.
 
 ### Changed
 
-- Vendor the window test helpers of SuiteCommon (`Get-SuiteButtonStateReport`, `Get-SuiteWindowChrome` and four more).
-- Share one STA session across all window test files of a Pester run. `Close-WpfSession` keeps the session open unless `-Force` is given.
+- Retake all 45 guide images on the lab with 1 px gray button borders.
+- Let the capture use any application type when the chosen application is not an MSI.
+- Vendor the SuiteCommon window test helpers.
+- Share one STA session across all window test files of a Pester run.
+
+### Fixed
+
+- Sync SuiteCommon so message box, collection picker and confirm dialog buttons have 1 px borders.
 
 ## [2026.11.14.0014] - 2026-11-14
 
