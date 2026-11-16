@@ -274,6 +274,21 @@ try {
         }
         throw
     }
+    # One pass is the check run and the capture run (D-21): the steps sample the colors of the controls they shoot, and the
+    # guide image test reads the manifest of the images that a full run produced (a run with -Section or -Image takes a part).
+    $logs = @(Get-ChildItem $tmp -Recurse -Filter run.log)
+    $sampleCount = 0; $warnCount = 0
+    foreach ($runLog in $logs) {
+        $lines = @(Get-Content $runLog.FullName)
+        $sampleCount += @($lines | Where-Object { $_ -match '\sSAMPLE\s' }).Count
+        $warnCount += @($lines | Where-Object { $_ -match '\sWARN\s' }).Count
+    }
+    $names = @($captured | ForEach-Object { $_.Name } | Sort-Object -Unique)
+    if (-not $Section -and -not $Image) {
+        $manifest = [ordered]@{ Count = $names.Count; Images = $names } | ConvertTo-Json
+        [IO.File]::WriteAllText((Join-Path $here 'produced-images.json'), ($manifest -replace "`r?`n", "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
+    }
+    Write-Output ('Capture verdict: PASS. Images produced {0}, probe samples {1}, warnings {2}, errors 0.' -f $names.Count, $sampleCount, $warnCount)
     $succeeded = $true
 }
 finally {

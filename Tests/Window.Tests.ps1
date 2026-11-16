@@ -1,6 +1,6 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
 # Window tests. The main window and the Options dialog (built from XAML text in the start script)
-# are opened off screen on an STA thread, in both themes and at 1024x720 and 1440x900, and measured.
+# are opened off screen on an STA thread, in both themes and at 1024x720 and the work area of the session (1920x1032 on a 1080p screen), and measured.
 # The app-specific names live in WindowConfig.ps1. The tests that open a window run only with the
 # opt-in SUITE_ALLOW_WINDOW_TESTS=1 (WindowHarness.ps1). The tests that read text only always run.
 
@@ -11,7 +11,8 @@ BeforeDiscovery {
     $script:WindowGuard = Test-WindowTestsAllowed
     if (-not $script:WindowGuard.Allowed) { Write-Host ('Window tests skipped: {0}' -f $script:WindowGuard.Reason) }
     $script:Matrix = foreach ($dark in $true, $false) {
-        foreach ($size in @(@(1024, 720), @(1440, 900))) {
+        $design = Get-DesignSize
+        foreach ($size in @(@(1024, 720), @($design.W, $design.H))) {
             @{ Dark = $dark; Theme = $(if ($dark) { 'dark' } else { 'light' }); W = $size[0]; H = $size[1]; Size = ('{0}x{1}' -f $size[0], $size[1]) }
         }
     }
@@ -33,13 +34,14 @@ BeforeAll {
                 $n -is [System.Management.Automation.Language.StringConstantExpressionAst] -and $n.Value -match '^\s*<Controls:MetroWindow'
             }, $true) | ForEach-Object { $_.Value })
 
+    $script:Design = Get-DesignSize
     $script:Measured = @{}
     $script:DialogMeasured = @{}
     $script:WindowGuard = Test-WindowTestsAllowed
     if ($script:WindowGuard.Allowed) {
         foreach ($case in @(
-                @{ Dark = $true; W = 1024; H = 720 }, @{ Dark = $true; W = 1440; H = 900 },
-                @{ Dark = $false; W = 1024; H = 720 }, @{ Dark = $false; W = 1440; H = 900 })) {
+                @{ Dark = $true; W = 1024; H = 720 }, @{ Dark = $true; W = $script:Design.W; H = $script:Design.H },
+                @{ Dark = $false; W = 1024; H = 720 }, @{ Dark = $false; W = $script:Design.W; H = $script:Design.H })) {
             $key = '{0}|{1}x{2}' -f $(if ($case.Dark) { 'dark' } else { 'light' }), $case.W, $case.H
             $case.Config = $script:AppConfig
             $case.Rows = $script:SampleRows
@@ -226,7 +228,7 @@ Describe 'Layout <Theme> <Size>' -ForEach $script:Matrix -Skip:(-not $script:Win
 
 Describe 'Contrast <Theme>' -ForEach @(@{ Theme = 'dark' }, @{ Theme = 'light' }) -Skip:(-not $script:WindowGuard.Allowed) {
     It 'meets the contrast standard on every text, control and title bar of the <View> view' -ForEach $script:ViewCases {
-        $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq $View)
+        $m = ($script:Measured['{0}|{1}' -f $Theme, $script:Design.Key] | Where-Object View -eq $View)
         $m.Text.Count | Should -BeGreaterThan 3
         $m.Interactive.Count | Should -BeGreaterThan 5
         $arrViolation = @(Get-ContrastViolation -Views @($m))
@@ -237,7 +239,7 @@ Describe 'Contrast <Theme>' -ForEach @(@{ Theme = 'dark' }, @{ Theme = 'light' }
 Describe 'Selected rows, combo box items and button states <Theme>' -ForEach @(@{ Theme = 'dark' }, @{ Theme = 'light' }) -Skip:(-not $script:WindowGuard.Allowed) {
     # The grids get a selected first row in the measurement. The rows must show white text on the theme highlight.
     It 'shows a selected row with white text on the highlight in the <View> view' -ForEach @(@{ View = 'Device list' }, @{ View = 'Device' }, @{ View = 'Applications' }, @{ View = 'Updates' }, @{ View = 'Collections' }) {
-        $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq $View)
+        $m = ($script:Measured['{0}|{1}' -f $Theme, $script:Design.Key] | Where-Object View -eq $View)
         $m.Selected.Count | Should -BeGreaterThan 0 -Because 'a selected row is in the view, so the scan is not empty'
         foreach ($r in $m.Selected) {
             $r.IsHighlight | Should -BeTrue -Because ('the backdrop of the selected {0} is {1}' -f $r.Type, $r.Backdrop)
@@ -246,7 +248,7 @@ Describe 'Selected rows, combo box items and button states <Theme>' -ForEach @(@
     }
 
     It 'shows the selected item and a highlighted item of the application type box with white text on the highlight' {
-        $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq 'Applications')
+        $m = ($script:Measured['{0}|{1}' -f $Theme, $script:Design.Key] | Where-Object View -eq 'Applications')
         @($m.ComboItems | Where-Object State -eq 'selected').Count | Should -Be 1
         @($m.ComboItems | Where-Object State -eq 'highlighted').Count | Should -Be 1
         foreach ($r in $m.ComboItems) {
@@ -257,7 +259,7 @@ Describe 'Selected rows, combo box items and button states <Theme>' -ForEach @(@
     }
 
     It 'applies the hover, focus and pressed state to every button of the <View> view and keeps the contrast' -ForEach $script:ViewCases {
-        $m = ($script:Measured['{0}|1440x900' -f $Theme] | Where-Object View -eq $View)
+        $m = ($script:Measured['{0}|{1}' -f $Theme, $script:Design.Key] | Where-Object View -eq $View)
         # The seven sidebar buttons, Inspect, the two export buttons and the buttons of the view are probed.
         $m.ButtonStates.Count | Should -BeGreaterThan 9
         foreach ($r in $m.ButtonStates) {
