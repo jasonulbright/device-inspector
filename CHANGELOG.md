@@ -8,6 +8,7 @@ All notable changes to Device Inspector are documented in this file.
 
 - Open maximized at 1920x1032; sidebar 36 px, buttons and boxes 26 px, rows 24 px.
 - Make the capture the check run: maximize, sample colors, print a verdict.
+- Retake all guide images maximized at 1920x1032.
 
 ### Added
 

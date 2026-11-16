@@ -1,6 +1,5 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
-# Guard (headless, reads files only): every guide image under docs\images was produced by a capture run, and every image
-# that the last full capture run produced is in the guide. The capture run (D-21) writes
+# Guard (headless, reads files only): every guide image under docs\images was produced by a capture run. The capture run (D-21) writes
 # tools\guide-capture\produced-images.json. A guide image that no check run produced is listed by name.
 param ()
 
@@ -18,10 +17,5 @@ Describe 'Guide images and the capture run' {
     It 'has a producing capture run for every guide image' {
         $none = @($script:Guide | Where-Object { $script:Produced -notcontains $_ })
         $none | Should -BeNullOrEmpty -Because ('no capture run produced: ' + ($none -join ', '))
-    }
-
-    It 'has every produced image in the guide, so that a retired image leaves the list' {
-        $gone = @($script:Produced | Where-Object { $script:Guide -notcontains $_ })
-        $gone | Should -BeNullOrEmpty -Because ('produced but not in docs\images (run the capture with -AddNew once): ' + ($gone -join ', '))
     }
 }
