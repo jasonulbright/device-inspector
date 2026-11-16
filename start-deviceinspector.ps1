@@ -1950,6 +1950,8 @@ $window.Add_Loaded({
         Initialize-SuiteFooter -Window $window -StatusName 'txtStatus' -OnOpenOptions { Show-OptionsDialog; Update-FooterSite } | Out-Null
     }
     catch { Write-ErrorLog ('The footer was not set up: {0}' -f $_.Exception.Message) }
+    # The first start, with no saved window state, opens maximized: the design size is a 1080p work area.
+    if (-not (Test-Path -LiteralPath $global:WindowStatePath)) { $window.WindowState = [System.Windows.WindowState]::Maximized }
     Restore-WindowState -Window $window -Path $global:WindowStatePath -OnStateLoaded {
         param($s)
         if ($s.ActiveView -in @('Device list', 'Device', 'Applications', 'Updates', 'Collections', 'Problems')) { Set-ActiveView -View ([string]$s.ActiveView) }

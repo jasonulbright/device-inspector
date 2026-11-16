@@ -4,6 +4,15 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Open maximized at 1920x1032; sidebar 36 px, buttons and boxes 26 px, rows 24 px.
+- Make the capture the check run: maximize, sample colors, print a verdict.
+
+### Added
+
+- Add 1080p density and vacant-space window tests and a guide image producer guard.
+
 ## [2026.11.15.0017] - 2026-11-15
 
 ## 38 guide images retaken, disabled controls dim

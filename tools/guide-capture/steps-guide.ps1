@@ -2,7 +2,7 @@
 # $Capture holds the site code, the SMS Provider and the device names (Invoke-GuideCapture.ps1).
 # The app only reads. No step changes the site or a device.
 $win = Start-App 'start-deviceinspector.ps1' 'Device Inspector'
-Size-Win $win 1440 900
+Maximize-Win $win
 $win = Find-Top 'Device Inspector' 10
 function Wait-Idle { Start-Sleep -Seconds 2; $null = Wait-Until { (Get-El $win 'btnInspect').Current.IsEnabled } 240; Start-Sleep -Seconds 1 }
 # An inspection that read the device lists its applications. A summary with 0 applications means that the step did not inspect the device (for example a message box stayed open).
@@ -129,6 +129,8 @@ Section 'tab order' {
 }
 Section 'light' {
     Toggle-El (Get-El $win 'toggleTheme'); Start-Sleep -Seconds 1; Show-View 'btnViewDevice'; Shot $win 'device-light'
+    # Probe samples (D-21): the text color on the blue of the Inspect button and of a sidebar button, read from the screen.
+    Extra 'inspect button' { Sample-El (Get-El $win 'btnInspect') 'inspect button normal'; Sample-El (Get-El $win 'btnViewApps') 'sidebar button normal' }
     foreach ($v in @(@('btnViewApps', 'apps-light'), @('btnViewUpdates', 'updates-light'), @('btnViewCollections', 'collections-light'), @('btnViewProblems', 'problems-light'))) { Show-View $v[0]; Shot $win $v[1] }
     Invoke-El (Get-El $win 'btnOptions'); $d = Find-Top 'Options' 10; Shot $d 'options-light'; Invoke-El (Get-El $d 'btnCancel'); Start-Sleep -Milliseconds 800
     Toggle-El (Get-El $win 'toggleTheme'); Start-Sleep -Seconds 1
