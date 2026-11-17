@@ -26,11 +26,11 @@ Window tests: `Window.Tests.ps1` and the other `*.Window.Tests.ps1` files open w
 | Theme guards | `Theme.Guard.Tests.ps1`, `Theme.Source.Guard.Tests.ps1`, `ButtonStyle.Guard.Tests.ps1`, `FontWeight.Guard.Tests.ps1`, `Footer.Guard.Tests.ps1` | White text on blue, fonts independent of the theme, banned words, one themed button style (also in the vendored SuiteCommon dialogs), Title Case, the footer |
 | Encoding | `Encoding.Guard.Tests.ps1` | Plain ASCII in every PowerShell file and every file that PowerShell reads |
 | Documents and images | `Documentation.Tests.ps1`, `Readme.Images.Guard.Tests.ps1`, `GuideImages.Guard.Tests.ps1` | Index and links, every README image is current, every guide image was produced by a capture run |
+| Start script | `Shell.Logic.Tests.ps1`, `Script.Contract.Tests.ps1`, `Startup.Tests.ps1` | The pure functions of `start-deviceinspector.ps1` cut from its syntax tree (action gate, view switch, status line, filters, preferences, Title Case), every named parameter of a call into the module or SuiteCommon, and the start without the Configuration Manager console |
 | Capture tool | `GuideCapture.Tests.ps1` | The capture scripts parse, carry no secret and take the lab lock |
 
 ## Not covered, and why
 
 - The tests stub the ConfigMgr commands. No test calls a real site.
 - The scan, the actions and the refresh handlers run inside the window with a site. The tests cover the module calls that they make, not the clicks.
-- Shell logic, script contract and startup tests do not exist yet. The start script is parsed by the guards only.
 - The settings save in SuiteCommon is not atomic. The fix belongs in `app-packager-suite`.
