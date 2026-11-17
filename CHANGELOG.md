@@ -14,6 +14,10 @@ All notable changes to Device Inspector are documented in this file.
 
 - Add 1080p density and vacant-space window tests and a guide image producer guard.
 
+### Fixed
+
+- Guard the buttons of the vendored SuiteCommon dialogs: the check no longer skips them, and the vendored SuiteCommon gives its dialogs ThemedButtonStyle.
+
 ## [2026.11.15.0017] - 2026-11-15
 
 ## 38 guide images retaken, disabled controls dim
