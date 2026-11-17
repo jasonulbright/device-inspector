@@ -13,6 +13,7 @@ All notable changes to Device Inspector are documented in this file.
 ### Added
 
 - Add 1080p density and vacant-space window tests and a guide image producer guard.
+- Add the test plan.
 
 ### Fixed
 
