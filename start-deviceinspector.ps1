@@ -262,10 +262,20 @@ $toggleTheme.IsOn = $__startIsDark
 $txtThemeLabel.Text = if ($__startIsDark) { 'Dark Theme' } else { 'Light Theme' }
 Update-SidebarButtonTheme
 
+# An action result notice is not modal: it stays open while the theme toggles. Every window that the main window owns takes the
+# new theme with it, so that an open notice never shows the old colors.
+function Update-OwnedWindowTheme {
+    param([Parameter(Mandatory)][System.Windows.Window]$Window, [Parameter(Mandatory)][bool]$IsDark)
+    foreach ($owned in @($Window.OwnedWindows)) {
+        if ($owned -is [MahApps.Metro.Controls.MetroWindow]) { Set-DialogTheme -Dialog $owned -IsDark $IsDark }
+    }
+}
+
 $toggleTheme.Add_Toggled({
     $isDark = [bool]$toggleTheme.IsOn
     if ($isDark) { [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($window, 'Dark.Steel'); $txtThemeLabel.Text = 'Dark Theme' }
     else         { [void][ControlzEx.Theming.ThemeManager]::Current.ChangeTheme($window, 'Light.Blue'); $txtThemeLabel.Text = 'Light Theme' }
+    Update-OwnedWindowTheme -Window $window -IsDark $isDark
     $global:Prefs['DarkMode'] = $isDark
     Save-DiPreferences -Prefs $global:Prefs
     Update-SidebarButtonTheme
