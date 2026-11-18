@@ -488,7 +488,7 @@ function Show-Inspection {
     $bits += ('Device {0}' -f $Inspection.ComputerName)
     if ($Inspection.Device -and $Inspection.Device.Client) { $bits += ('client service {0}, version {1}' -f $Inspection.Device.Client.ServiceState, $Inspection.Device.Client.Version) }
     if ($Inspection.Site -and $Inspection.Site.Found) { $bits += ('discovery data found (resource ID {0})' -f $Inspection.Site.ResourceId) }
-    elseif ($Inspection.Site) { $bits += 'the site has no record of the device' }
+    elseif ($Inspection.Site) { $bits += 'the site does not know the device' }
     $bits += ('{0} applications' -f $script:AppRows.Count)
     $bits += ('{0} update rows' -f @($gridUpdates.ItemsSource).Count)
     $bits += ('{0} collections' -f @($gridCollections.ItemsSource).Count)

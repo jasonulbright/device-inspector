@@ -24,7 +24,7 @@ None.
 | Message | Where | Cause | Fix |
 |---|---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | Dialog **Inspect** and log | The device box is empty or holds another character. | Enter a valid device name. |
-| The SMS Provider is a computer name or an FQDN. | Dialog **Inspect** and log | The saved SMS Provider has another character. | Correct it in **Options**. |
+| Enter the SMS Provider as a computer name or an FQDN. | Dialog **Inspect** and log | The saved SMS Provider has another character. | Correct it in **Options**. |
 | The site code is three letters or digits. | Dialog **Inspect** and log | The saved site code has another form. | Enter three letters or digits in **Options**. |
 | A site code needs an SMS Provider. | Dialog **Inspect** and log | A site code is set and the SMS Provider is empty. | Set the SMS Provider in **Options**, or clear the site code. |
 | An SMS Provider needs a site code. Enter it in Options. | Dialog **Inspect** and log | The SMS Provider is set and the site code is empty. | Enter the site code in **Options**. |
@@ -38,7 +38,7 @@ None.
 
 | Message | Cause | Fix |
 |---|---|---|
-| The SMS Provider is a computer name or an FQDN. | The SMS Provider holds another character. | Enter a computer name or an FQDN. |
+| Enter the SMS Provider as a computer name or an FQDN. | The SMS Provider holds another character. | Enter a computer name or an FQDN. |
 | The site code is three letters or digits. | The site code has another form. | Enter three letters or digits. |
 | A site code needs an SMS Provider. | A site code is set and the SMS Provider is empty. | Enter an SMS Provider, or clear the site code. |
 | An SMS Provider needs a site code. Enter it in Options. | The SMS Provider is set and the site code is empty. | Enter the site code. |
@@ -60,7 +60,7 @@ The script checks its input first and stops with the messages of the Inspect bar
 | Message | Cause | Fix |
 |---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | The device name has another form. | Use letters, digits, dots, hyphens and underscores. |
-| The SMS Provider is a computer name or an FQDN. | `-SiteServer` holds another character. | Enter a computer name or an FQDN. |
+| Enter the SMS Provider as a computer name or an FQDN. | `-SiteServer` holds another character. | Enter a computer name or an FQDN. |
 | The site code is three letters or digits. | `-SiteCode` has another form. | Enter three letters or digits. |
 | A site code needs an SMS Provider. | `-SiteCode` is set and `-SiteServer` is not. | Add `-SiteServer`, or remove `-SiteCode`. |
 | An SMS Provider needs a site code. Enter it in Options. | `-SiteServer` is set and `-SiteCode` is not. | Add `-SiteCode`. The script has no Options dialog. |

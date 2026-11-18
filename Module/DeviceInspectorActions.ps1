@@ -52,7 +52,7 @@ $script:scriptBlockPolicyUpdate = {
         }
         $listStep.Add(('Triggered {0} {1}.' -f $hashtableSchedule.Name, $hashtableSchedule.Id))
     }
-    $strSummary = 'The client ran the Machine Policy Retrieval & Evaluation Cycle.'
+    $strSummary = 'The client started the Machine Policy Retrieval & Evaluation Cycle.'
     if ($DryRun) {
         $strSummary = 'Dry run: the client answers. Nothing changed.'
     }
@@ -139,7 +139,7 @@ $script:scriptBlockFullInventory = {
         return [pscustomobject]@{ Succeeded = $false; Summary = ('The cycle did not start (return value {0}). The next scheduled cycle sends a full report.' -f $objReturnValue); Steps = @($listStep) }
     }
     $listStep.Add(('Triggered Hardware Inventory {0}.' -f $strActionId))
-    [pscustomobject]@{ Succeeded = $true; Summary = 'The client started a hardware inventory cycle with no status record, so it sends a full report. The device writes the report to InventoryAgent.log.'; Steps = @($listStep) }
+    [pscustomobject]@{ Succeeded = $true; Summary = 'The client started the Hardware Inventory Cycle with no status record, so it sends a full report. InventoryAgent.log shows the progress.'; Steps = @($listStep) }
 }
 
 # Runs on the device. Installs the updates of the client policy that the client

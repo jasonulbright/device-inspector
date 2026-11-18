@@ -53,7 +53,7 @@ A right-click on a collection row opens **Remove from Collection...** and **Add 
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| Both grids are empty. | The site has no record of the device, or the site part failed. | Review the **Problems** panel. Check the device name. |
+| Both grids are empty. | The site does not know the device, or the site part failed. | Review the **Problems** panel. Check the device name. |
 
 ## Links
 

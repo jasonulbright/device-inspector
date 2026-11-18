@@ -449,10 +449,10 @@
                                 ToolTip="Start the Machine Policy Retrieval &amp; Evaluation Cycle on the device (needs Enable Actions)."/>
                         <Button x:Name="btnFullInventory" Content="Full Hardware Inventory..."
                                 Style="{StaticResource SquareInlineButtonStyle}"
-                                ToolTip="Run the Hardware Inventory Cycle (full resynchronization) on the device (needs Enable Actions)."/>
+                                ToolTip="Run the Hardware inventory cycle (full resynchronization) on the device (needs Enable Actions)."/>
                         <Button x:Name="btnRepairInventory" Content="Repair Inventory..."
                                 Style="{StaticResource SquareInlineButtonStyle}"
-                                ToolTip="Run the Hardware Inventory Cycle (full resynchronization) when the inventory check says Corrupt (needs Enable Actions)."/>
+                                ToolTip="Run the Hardware inventory cycle (full resynchronization) when the inventory check says Corrupt (needs Enable Actions)."/>
                     </WrapPanel>
                     <DataGrid x:Name="gridFacts" Grid.Row="2"
                               Style="{StaticResource ViewDataGrid}"

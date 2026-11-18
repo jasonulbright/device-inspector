@@ -959,9 +959,9 @@ Describe 'ConvertTo-DeviceInspectionReport' {
         $strReport | Should -BeLike '*== Problems (0) ==*'
     }
 
-    It 'says when the site has no record' {
+    It 'says when the site does not know the device' {
         $objMissing = [pscustomobject]@{ ComputerName = 'X'; InspectedAt = 't'; SiteServer = 's'; SiteCode = 'XYZ'; Site = [pscustomobject]@{ Found = $false }; Device = $null; Problems = @() }
-        ConvertTo-DeviceInspectionReport -Inspection $objMissing | Should -BeLike '*The site has no record of this device.*'
+        ConvertTo-DeviceInspectionReport -Inspection $objMissing | Should -BeLike '*The site does not know this device.*'
     }
 
     It 'limits long lists' {

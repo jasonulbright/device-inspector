@@ -109,11 +109,11 @@ Describe 'Panel rows' {
         @($arrRow | Where-Object { $_.Name -eq 'Service CcmExec' })[0].Value | Should -Be 'Running (start mode Auto)'
     }
 
-    It 'says so in a fact row when the site has no record of the device' {
+    It 'says so in a fact row when the site does not know the device' {
         $objNone = New-WindowTestInspection
         $objNone.Site = [pscustomobject]@{ Found = $false }
         $arrRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objNone)
-        @($arrRow | Where-Object { $_.Group -eq 'Discovery data and hardware inventory' })[0].Value | Should -Be 'The site has no record of this device.'
+        @($arrRow | Where-Object { $_.Group -eq 'Discovery data and hardware inventory' })[0].Value | Should -Be 'The site does not know this device.'
     }
 
     It 'makes one application row for each uninstall key of the device, with no status and no inventory version' {

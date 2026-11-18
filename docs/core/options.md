@@ -73,7 +73,7 @@ Each message opens in a message box with the title **Device Inspector**.
 | The site code is three letters or digits. | The site code has another form. | Enter three letters or digits. |
 | An SMS Provider needs a site code. Enter it in Options. | The SMS Provider is set and the site code is empty. | Enter the site code. |
 | A site code needs an SMS Provider. | The site code is set and the SMS Provider is empty. | Enter the SMS Provider, or clear the site code. |
-| The SMS Provider is a computer name or an FQDN. | The SMS Provider holds another character. | Enter a computer name or an FQDN. |
+| Enter the SMS Provider as a computer name or an FQDN. | The SMS Provider holds another character. | Enter a computer name or an FQDN. |
 
 ## Links
 

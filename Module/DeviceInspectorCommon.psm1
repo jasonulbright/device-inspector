@@ -1850,7 +1850,7 @@ function Test-DeviceInspectionInventory {
         if ($listApplication.Count -eq 0) {
             return (& $scriptBlockResult 'Current' $strSite $strCycle @() 'The site inventory is current and its applications match the device.')
         }
-        & $scriptBlockResult 'Corrupt' $strSite $strCycle $listApplication.ToArray() ('The site inventory is current (last hardware inventory time {0}, device local time), but {1} applications differ from the device. The inventory on the site can be corrupt. An application removed or changed after the last cycle also shows as a difference. Repair inventory runs a full hardware inventory.' -f $strSite, $listApplication.Count)
+        & $scriptBlockResult 'Corrupt' $strSite $strCycle $listApplication.ToArray() ('The site inventory is current (last hardware inventory time {0}, device local time), but {1} applications differ from the device. The inventory on the site can be corrupt. An application removed or changed after the last cycle also shows as a difference. Repair Inventory runs a full hardware inventory.' -f $strSite, $listApplication.Count)
     }
 }
 
@@ -1945,7 +1945,7 @@ function ConvertTo-DeviceInspectionReport {
         if ($null -eq $Inspection.Site) {
             $listLine.Add('  No data.')
         } elseif (-not $Inspection.Site.Found) {
-            $listLine.Add('  The site has no record of this device.')
+            $listLine.Add('  The site does not know this device.')
         } else {
             $objSite = $Inspection.Site
             $listLine.Add(('  Resource ID:               {0}' -f $objSite.ResourceId))
@@ -2070,7 +2070,7 @@ function Test-DeviceInspectorInput {
             $listError.Add('Enter the device name. Use letters, digits, dots, hyphens and underscores.')
         }
         if (-not [string]::IsNullOrEmpty($strServer) -and $strServer -notmatch '^[A-Za-z0-9_.-]{1,255}$') {
-            $listError.Add('The SMS Provider is a computer name or an FQDN.')
+            $listError.Add('Enter the SMS Provider as a computer name or an FQDN.')
         }
         if (-not [string]::IsNullOrEmpty($strCode) -and $strCode -notmatch '^[A-Za-z0-9]{3}$') {
             $listError.Add('The site code is three letters or digits.')
@@ -2222,7 +2222,7 @@ function ConvertTo-DeviceInspectionFactRow {
                 & $scriptBlockRow 'Discovery data and hardware inventory' 'Last logon user' $Inspection.Site.LastLogonUserName
                 & $scriptBlockRow 'Discovery data and hardware inventory' 'Last hardware inventory' (Get-SiteHardwareInventoryFact -Site $Inspection.Site).Value
             } else {
-                & $scriptBlockRow 'Discovery data and hardware inventory' 'Status' 'The site has no record of this device.'
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Status' 'The site does not know this device.'
             }
         }
         $objCheckProperty = $Inspection.PSObject.Properties['InventoryCheck']

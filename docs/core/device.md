@@ -21,7 +21,7 @@ An inspection. Before **Inspect**, the panel shows "No inspection yet." and an e
 1. Select **Inspect**.
 2. Review the line above the table, for example: `Device WS01; client service Running, version 5.00.9146.1009; discovery data found (resource ID 16777221); 20 applications; 8 update rows; 11 collections; 0 problems.`
 
-The line says "the site has no record of the device" when the site does not know the device.
+The line says "the site does not know the device" when the site does not know the device.
 
 ![The Device panel of the workstation](../images/device-panel.png)
 
@@ -36,7 +36,7 @@ The table has three columns: **Group**, **Property** and **Value**.
 | Client health (device) | The state and the start mode of the `CcmExec` service, the client version, the assigned site code, the current management point, and the last Hardware Inventory Cycle and the last Discovery Data Collection Cycle (UTC). |
 | Discovery data and hardware inventory | From `Get-CMDevice` and the hardware inventory class `SMS_G_System_WORKSTATION_STATUS`: the resource ID, whether the client is installed, the client version, whether the device is active, the operating system, the last logon user and the last hardware inventory time. |
 
-The **Last hardware inventory** property of the **Discovery data and hardware inventory** group is the last hardware inventory time of the site (`LastHWScan` of `SMS_G_System_WORKSTATION_STATUS`). The value ends with "(device local time)". The site stores this time as the local clock time of the device, with no zone, and the tool does not convert it. The inventory check uses the same value.
+The **Last hardware inventory** property of the **Discovery data and hardware inventory** group is the last hardware inventory time of the site (`LastHardwareScan` of `SMS_G_System_WORKSTATION_STATUS`). The value ends with "(device local time)". The site stores this time as the local clock time of the device, with no zone, and the tool does not convert it. The inventory check uses the same value.
 
 If the site has no row in that class for the device, the property shows the `Get-CMDevice` value in UTC. The value then ends with "(UTC, from Get-CMDevice; can lag a processed report)". On the lab on 2026-11-10 the `Get-CMDevice` value kept the date of an older report for hours after the site loaded a new full report. Microsoft Learn does not document why. The JSON export names the source in `LastHardwareInventorySource`.
 

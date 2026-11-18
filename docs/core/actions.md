@@ -88,7 +88,7 @@ The **Full Hardware Inventory...** button is on the Device panel. Use it when th
 4. Select **Dry Run**. The log shows the status record of hardware inventory on the device (last cycle, last report, report version) and the steps.
 5. Select **Full Hardware Inventory...** again, then **Run**.
 
-The tool deletes the `InventoryActionStatus` record of hardware inventory (`{00000000-0000-0000-0000-000000000001}`) in `root\ccm\invagt` on the device. Then it triggers the Hardware Inventory Cycle. This is the Hardware Inventory Cycle (full resynchronization) of Support Center Client Tools. Without the record, the client sends a full report instead of a delta report, and the site replaces all hardware inventory of the device. When no record exists, the tool only triggers the schedule. When the delete fails, the tool does not trigger the schedule. The client log `InventoryAgent.log` shows the full report. The site shows the new inventory date after it processes the report. When hardware inventory is off in the client settings, the client sends no report.
+The tool deletes the `InventoryActionStatus` record of hardware inventory (`{00000000-0000-0000-0000-000000000001}`) in `root\ccm\invagt` on the device. Then it triggers the Hardware Inventory Cycle. This is the Hardware inventory cycle (full resynchronization) of Support Center Client Tools. Without the record, the client sends a full report instead of a delta report, and the site replaces all hardware inventory of the device. When no record exists, the tool only triggers the schedule. When the delete fails, the tool does not trigger the schedule. The client log `InventoryAgent.log` shows the progress of the cycle. The site shows the new inventory date after it processes the report. When hardware inventory is off in the client settings, the client sends no report.
 
 ### Install pending updates
 
@@ -193,7 +193,7 @@ Each inspection with the site and the device runs an inventory check. The Device
 
 An application on the device with an install date on or after the day of the last cycle does not count, because the next cycle reports it. The install date can be `yyyyMMdd`, `yyyy-MM-dd`, `yyyy/MM/dd` or `M/d/yyyy`. An application that is removed or changed after the last cycle also shows as a difference, so the state **Corrupt** is a hint. Check the **Difference** rows before you repair.
 
-The check reads the last hardware inventory time (`LastHWScan`) from `SMS_G_System_WORKSTATION_STATUS`. The site stores it as the local clock time of the client, with no zone. The **Last hardware inventory** property of the **Discovery data and hardware inventory** group shows the same value, from the same read. See [Device](device.md).
+The check reads the last hardware inventory time (`LastHardwareScan`) from `SMS_G_System_WORKSTATION_STATUS`. The site stores it as the local clock time of the client, with no zone. The **Last hardware inventory** property of the **Discovery data and hardware inventory** group shows the same value, from the same read. See [Device](device.md).
 
 The **Repair Inventory...** button is on the Device panel. It is on only when the state is **Corrupt**.
 

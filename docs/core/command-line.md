@@ -47,7 +47,7 @@ The script inspects one device and prints a report. With `-JsonPath` it also wri
 
 ### A failed part
 
-A part that fails is listed in the **Problems** section. The other parts still print. A device that does not exist gives "The site has no record of this device." in **Problems**, and the WinRM error in the **Problem detail** section.
+A part that fails is listed in the **Problems** section. The other parts still print. A device that does not exist gives "The site does not know this device." in **Problems**, and the WinRM error in the **Problem detail** section.
 
 ## Options and settings of this page
 

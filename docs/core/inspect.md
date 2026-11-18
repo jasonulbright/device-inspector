@@ -82,7 +82,7 @@ The **Enable Actions** switch at the bottom of the sidebar is off at each start.
 | Message | Cause | Fix |
 |---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | The trimmed name is empty, is longer than 255 characters, starts with a dot or holds another character. | Enter 1 to 255 letters, digits, dots, hyphens or underscores. Do not start with a dot. |
-| The SMS Provider is a computer name or an FQDN. | The saved SMS Provider has another character. | Correct it in **Options**. |
+| Enter the SMS Provider as a computer name or an FQDN. | The saved SMS Provider has another character. | Correct it in **Options**. |
 | A site code needs an SMS Provider. | A site code is set in Options and the SMS Provider is empty. | Set an SMS Provider in **Options**, or clear the site code. |
 | An SMS Provider needs a site code. Enter it in Options. | The SMS Provider box holds a value and Options holds no site code. | Enter the site code in **Options**. |
 
