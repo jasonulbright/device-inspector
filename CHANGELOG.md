@@ -4,6 +4,10 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+## [2026.11.18.0018] - 2026-11-18
+
+## 14 changes: filtered deployment and update reads, limited name search, Cancel
+
 ### Changed
 
 - Open maximized at 1920x1032; sidebar 36 px, buttons and boxes 26 px, rows 24 px.
