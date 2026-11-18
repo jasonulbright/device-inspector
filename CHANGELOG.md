@@ -12,6 +12,7 @@ All notable changes to Device Inspector are documented in this file.
 
 ### Added
 
+- Add a window test that reads the drawn grid column header text of every view in both themes.
 - Add 1080p density and vacant-space window tests and a guide image producer guard.
 - Add the test plan.
 - Add shell logic, script contract and start-up tests for the start script.
