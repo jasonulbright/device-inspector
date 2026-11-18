@@ -1592,7 +1592,14 @@ Describe 'Device list' {
                 [pscustomobject]@{ Name = 'WS01'; ResourceID = 1; IsClient = $true; IsActive = $true; ClientVersion = '5.00'; DeviceOS = 'Windows'; LastLogonUser = 'a'; LastActiveTime = $null }
             }
             Mock Invoke-SiteQuery {
-                if ($Query -like 'SELECT ResourceID FROM SMS_CM_RES_COLL_*') { [pscustomobject]@{ ResourceID = 3 } }
+                $strNameSearch = "SMS_CM_RES_COLL_SMS00001 WHERE ResourceType = 5 AND Name LIKE 'WS%'"
+                if ($Query -like 'SELECT ResourceID FROM SMS_CM_RES_COLL_*') {
+                    if ($Query -like "*$strNameSearch") { [pscustomobject]@{ ResourceID = 1 }; [pscustomobject]@{ ResourceID = 2 } } else { [pscustomobject]@{ ResourceID = 3 } }
+                }
+                elseif ($Query -like "*FROM $strNameSearch ORDER BY Name") {
+                    [pscustomobject]@{ Name = 'WS01'; ResourceID = 1; IsClient = $true; IsActive = $true; ClientVersion = '5.00'; DeviceOS = 'Windows'; LastLogonUser = 'a'; LastActiveTime = $null }
+                    [pscustomobject]@{ Name = 'WS02'; ResourceID = 2; IsClient = $true; IsActive = $false; ClientVersion = '5.00'; DeviceOS = 'Windows'; LastLogonUser = 'b'; LastActiveTime = [datetime]'2026-11-10T08:00:00' }
+                }
                 elseif ($Query -like '*FROM SMS_CM_RES_COLL_*ORDER BY Name') { [pscustomobject]@{ Name = 'WS03'; ResourceID = 3; IsClient = $true; IsActive = $true; DeviceOS = 'Windows' } }
             }
             Mock Get-CMCollectionMember { }
@@ -1606,17 +1613,18 @@ Describe 'Device list' {
         @($objList.Devices | ForEach-Object { $_.Name }) | Should -Be @('WS01', 'WS02')
         $objList.Devices[1].LastActive | Should -Be '2026-11-10T08:00:00Z'
         $objList.Devices[0].LastActive | Should -BeNullOrEmpty
-        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDevice -Times 1 -Exactly -ParameterFilter { $Name -eq 'WS*' -and $Fast }
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_CM_RES_COLL_SMS00001 WHERE ResourceType = 5 AND Name LIKE ''WS%'' ORDER BY Name' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDevice -Times 0 -Exactly
         Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 1 -Exactly
     }
 
     It 'lists the system members of a collection, with the name pattern as a filter, and leaves out users' {
-        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'SMS00001' -NamePattern 'WS*'
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'XYZ0001F' -NamePattern 'WS*'
         $objList.Total | Should -Be 1
         $objList.Devices[0].Name | Should -Be 'WS03'
         $objList.Devices[0].LastLogonUser | Should -Be ''
-        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like 'SELECT ResourceID FROM SMS_CM_RES_COLL_SMS00001 WHERE ResourceType = 5 AND Name LIKE ''WS%''' }
-        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_CM_RES_COLL_SMS00001 WHERE ResourceType = 5 AND Name LIKE ''WS%'' ORDER BY Name' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like 'SELECT ResourceID FROM SMS_CM_RES_COLL_XYZ0001F WHERE ResourceType = 5 AND Name LIKE ''WS%''' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_CM_RES_COLL_XYZ0001F WHERE ResourceType = 5 AND Name LIKE ''WS%'' ORDER BY Name' }
         Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDevice -Times 0 -Exactly
         Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 0 -Exactly
     }
@@ -1656,6 +1664,14 @@ Describe 'Device list' {
         $objList.Truncated | Should -BeTrue
     }
 
+    It 'searches by name with a query on All Systems, a LIKE filter (the underscore is escaped) and a limit' {
+        InModuleScope DeviceInspectorCommon { Mock Invoke-SiteQuery { 1..3 | ForEach-Object { [pscustomobject]@{ Name = ('A_{0}' -f $_); ResourceID = $_; IsClient = $true; IsActive = $true } } } }
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'A_?*' -Maximum 2
+        @($objList.Devices).Count | Should -Be 2
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 2 -Exactly -ParameterFilter { $Query.Contains("FROM SMS_CM_RES_COLL_SMS00001 WHERE ResourceType = 5 AND Name LIKE 'A[_]_%'") }
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDevice -Times 0 -Exactly
+    }
+
     It 'refuses an empty search and a pattern or a collection ID outside the rules' {
         { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' } | Should -Throw '*name pattern, a collection ID, or both*'
         { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern "WS'; x" } | Should -Throw
@@ -1669,7 +1685,9 @@ Describe 'Device list' {
     }
 
     It 'returns 500 rows by default and a numeric resource ID' {
-        Mock -ModuleName DeviceInspectorCommon Get-CMDevice { 1..501 | ForEach-Object { [pscustomobject]@{ Name = ('WS{0:d4}' -f $_); ResourceID = $_; IsClient = $true; IsActive = $true } } }
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery { 1..501 | ForEach-Object { [pscustomobject]@{ Name = ('WS{0:d4}' -f $_); ResourceID = $_; IsClient = $true; IsActive = $true } } }
+        }
         $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*'
         @($objList.Devices).Count | Should -Be 500
         $objList.Total | Should -Be 501
@@ -1685,7 +1703,7 @@ Describe 'Device list' {
     }
 
     It 'closes the site drive when the read fails' {
-        Mock -ModuleName DeviceInspectorCommon Get-CMDevice { throw 'provider error' }
+        InModuleScope DeviceInspectorCommon { Mock Invoke-SiteQuery { throw 'provider error' } }
         { Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -NamePattern 'WS*' } | Should -Throw '*provider error*'
         Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 1 -Exactly
     }
