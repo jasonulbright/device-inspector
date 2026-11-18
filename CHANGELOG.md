@@ -10,6 +10,10 @@ All notable changes to Device Inspector are documented in this file.
 - Rename the first action button to **Machine Policy Cycle...**, after the Machine Policy Retrieval & Evaluation Cycle client action. The action dialogs and the guide use the same names.
 - Retake the guide images that show the changed text.
 
+### Fixed
+
+- Add a guard test that fails when a tool script stops a process by a command-line pattern or by name. The capture tool already stops only its own processes, by process id.
+
 ## [2026.11.18.0018] - 2026-11-18
 
 ## 14 changes: filtered deployment and update reads, limited name search, Cancel
