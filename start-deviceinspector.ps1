@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Main window of Device Inspector, a tool that shows the facts of one device from a Configuration Manager site and from the device itself, with optional actions.
+    Main window of Device Inspector, a tool that shows the discovery data, the hardware inventory and the client health of one device from a Configuration Manager site and the data from the device itself, with optional actions.
 
 .DESCRIPTION
     Sidebar navigation across six panels (Device list, Device, Applications, Updates,
@@ -24,7 +24,7 @@
       - DeviceInspectorCommon module under .\Module\
       - Configuration Manager console on this computer (it provides the
         ConfigurationManager PowerShell module)
-      - WinRM access to the device, and access to the site server
+      - WinRM access to the device, and access to the SMS Provider
 
 .NOTES
     ScriptName : start-deviceinspector.ps1
@@ -410,7 +410,7 @@ function Update-ControlState {
 # === View switching ===
 $script:ViewMeta = @{
     'Device list'  = @{ Title = 'Device List';  Subtitle = 'Devices of the site that match a name pattern or a collection. Select one and inspect it.' }
-    'Device'       = @{ Title = 'Device';       Subtitle = 'Operating system, client health and site record of the device.' }
+    'Device'       = @{ Title = 'Device';       Subtitle = 'Operating system, client health, discovery data and hardware inventory of the device.' }
     'Applications' = @{ Title = 'Applications'; Subtitle = 'Applications that the device lists in its uninstall registry keys now. Right-click a row to uninstall or repair.' }
     'Updates'      = @{ Title = 'Updates';      Subtitle = 'Updates that the site lists as required for the device, and updates pending on the device.' }
     'Collections'  = @{ Title = 'Collections';  Subtitle = 'Collections that hold the device and the deployments that target them.' }
@@ -448,7 +448,7 @@ function Update-StatusBarSummary {
         $parts += ('{0} inspected {1}' -f $script:Inspection.ComputerName, $script:Inspection.InspectedAt)
         $parts += ('{0} problems' -f @($script:Inspection.Problems).Count)
     } else {
-        $parts += 'Enter a device name and click Inspect'
+        $parts += 'Enter a device name and select Inspect'
     }
     $parts += $(if ($script:ActionsEnabled) { 'actions on' } else { 'read only' })
     if ($script:RunList.Count -gt 0) { $parts += ('{0} running' -f $script:RunList.Count) }
@@ -487,7 +487,7 @@ function Show-Inspection {
     $bits = @()
     $bits += ('Device {0}' -f $Inspection.ComputerName)
     if ($Inspection.Device -and $Inspection.Device.Client) { $bits += ('client service {0}, version {1}' -f $Inspection.Device.Client.ServiceState, $Inspection.Device.Client.Version) }
-    if ($Inspection.Site -and $Inspection.Site.Found) { $bits += ('site record found (resource ID {0})' -f $Inspection.Site.ResourceId) }
+    if ($Inspection.Site -and $Inspection.Site.Found) { $bits += ('discovery data found (resource ID {0})' -f $Inspection.Site.ResourceId) }
     elseif ($Inspection.Site) { $bits += 'the site has no record of the device' }
     $bits += ('{0} applications' -f $script:AppRows.Count)
     $bits += ('{0} update rows' -f @($gridUpdates.ItemsSource).Count)
@@ -597,8 +597,8 @@ function Invoke-Inspect {
     }
     $siteOnly = [bool]$chkSiteOnly.IsChecked
     if ($siteOnly -and -not $check.SiteServer) {
-        Add-LogLine 'Inspect: Site Only needs a site server.'
-        Set-StatusText 'Set a site server in Options, or clear Site Only.'
+        Add-LogLine 'Inspect: Site Only needs an SMS Provider.'
+        Set-StatusText 'Set an SMS Provider in Options, or clear Site Only.'
         return
     }
     $global:Prefs['LastDevice'] = $check.ComputerName
@@ -626,7 +626,7 @@ function Invoke-Inspect {
             Write-ErrorLog ('Inspect failed: {0}' -f $State.ErrorMsg)
             Add-LogLine 'Inspect failed. The log file has the reason.'
             Set-StatusText 'Inspect failed. The log file has the reason.'
-            [void](Show-ThemedMessage -Owner $window -Title 'Inspect' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The inspection failed. Check the site server, the site code and your account rights in Options. The log file has the reason.' }) -Icon Error)
+            [void](Show-ThemedMessage -Owner $window -Title 'Inspect' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The inspection failed. Check the SMS Provider, the site code and your account rights in Options. The log file has the reason.' }) -Icon Error)
             return
         }
         $r = $State.Result
@@ -818,12 +818,12 @@ function Show-OptionsDialog {
         <Grid Grid.Column="2" Grid.Row="0" Margin="20,16,20,16">
             <StackPanel x:Name="paneConnection" Visibility="Visible">
                 <TextBlock Text="Configuration Manager Connection" Style="{StaticResource OptLabel}" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                <TextBlock Text="Site Server (SMS Provider FQDN)" Style="{StaticResource OptLabel}" FontSize="14" FontWeight="Bold" Margin="0,4,0,2"/>
+                <TextBlock Text="SMS Provider (FQDN)" Style="{StaticResource OptLabel}" FontSize="14" FontWeight="Bold" Margin="0,4,0,2"/>
                 <TextBox x:Name="txtSmsProvider" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="e.g. sms01.example.com"/>
+                         Controls:TextBoxHelper.Watermark="For example sms01.example.com"/>
                 <TextBlock Text="Site Code" Style="{StaticResource OptLabel}" FontSize="14" FontWeight="Bold" Margin="0,12,0,2"/>
                 <TextBox x:Name="txtSiteCode" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="e.g. XYZ. Required with a site server." Width="240" HorizontalAlignment="Left"/>
+                         Controls:TextBoxHelper.Watermark="For example XYZ. Required." Width="240" HorizontalAlignment="Left"/>
                 <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The tool needs the Configuration Manager console on this computer. The account needs local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested. Only actions make changes."
                            FontSize="11" TextWrapping="Wrap" Margin="0,16,0,0"
                            Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
@@ -831,7 +831,7 @@ function Show-OptionsDialog {
             <StackPanel x:Name="paneAbout" Visibility="Collapsed">
                 <TextBlock Text="About" Style="{StaticResource OptLabel}" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
                 <TextBlock x:Name="txtAboutVersion" Text="Device Inspector v0.0.0" Style="{StaticResource OptLabel}" FontSize="13" FontWeight="SemiBold"/>
-                <TextBlock Text="Read the facts of one device from a Configuration Manager site and from the device itself: operating system, client health, installed applications, updates, collections and deployments. Export the result as JSON or as an HTML report."
+                <TextBlock Text="View the operating system, client health, discovery data, hardware inventory, installed applications, updates, collections and deployments of one device, from a Configuration Manager site and from the device itself. Export the result as JSON or as an HTML report."
                            FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
                 <TextBlock Text="Author: Jason Ulbright. License: MIT."
                            FontSize="11" Margin="0,16,0,0" Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
@@ -1662,20 +1662,20 @@ function Start-ActionWork {
 }
 
 $btnPolicyUpdate.Add_Click({
-    Invoke-DeviceAction -Name 'Client policy update' -Function 'Invoke-DeviceInspectorPolicyUpdate' `
-        -Message 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it (Machine Policy Retrieval and Evaluation Cycle).'
+    Invoke-DeviceAction -Name 'Machine policy cycle' -Function 'Invoke-DeviceInspectorPolicyUpdate' `
+        -Message 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it (Machine Policy Retrieval & Evaluation Cycle).'
 })
 
 $btnFullInventory.Add_Click({
     Invoke-DeviceAction -Name 'Full hardware inventory' -Function 'Invoke-DeviceInspectorFullInventory' -AfterRun { param($r, $ctx) Clear-InventoryCheck } `
-        -Message 'The tool deletes the hardware inventory status record on the device (InventoryActionStatus, root\ccm\invagt), then starts a hardware inventory cycle. The client then sends a full report, and the site replaces all hardware inventory of the device.'
+        -Message 'The tool deletes the hardware inventory status record on the device (InventoryActionStatus, root\ccm\invagt), then starts the Hardware Inventory Cycle. The client then sends a full report (full resynchronization), and the site replaces all hardware inventory of the device.'
 })
 
 $btnRepairInventory.Add_Click({
     if (-not (Test-InventoryCorrupt)) { Add-LogLine 'Repair inventory: the inventory check does not say Corrupt.'; return }
     $check = $script:Inspection.InventoryCheck
     Invoke-DeviceAction -Name 'Corrupt-inventory repair' -Function 'Invoke-DeviceInspectorInventoryRepair' `
-        -Message ('{0} The tool deletes the hardware inventory status record on the device and starts a hardware inventory. The client sends a full report, and the site replaces the hardware inventory of the device. Inspect again after the site processes the report.' -f $check.Message) `
+        -Message ('{0} The tool deletes the hardware inventory status record on the device and starts the Hardware Inventory Cycle. The client sends a full report (full resynchronization), and the site replaces the hardware inventory of the device. Inspect again after the site processes the report.' -f $check.Message) `
         -AfterRun { param($r, $ctx) Clear-InventoryCheck; Add-LogLine ('{0}: inspect {1} again after the site processes the full report.' -f $r.Action, $r.ComputerName) }
 })
 
@@ -1842,7 +1842,7 @@ function Invoke-AddToCollection {
         if ($State.ErrorMsg) {
             Write-ErrorLog ('Add to collection: the collections cannot be read: {0}' -f $State.ErrorMsg)
             Add-LogLine 'Add to collection: the collections cannot be read. The log file has the reason.'
-            [void](Show-ThemedMessage -Owner $window -Title 'Add to Collection' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The collections cannot be read. Check the site server, the site code and your account rights. The log file has the reason.' }) -Icon Error)
+            [void](Show-ThemedMessage -Owner $window -Title 'Add to Collection' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The collections cannot be read. Check the SMS Provider, the site code and your account rights. The log file has the reason.' }) -Icon Error)
             return
         }
         $choices = @(Select-DeviceInspectorAddableCollection -Collections @($State.Result) -Rows @($gridCollections.ItemsSource))
@@ -1872,7 +1872,7 @@ function Invoke-DeviceListSearch {
     $check = Test-DeviceInspectorInput -ComputerName $neutralName -SiteServer ([string]$txtSiteServer.Text) -SiteCode ([string]$global:Prefs.SiteCode)
     $problems = @()
     if (-not $check.IsValid) { $problems += $check.Errors }
-    if (-not $check.SiteServer -and $problems.Count -eq 0) { $problems += 'Set a site server in Options. The device list reads the site.' }
+    if (-not $check.SiteServer -and $problems.Count -eq 0) { $problems += 'Set an SMS Provider in Options. The device list queries the site.' }
     if (-not $pattern -and -not $collection) { $problems += 'Enter a name pattern, a collection ID, or both.' }
     if ($pattern -and -not $collection -and $pattern -notmatch '[A-Za-z0-9]') { $problems += 'A name pattern without a collection needs at least one letter or digit.' }
     if ($pattern -and $pattern -notmatch '^[A-Za-z0-9_.*?-]{1,63}$') { $problems += 'The name pattern can hold letters, digits, hyphen, underscore, dot, * and ?.' }
@@ -1898,7 +1898,7 @@ function Invoke-DeviceListSearch {
             $gridDeviceList.ItemsSource = @()
             $txtListSummary.Text = 'The search failed. The log file has the reason.'
             Update-ControlState
-            [void](Show-ThemedMessage -Owner $window -Title 'Device List' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The search failed. Check the site server, the site code and your account rights. The log file has the reason.' }) -Icon Error)
+            [void](Show-ThemedMessage -Owner $window -Title 'Device List' -Message $(if ($State.ToolMessage) { [string]$State.ToolMessage } else { 'The search failed. Check the SMS Provider, the site code and your account rights. The log file has the reason.' }) -Icon Error)
             return
         }
         $list = $State.Result
@@ -1995,7 +1995,7 @@ $window.Add_Loaded({
     Update-FooterSite
     Update-ControlState
     Update-StatusBarSummary
-    Add-LogLine 'Device Inspector ready. Enter a device name, then click Inspect. Set the site server in Options. The tool only reads until you turn on Enable Actions.'
+    Add-LogLine 'Device Inspector ready. Enter a device name, then select Inspect. Set the SMS Provider in Options. The tool only reads until you turn on Enable Actions.'
     Add-LogLine ('Log file: {0}' -f $script:ToolLogPath)
 })
 

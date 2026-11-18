@@ -12,15 +12,15 @@ Use it to find out why a device gets a deployment, or which collection brings it
 
 ## Requirements
 
-An inspection that read the site. A **Site Only** inspection and a full inspection both fill the panel. An inspection with no site server leaves it empty.
+An inspection that read the site. A **Site Only** inspection and a full inspection both fill the panel. An inspection with no SMS Provider leaves it empty.
 
 ## Steps
 
-### Read the memberships and the deployments
+### View the memberships and the deployments
 
 1. Select **Collections** in the sidebar.
-2. Read the upper grid: **Collection ID**, **Collection** and **Membership**.
-3. Read the lower grid: **Deployment**, **Type**, **Intent**, **Collection** and **Deadline (UTC)**. The **Collection** column names the collection that brings the deployment to the device.
+2. Review the upper grid: **Collection ID**, **Collection** and **Membership**.
+3. Review the lower grid: **Deployment**, **Type**, **Intent**, **Collection** and **Deadline (UTC)**. The **Collection** column names the collection that brings the deployment to the device.
 
 ![The Collections panel of a server that is in two collections](../images/collections-server.png)
 
@@ -53,7 +53,7 @@ A right-click on a collection row opens **Remove from Collection...** and **Add 
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| Both grids are empty. | The site has no record of the device, or the site part failed. | Read the **Problems** panel. Check the device name. |
+| Both grids are empty. | The site has no record of the device, or the site part failed. | Review the **Problems** panel. Check the device name. |
 
 ## Links
 

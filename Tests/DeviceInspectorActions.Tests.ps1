@@ -42,7 +42,7 @@ Describe 'Invoke-DeviceInspectorPolicyUpdate' {
         $objResult.Succeeded | Should -BeTrue
         $objResult.DryRun | Should -Be $DryRun
         $objResult.Mode | Should -Be $(if ($DryRun) { 'DRY RUN' } else { 'RUN' })
-        $objResult.Action | Should -Be 'Client policy update'
+        $objResult.Action | Should -Be 'Machine policy cycle'
         $objResult.ComputerName | Should -Be 'WS01'
         $objResult.Steps | Should -Be @('step one')
         $objResult.StartedAt | Should -Match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
@@ -124,7 +124,7 @@ Describe 'Policy update script on the device' {
             $objRaw.Steps[1] | Should -Match '^Triggered .*000000000021'
             $objRaw.Steps[2] | Should -Match 'failed\.$'
             $objRaw.Steps[2] | Should -Not -Match 'Generic failure'
-            @($objRaw.Detail) | Should -Contain 'Machine policy evaluation (Machine Policy Evaluation): Generic failure'
+            @($objRaw.Detail) | Should -Contain 'Evaluate Machine Policies: Generic failure'
         }
     }
 
@@ -500,7 +500,7 @@ Describe 'Corrupt-inventory check and repair' {
         $objCheck.Differences | Should -Be 0
     }
 
-    It 'says Unknown without the site record, without the client facts, or without a date' {
+    It 'says Unknown without the discovery data, without the client data, or without a date' {
         $objNoSite = New-CheckInspection -DeviceApp @() -SiteApp @()
         $objNoSite.Site = $null
         (Test-DeviceInspectionInventory -Inspection $objNoSite).State | Should -Be 'Unknown'
@@ -552,10 +552,10 @@ Describe 'Corrupt-inventory check and repair' {
         (Test-DeviceInspectionInventory -Inspection $objInspection).State | Should -Be 'Unknown'
     }
 
-    It 'says Unknown when the cycle record is missing' {
+    It 'says Unknown when the status of the last cycle is missing' {
         $objCheck = Test-DeviceInspectionInventory -Inspection (New-CheckInspection -Cycle '' -DeviceApp @() -SiteApp @())
         $objCheck.State | Should -Be 'Unknown'
-        $objCheck.Message | Should -Match 'no hardware inventory cycle record'
+        $objCheck.Message | Should -Match 'no hardware inventory status'
     }
 
     It 'compares by name with Compare-DeviceInspectionApplication: Match, Version differs, Device only, Inventory only' {
@@ -1728,7 +1728,7 @@ Describe 'Background device actions' {
             return $objFound.Extent.Text
         }
         function New-TestRun {
-            param([string]$ComputerName, [string]$Action = 'Client policy update', [bool]$DryRun = $false)
+            param([string]$ComputerName, [string]$Action = 'Machine policy cycle', [bool]$DryRun = $false)
             return (New-DeviceInspectorActionRun -ActionId (New-DeviceInspectorActionId) -Action $Action -ComputerName $ComputerName -DryRun $DryRun)
         }
         function New-TestList {
@@ -1749,14 +1749,14 @@ Describe 'Background device actions' {
             Mock -ModuleName DeviceInspectorCommon Invoke-ActionDeviceScript { [pscustomobject]@{ Succeeded = $false; Summary = 'The installer failed with exit code 1603.'; Steps = @('Command ran.') } }
             $strId = New-DeviceInspectorActionId
             $strPath = Join-Path -Path $TestDrive -ChildPath 'Logs\ids.log'
-            $objStart = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Outcome 'STARTED' -ActionId $strId -Summary 'The run started.' -Steps @()
+            $objStart = New-DeviceInspectorActionRecord -Action 'Machine policy cycle' -ComputerName 'WS01' -DryRun $false -Succeeded $false -Outcome 'STARTED' -ActionId $strId -Summary 'The run started.' -Steps @()
             $null = Write-DeviceInspectorActionLog -Path $strPath -Result $objStart
             $objResult = Add-DeviceInspectorActionId -Result (Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01') -ActionId $strId
             $null = Write-DeviceInspectorActionLog -Path $strPath -Result $objResult
             $arrHeader = @([System.IO.File]::ReadAllLines($strPath) | Where-Object { $_ -notmatch '^\s' })
             $arrHeader.Count | Should -Be 2
-            $arrHeader[0] | Should -Match ('^\S+ \| {0} \| \S+ \| WS01 \| Client policy update \| RUN \| STARTED \| The run started\.$' -f $strId)
-            $arrHeader[1] | Should -Match ('^\S+ \| {0} \| \S+ \| WS01 \| Client policy update \| RUN \| FAILED \| The installer failed with exit code 1603\.$' -f $strId)
+            $arrHeader[0] | Should -Match ('^\S+ \| {0} \| \S+ \| WS01 \| Machine policy cycle \| RUN \| STARTED \| The run started\.$' -f $strId)
+            $arrHeader[1] | Should -Match ('^\S+ \| {0} \| \S+ \| WS01 \| Machine policy cycle \| RUN \| FAILED \| The installer failed with exit code 1603\.$' -f $strId)
         }
 
         It 'writes an ID on the result line of a dry run' {
@@ -1764,7 +1764,7 @@ Describe 'Background device actions' {
             $strId = New-DeviceInspectorActionId
             $objResult = Add-DeviceInspectorActionId -Result (Invoke-DeviceInspectorPolicyUpdate -ComputerName 'WS01' -DryRun) -ActionId $strId
             $objResult.ActionId | Should -Be $strId
-            @(ConvertTo-DeviceInspectorActionText -Result $objResult)[0] | Should -Match ('\| {0} \| \S+ \| WS01 \| Client policy update \| DRY RUN \| OK \|' -f $strId)
+            @(ConvertTo-DeviceInspectorActionText -Result $objResult)[0] | Should -Match ('\| {0} \| \S+ \| WS01 \| Machine policy cycle \| DRY RUN \| OK \|' -f $strId)
         }
 
         It 'gives the record of an action function an empty ID until the window sets it' {
@@ -1959,7 +1959,7 @@ Describe 'Background device actions' {
             $strOne | Should -Match '^1 action is still running\. If you close the tool, it stops waiting for it, and the run on the device can stop before it is complete\. Wait for the running action to end before you close\.'
             $strOne | Should -Not -Match 'actions are'
             $strOne | Should -Not -Match '1 actions'
-            @($strOne -split "`n" | Where-Object { $_ -match '^Client policy update on WS01 \(ID \S+\)$' }).Count | Should -Be 1
+            @($strOne -split "`n" | Where-Object { $_ -match '^Machine policy cycle on WS01 \(ID \S+\)$' }).Count | Should -Be 1
             $strTwo = Get-DeviceInspectorCloseWarningText -Run @((New-TestRun -ComputerName 'WS01'), (New-TestRun -ComputerName 'WS02')) -NewLine $strNl
             $strTwo | Should -Match '^2 actions are still running\. If you close the tool, it stops waiting for them, and a run on a device can stop before it is complete\. Wait for the running actions to end before you close\.'
             @($strTwo -split "`n" | Where-Object { $_ -match ' on WS0[12] \(ID ' }).Count | Should -Be 2

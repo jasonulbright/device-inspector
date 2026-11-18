@@ -16,10 +16,10 @@ An inspection that read the site, the device or both.
 
 ## Steps
 
-### Read the list
+### View the list
 
 1. Select **Updates** in the sidebar.
-2. Read the columns: **Source**, **Article**, **Severity**, **State**, **Deadline (UTC)** and **Title**.
+2. Review the columns: **Source**, **Article**, **Severity**, **State**, **Deadline (UTC)** and **Title**.
 
 ![The Updates panel of the workstation, which has no required update](../images/updates-panel.png)
 
@@ -63,8 +63,8 @@ The grid is read only. A right-click opens a menu with **Install Selected Pendin
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| Only **Device** rows show. | **Site Only** was off and the site part failed, or the site server was empty. | Read the **Problems** panel. Set the site server in **Options**. |
-| Only **Site** rows show. | **Site Only** was on, or the device did not answer. | Clear **Site Only**. Read the **Problems** panel. |
+| Only **Device** rows show. | **Site Only** was off and the site part failed, or the SMS Provider was empty. | Review the **Problems** panel. Set the SMS Provider in **Options**. |
+| Only **Site** rows show. | **Site Only** was on, or the device did not answer. | Clear **Site Only**. Review the **Problems** panel. |
 
 ## Links
 

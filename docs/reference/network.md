@@ -18,7 +18,7 @@ None.
 
 | Call | Target | When | Content |
 |---|---|---|---|
-| ConfigurationManager module | The SMS Provider computer, through the site drive that the console module opens | **Inspect** with a site server | `Get-CMSite`, `Get-CMDevice`, `Get-CMDeviceCollection`, `Get-CMDeployment`, `Get-CMSoftwareUpdate` and `Invoke-CMWmiQuery` (WQL `SELECT`). The ports are those of the console. |
+| ConfigurationManager module | The SMS Provider computer, through the site drive that the console module opens | **Inspect** with an SMS Provider | `Get-CMSite`, `Get-CMDevice`, `Get-CMDeviceCollection`, `Get-CMDeployment`, `Get-CMSoftwareUpdate` and `Invoke-CMWmiQuery` (WQL `SELECT`). The ports are those of the console. |
 | WinRM remote script block | The device, TCP 5985 (HTTP) by default | **Inspect** with no **Site Only** | `Invoke-Command` with one script block that reads the device. |
 | `https://api.github.com/repos/<repository>/releases/latest` | GitHub | At the start of the window, once a day, only when the tool is installed by the suite installer | The check for a newer suite version. The result goes to the log. |
 

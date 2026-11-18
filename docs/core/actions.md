@@ -16,7 +16,7 @@ Each action follows the same steps:
 
 ![The Device panel with Enable Actions on: the three action buttons are on and the status bar says actions on](../images/actions-device-buttons.png)
 
-![The confirmation dialog of the client policy update, with the Run, Dry Run and Cancel buttons](../images/actions-confirm-dialog.png)
+![The confirmation dialog of the Machine Policy Cycle, with the Run, Dry Run and Cancel buttons](../images/actions-confirm-dialog.png)
 
 ## Running Actions
 
@@ -36,7 +36,7 @@ A device runs one action at a time. A run, and a dry run, counts as an action. T
 
 You can start the next action on the device after the first one ends.
 
-When a run ends, a result window opens. It does not take the focus, so your typing and clicks stay in the main window. Select **OK** to close it. The tool refreshes the view of the result only when the inspection on screen is of the same device. After a **Full Hardware Inventory**, for example, the inventory check changes only for the device on screen. When the device is not on screen, the window log says to inspect it again.
+When a run ends, a result window opens. It does not take the focus, so your typing and selections stay in the main window. Select **OK** to close it. The tool refreshes the view of the result only when the inspection on screen is of the same device. After a **Full Hardware Inventory**, for example, the inventory check changes only for the device on screen. When the device is not on screen, the window log says to inspect it again.
 
 ![The result window of a dry run](../images/actions-result.png)
 
@@ -66,17 +66,17 @@ Inspect the device later to see its state.
 
 ## Steps
 
-### Update the client policy
+### Start the Machine Policy Retrieval & Evaluation Cycle
 
-The **Client Policy Update...** button is on the Device panel.
+The **Machine Policy Cycle...** button is on the Device panel.
 
 1. Turn on **Enable Actions**.
 2. Inspect the device.
-3. On the Device panel, select **Client Policy Update...**.
+3. On the Device panel, select **Machine Policy Cycle...**.
 4. Select **Dry Run**. The log shows the client version and the two steps.
-5. Select **Client Policy Update...** again, then **Run**.
+5. Select **Machine Policy Cycle...** again, then **Run**.
 
-The client requests machine policy from its management point (schedule `{00000000-0000-0000-0000-000000000021}`, Machine Policy Assignments Request) and then evaluates it (schedule `{00000000-0000-0000-0000-000000000022}`, Machine Policy Evaluation). This is the Machine Policy Retrieval and Evaluation Cycle of the client. The request returns at once. The client downloads and applies the policy in the next minutes.
+The client requests machine policy from its management point (schedule `{00000000-0000-0000-0000-000000000021}`, Request Machine Assignments) and then evaluates it (schedule `{00000000-0000-0000-0000-000000000022}`, Evaluate Machine Policies). Together they are the Machine Policy Retrieval & Evaluation Cycle client action. The request returns at once. The client downloads and applies the policy in the next minutes.
 
 ### Start a full hardware inventory
 
@@ -88,7 +88,7 @@ The **Full Hardware Inventory...** button is on the Device panel. Use it when th
 4. Select **Dry Run**. The log shows the status record of hardware inventory on the device (last cycle, last report, report version) and the steps.
 5. Select **Full Hardware Inventory...** again, then **Run**.
 
-The tool deletes the `InventoryActionStatus` record of hardware inventory (`{00000000-0000-0000-0000-000000000001}`) in `root\ccm\invagt` on the device. Then it triggers the Hardware Inventory schedule. Without the record, the client sends a full report instead of a delta report, and the site replaces all hardware inventory of the device. When no record exists, the tool only triggers the schedule. When the delete fails, the tool does not trigger the schedule. The client log `InventoryAgent.log` shows the full report. The site shows the new inventory date after it processes the report. When hardware inventory is off in the client settings, the client sends no report.
+The tool deletes the `InventoryActionStatus` record of hardware inventory (`{00000000-0000-0000-0000-000000000001}`) in `root\ccm\invagt` on the device. Then it triggers the Hardware Inventory Cycle. This is the Hardware Inventory Cycle (full resynchronization) of Support Center Client Tools. Without the record, the client sends a full report instead of a delta report, and the site replaces all hardware inventory of the device. When no record exists, the tool only triggers the schedule. When the delete fails, the tool does not trigger the schedule. The client log `InventoryAgent.log` shows the full report. The site shows the new inventory date after it processes the report. When hardware inventory is off in the client settings, the client sends no report.
 
 ### Install pending updates
 
@@ -186,14 +186,14 @@ Each inspection with the site and the device runs an inventory check. The Device
 
 | State | Meaning |
 |---|---|
-| **Current** | The hardware scan time of the site is not older than the start of the last hardware inventory cycle on the device, and the installed applications of the site inventory and of the device match. Both times are local clock times of the device. |
+| **Current** | The last hardware inventory time of the site is not older than the start of the last Hardware Inventory Cycle on the device, and the installed applications of the site inventory and of the device match. Both times are local clock times of the device. |
 | **Corrupt** | The site inventory is current, but applications differ. The rows **Difference** name them. The **Problems** panel gets a line. |
-| **NotCurrent** | The site has not processed the last hardware inventory cycle of the device yet. The check does not compare the applications. |
-| **Unknown** | The site record, the client facts, a date or the cycle record is missing; the site or the device application read failed; or a site inventory class has no rows (the class can be off in the client settings). |
+| **NotCurrent** | The site has not processed the last Hardware Inventory Cycle of the device yet. The check does not compare the applications. |
+| **Unknown** | The discovery data of the device on the site, the client data of the device, a date or the last cycle is missing; the site or the device application read failed; or a site inventory class has no rows (the class can be off in the client settings). |
 
 An application on the device with an install date on or after the day of the last cycle does not count, because the next cycle reports it. The install date can be `yyyyMMdd`, `yyyy-MM-dd`, `yyyy/MM/dd` or `M/d/yyyy`. An application that is removed or changed after the last cycle also shows as a difference, so the state **Corrupt** is a hint. Check the **Difference** rows before you repair.
 
-The check reads the hardware scan time from `SMS_G_System_WORKSTATION_STATUS`. The site stores it as the local clock time of the client, with no zone. The **Last hardware inventory** fact of the site record shows the same value, from the same read. See [Device](device.md).
+The check reads the last hardware inventory time (`LastHWScan`) from `SMS_G_System_WORKSTATION_STATUS`. The site stores it as the local clock time of the client, with no zone. The **Last hardware inventory** property of the **Discovery data and hardware inventory** group shows the same value, from the same read. See [Device](device.md).
 
 The **Repair Inventory...** button is on the Device panel. It is on only when the state is **Corrupt**.
 
@@ -233,10 +233,10 @@ A failed run also has indented lines that start with `Detail:` after its steps. 
 The ID joins the lines of one run: the `STARTED` line and the `OK` or `FAILED` line have the same ID. A dry run has one line with an ID. A line from an older version of the tool has no ID field, and one from a result without an ID shows a hyphen.
 
 ```text
-2026-11-10T20:00:00Z | a1b2c3d4 | CONTOSO\admin1 | CLIENT01 | Client policy update | DRY RUN | OK | Dry run: the client answers. Nothing changed.
+2026-11-10T20:00:00Z | a1b2c3d4 | CONTOSO\admin1 | CLIENT01 | Machine policy cycle | DRY RUN | OK | Dry run: the client answers. Nothing changed.
     Client version 5.00.9146.1009 answers.
-    Dry run: would trigger Machine policy retrieval (Machine Policy Assignments Request) {00000000-0000-0000-0000-000000000021}.
-    Dry run: would trigger Machine policy evaluation (Machine Policy Evaluation) {00000000-0000-0000-0000-000000000022}.
+    Dry run: would trigger Request Machine Assignments {00000000-0000-0000-0000-000000000021}.
+    Dry run: would trigger Evaluate Machine Policies {00000000-0000-0000-0000-000000000022}.
 ```
 
 ## Limits
@@ -251,14 +251,14 @@ The ID joins the lines of one run: the `STARTED` line and the `OK` or `FAILED` l
 | Message | Cause | Fix |
 |---|---|---|
 | Cannot run the action on <device>: ... | WinRM to the device failed. On a run, a step can have run before the failure. | Check that the device is on and that your account is a local administrator on it. Inspect the device to see its state. |
-| <step> failed. The earlier steps, if any, ran. | A method call on the client failed. | Read the step lines in the log. Read `PolicyAgent.log` on the device. |
+| <step> failed. The earlier steps, if any, ran. | A method call on the client failed. | Review the step lines in the log. Check `PolicyAgent.log` on the device. |
 | The action log cannot be written, so the run does not start. | The `Logs` folder is not writable. | Make the folder of the script writable. |
 | <action> (ID <id>) is running on <device> since <time>. A device runs one action at a time. Wait until it ends. | The device has a running action. | Wait until the row of the device leaves the list **Running Actions**, or act on another device. |
 | A line with the outcome `CLOSED` and no result line for the ID. | You closed the window while the run was open. The tool stopped waiting, and the run can have stopped before it was complete. | Inspect the device to see its state. Run the action again if the state is not what you want. |
 | The Configuration Manager client does not answer: ... | The client is not installed or its WMI namespace is broken. | Install or repair the client. |
-| ... failed with return value <n>. | The client refused the request. | Read `PolicyAgent.log` on the device. |
+| ... failed with return value <n>. | The client refused the request. | Check `PolicyAgent.log` on the device. |
 | The hardware inventory status cannot be read: ... | WMI refused the read of `root\ccm\invagt`. | Check the rights on `root\ccm\invagt`. Repair the client. |
-| The hardware inventory status record cannot be deleted. The schedule was not triggered. | WMI refused the delete. | Check the rights on `root\ccm\invagt`. Read `InventoryAgent.log`. |
+| The hardware inventory status record cannot be deleted. The schedule was not triggered. | WMI refused the delete. | Check the rights on `root\ccm\invagt`. Check `InventoryAgent.log`. |
 | The uninstall key <key> (<view> view) is not on the device now. | Something removed the key after the inspection. | Inspect the device again. |
 | <name> is a system component, part of another product. ... | `SystemComponent` is 1 in the key. | Uninstall the product that owns it. |
 | There is no documented repair command for this installer. ... | Repair works for MSI entries only. | Repair the application with its own installer. |
@@ -267,7 +267,7 @@ The ID joins the lines of one run: the `STARTED` line and the `OK` or `FAILED` l
 | The uninstall program <path> is not on the device. ... | The file of the quiet uninstall string is gone. | Inspect the device again. |
 | The installer is still running after 10 minutes. The outcome is not known. | The installer is slow or waits for input. | Inspect the device again later. |
 | The installer returned 1618: another installation is in progress. | Windows Installer runs another install. | Try again later. |
-| The installer failed with exit code <n>. | The installer reported an error. | Read the log of the installer on the device. |
+| The installer failed with exit code <n>. | The installer reported an error. | Check the log of the installer on the device. |
 | The device has no direct rule in <ID>. ... | The membership comes from a query, include or other rule. | Change the rule of the collection in the Configuration Manager console. |
 | <ID> is a built-in collection. ... | Built-in collections have no direct rules. | None. |
 | The site has <n> device records named <name>. ... | The change needs exactly one device record. | Remove the duplicate record in the console. |
@@ -275,8 +275,8 @@ The ID joins the lines of one run: the `STARTED` line and the `OK` or `FAILED` l
 | The device is not a member of the limiting collection <ID> of <ID>. ... | The limiting collection does not hold the device. | Pick another collection, or change the limiting collection in the console. |
 | The site did not change the rule. ... | The account has no right to modify the collection. | Check the role and the scope of the account. |
 | No update to install: ... | No selected update is missing on the device. | Inspect again. The update can be installed already. |
-| The client refused the install request (return value <n>). | The client did not accept the job. | Read `UpdatesDeployment.log` on the device. |
-| The cycle did not start (return value <n>). | The client refused the trigger after the delete. | Read `InventoryAgent.log` on the device. The next scheduled cycle sends a full report. |
+| The client refused the install request (return value <n>). | The client did not accept the job. | Check `UpdatesDeployment.log` on the device. |
+| The cycle did not start (return value <n>). | The client refused the trigger after the delete. | Check `InventoryAgent.log` on the device. The next scheduled cycle sends a full report. |
 | The status record is deleted, but the cycle did not start. | The trigger failed after the delete. | Wait for the next scheduled cycle. It sends a full report. Or run the action again. |
 
 ## Links

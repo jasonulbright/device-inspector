@@ -164,10 +164,11 @@ try {
     foreach ($steps in $stepFiles) {
         $dest = $root
         # A fresh copy for each run: no saved settings, no window state, no log of an earlier run. Stop only the leftovers
-        # of an earlier capture of this app.
+        # of an earlier capture of this app, found by the process ids in its ledger.
         Invoke-Command $session {
             param($d)
-            Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like "*$d\*" -and $_.ProcessId -ne $PID } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            $ledger = Join-Path $d '.pids'
+            if (Test-Path -LiteralPath $ledger) { foreach ($entry in @(Get-Content -LiteralPath $ledger)) { $a = $entry -split '\|'; $p = Get-Process -Id ([int]$a[0]) -ErrorAction SilentlyContinue; if ($p -and $p.Id -ne $PID -and $p.StartTime.Ticks -eq [long]$a[1]) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } } }
             Start-Sleep -Seconds 2
             if (Test-Path $d) { Remove-Item $d -Recurse -Force }
             New-Item -ItemType Directory $d, (Join-Path $d 'ui') -Force | Out-Null
@@ -285,13 +286,14 @@ try {
 finally {
     # Each cleanup runs on its own, so that a failed cleanup cannot replace the original error.
     # Stop a capture that still runs (a timeout leaves it running), then remove the task. Stop the task first, then the
-    # powershell.exe processes of this folder, then unregister, so that nothing keeps writing into the folder or the lock.
+    # processes that the ledger of this folder lists (by id), then unregister, so that nothing keeps writing into the folder or the lock.
     # Only a capture that holds the lock cleans up: without the lock the task, the folder and the processes belong to another capture.
     if ($session -and $haveLock) { try {
         Invoke-Command $session {
             param($t, $r)
             Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
-            Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like "*$r\*" -and $_.ProcessId -ne $PID } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            $ledger = Join-Path $r '.pids'
+            if (Test-Path -LiteralPath $ledger) { foreach ($entry in @(Get-Content -LiteralPath $ledger)) { $a = $entry -split '\|'; $p = Get-Process -Id ([int]$a[0]) -ErrorAction SilentlyContinue; if ($p -and $p.Id -ne $PID -and $p.StartTime.Ticks -eq [long]$a[1]) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } } }
             Start-Sleep -Seconds 2
             Unregister-ScheduledTask -TaskName $t -Confirm:$false -ErrorAction SilentlyContinue
         } -ArgumentList $taskName, $root

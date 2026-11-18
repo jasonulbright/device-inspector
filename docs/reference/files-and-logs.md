@@ -18,7 +18,7 @@ Write access for your account to the folder of the script.
 
 | Path (in the script folder) | Content | Written when |
 |---|---|---|
-| `DeviceInspector.prefs.json` | The site server, the site code, the last device and Site Only. See [Settings](settings.md). | **Inspect**, **OK** in Options, the theme toggle. |
+| `DeviceInspector.prefs.json` | The SMS Provider, the site code, the last device and Site Only. See [Settings](settings.md). | **Inspect**, **OK** in Options, the theme toggle. |
 | `DeviceInspector.windowstate.json` | The window size, position and panel. | Window close. |
 | `Logs\DeviceInspector-<yyyyMMdd-HHmmss>.log` | The full log of one session: every line of the window log, the full report of each inspection with every list entry, and each action with its steps. | During the session. |
 | `Logs\DeviceInspector-actions.log` | The action log: every run and every dry run of an action, from every session. Each line has an action ID. | Before a run (`STARTED`), after each action, and at window close for each open run (`CLOSED`). |

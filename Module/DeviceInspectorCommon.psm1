@@ -17,8 +17,8 @@ function ConvertTo-InspectionTimestamp {
     # Gives the same text in Windows PowerShell 5.1 and PowerShell 7, because
     # ConvertTo-Json formats [datetime] values differently in the two versions.
     # A value with Kind Unspecified is read as UTC. The ConfigurationManager cmdlets
-    # return the inventory dates of the site this way. The last hardware scan of
-    # Get-CMDevice can lag a processed report. The Last hardware inventory fact shows
+    # return the inventory dates of the site this way. The last hardware inventory time of
+    # Get-CMDevice can lag a processed report. The Last hardware inventory property shows
     # it only when SMS_G_System_WORKSTATION_STATUS has no row.
     #
     # .PARAMETER Value
@@ -664,7 +664,7 @@ function Connect-InspectorSite {
             # site drive of a local site server opens with the signed-in account.
             $boolUseCredential = $PSBoundParameters.ContainsKey('Credential') -and ($null -ne $Credential)
             if ($boolUseCredential -and (Test-InspectorLocalComputer -ComputerName $SiteServer)) {
-                Write-Verbose -Message 'The site server is this computer. Windows does not allow credentials for a local connection, so the signed-in account is used.'
+                Write-Verbose -Message 'The SMS Provider is this computer. Windows does not allow credentials for a local connection, so the signed-in account is used.'
                 $boolUseCredential = $false
             }
             $objDrive = Get-PSDrive -Name $SiteCode -PSProvider 'CMSite' -ErrorAction SilentlyContinue
@@ -693,9 +693,9 @@ function Connect-InspectorSite {
             # The thrown message is a fixed text. The raw text goes in the Data of the
             # exception, so that the caller can keep it in ProblemDetail.
             if ($strRawText -like '*credentials cannot be used for local connections*') {
-                $strFixedText = 'Cannot open site {0} on {1}. The site server is this computer, and Windows does not allow credentials for a local connection. Enter the name of this computer as the site server, or run without a credential. The log file has the reason.' -f $SiteCode, $SiteServer
+                $strFixedText = 'Cannot open site {0} on {1}. The SMS Provider is this computer, and Windows does not allow credentials for a local connection. Enter the name of this computer as the SMS Provider, or run without a credential. The log file has the reason.' -f $SiteCode, $SiteServer
             } else {
-                $strFixedText = 'Cannot open site {0} on {1}. Check the site code and the site server name, and the account rights. The log file has the reason.' -f $SiteCode, $SiteServer
+                $strFixedText = 'Cannot open site {0} on {1}. Check the site code and the SMS Provider name, and the account rights. The log file has the reason.' -f $SiteCode, $SiteServer
             }
             $exceptionFixed = New-Object -TypeName 'System.InvalidOperationException' -ArgumentList $strFixedText
             $exceptionFixed.Data['RawText'] = $strRawText
@@ -805,19 +805,19 @@ function Invoke-SiteQuery {
 
 function Get-SiteFact {
     # .SYNOPSIS
-    # Collects the facts that the ConfigMgr site holds about one device.
+    # Collects the data that the ConfigMgr site holds about one device.
     #
     # .DESCRIPTION
     # Read only. The site drive must be open (Connect-InspectorSite). A failure in one
     # part (inventory, collections, deployments) is added to the Problems list and the
     # other parts continue. A failure of the device lookup throws.
     #
-    # Cmdlets: Get-CMDevice (device record; its last hardware scan is the fallback),
+    # Cmdlets: Get-CMDevice (device object; its last hardware inventory time is the fallback),
     # Get-CMDeviceCollection (collection names), Get-CMDeployment (deployments),
     # Get-CMSoftwareUpdate (update details). Four reads have no cmdlet
     # and use Invoke-CMWmiQuery: the installed applications from hardware inventory,
     # the collection memberships of the device, the required updates of the device
-    # and the hardware scan time of the device.
+    # and the last hardware inventory time of the device.
     #
     # .PARAMETER ComputerName
     # The device name, without a domain suffix.
@@ -840,7 +840,7 @@ function Get-SiteFact {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] The site facts. Found is $false when the site has no such device.
+    # [pscustomobject] The site data. Found is $false when the site has no such device.
     #
     # .NOTES
     # PRIVATE/INTERNAL HELPER. Not part of the public API surface. Parameters,
@@ -902,7 +902,7 @@ function Get-SiteFact {
 
         $strLastHardwareInventory = ConvertTo-InspectionTimestamp -Value $objResource.LastHardwareScan
 
-        # The site stores the hardware scan time as the local clock time of the client,
+        # The site stores the last hardware inventory time as the local clock time of the client,
         # with no zone. The inventory check compares it with the cycle start in the
         # local time of the device, so the value stays unconverted.
         $strHardwareScanClientTime = $null
@@ -918,11 +918,11 @@ function Get-SiteFact {
             }
         } catch {
             Write-Debug -Message $_.Exception.Message
-            $ProblemDetail.Add(('Site hardware scan time: {0}' -f $_.Exception.Message))
-            $Problems.Add(('Site hardware scan time: {0}' -f $strFailedText))
+            $ProblemDetail.Add(('Site last hardware inventory time: {0}' -f $_.Exception.Message))
+            $Problems.Add(('Site last hardware inventory time: {0}' -f $strFailedText))
         }
 
-        # One read serves the fact and the inventory check. With no row, the fact falls
+        # One read serves the property and the inventory check. With no row, the property falls
         # back to the Get-CMDevice value.
         $strLastHardwareInventorySource = 'None'
         if (-not [string]::IsNullOrEmpty($strHardwareScanClientTime)) {
@@ -1086,7 +1086,7 @@ function Get-SiteFact {
 
 function Get-DeviceFact {
     # .SYNOPSIS
-    # Collects facts from the device itself over WinRM.
+    # Collects data from the device itself over WinRM.
     #
     # .DESCRIPTION
     # Runs one fixed script block on the device with Invoke-Command. The block
@@ -1108,7 +1108,7 @@ function Get-DeviceFact {
     # None. You can't pipe objects to this function.
     #
     # .OUTPUTS
-    # [pscustomobject] The device facts. The Problems property lists the parts that
+    # [pscustomobject] The device data. The Problems property lists the parts that
     # failed, with fixed texts and no exception text. The ProblemDetail property
     # ([string[]]) holds the raw exception text of those parts, in the same order,
     # each entry with the same area label as its fixed text.
@@ -1540,7 +1540,7 @@ function Split-DeviceInspectionCommand {
 
 function Get-DeviceInspection {
     # .SYNOPSIS
-    # Collects the facts of one device from a ConfigMgr site and from the device.
+    # Collects the data of one device from a ConfigMgr site and from the device.
     #
     # .DESCRIPTION
     # Read-only. Reads the site with the ConfigurationManager cmdlets (the console
@@ -1548,9 +1548,9 @@ function Get-DeviceInspection {
     # changes the site or the device. A part that fails is listed in Problems
     # and the other parts still run.
     #
-    # Site facts: resource record, last hardware inventory, installed
+    # Site data: discovery data, last hardware inventory, installed
     # applications, collection memberships, deployments targeted at those
-    # collections. Device facts: operating system, installed applications (one
+    # collections. Device data: operating system, installed applications (one
     # entry for each uninstall registry key under HKLM, with the view, the key name
     # and the uninstall strings), client health (service, version, management
     # point, inventory cycles), and the client application policy.
@@ -1559,16 +1559,16 @@ function Get-DeviceInspection {
     # The device name. Letters, digits, hyphen, underscore and dot only.
     #
     # .PARAMETER SiteServer
-    # The site server (SMS Provider) name. Omit it to skip the site facts.
+    # The SMS Provider computer name. Omit it to skip the site data.
     #
     # .PARAMETER SiteCode
     # The three-character site code. It is required with SiteServer.
     #
     # .PARAMETER Credential
-    # An optional credential for the site server and the device.
+    # An optional credential for the SMS Provider and the device.
     #
     # .PARAMETER SkipDevice
-    # Skip the facts from the device itself.
+    # Skip the data from the device itself.
     #
     # .EXAMPLE
     # $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01.example.com' -SiteCode 'XYZ' -Credential $objCredential
@@ -1578,7 +1578,7 @@ function Get-DeviceInspection {
     # .EXAMPLE
     # Get-DeviceInspection -ComputerName 'WS01' -SkipDevice -SiteServer 'sms01.example.com' -SiteCode 'XYZ' | ConvertTo-Json -Depth 6
     #
-    # # Prints the site facts as JSON. The device is not contacted.
+    # # Prints the site data as JSON. The device is not contacted.
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
@@ -1729,10 +1729,10 @@ function Test-DeviceInspectionInventory {
     # Flags a device whose site inventory is current but whose installed applications differ.
     #
     # .DESCRIPTION
-    # Read only. The site inventory is current when its hardware scan time is not
+    # Read only. The site inventory is current when its last hardware inventory time is not
     # older than the start of the last hardware inventory cycle on the device, so the
     # site holds the last report. Both times are local clock times of the device: the
-    # site stores the scan time that way, with no zone, and the cmdlet value of the
+    # site stores the time that way, with no zone, and the cmdlet value of the
     # device record can lag the processed report by hours. Then the installed applications of the site inventory and of the
     # device must match. A difference means that the inventory on the site is
     # corrupt. A device application whose install date is on or after the day of the
@@ -1783,7 +1783,7 @@ function Test-DeviceInspectionInventory {
         $objSite = $Inspection.Site
         $objDevice = $Inspection.Device
         if ($null -eq $objSite -or -not $objSite.Found -or $null -eq $objDevice -or $null -eq $objDevice.Client) {
-            return (& $scriptBlockResult 'Unknown' $null $null @() 'The check needs the site record and the client facts of the device.')
+            return (& $scriptBlockResult 'Unknown' $null $null @() 'The check needs the discovery data of the device on the site and the client data of the device.')
         }
         $strSite = $null
         $strCycle = $null
@@ -1798,13 +1798,13 @@ function Test-DeviceInspectionInventory {
         $datetimeSite = [datetime]::MinValue
         $datetimeCycle = [datetime]::MinValue
         if ([string]::IsNullOrEmpty($strCycle)) {
-            return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() 'The device has no hardware inventory cycle record. A cycle runs now, or none ran since the record was deleted.')
+            return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() 'The device has no hardware inventory status. A cycle runs now, or none ran since the status was deleted.')
         }
         if (-not [datetime]::TryParseExact($strSite, 'yyyy-MM-ddTHH:mm:ss', $objCulture, $enumStyle, [ref]$datetimeSite) -or -not [datetime]::TryParseExact($strCycle, 'yyyy-MM-ddTHH:mm:ss', $objCulture, $enumStyle, [ref]$datetimeCycle)) {
             return (& $scriptBlockResult 'Unknown' $strSite $strCycle @() 'The site inventory date or the last hardware inventory cycle of the device is missing.')
         }
         if ($datetimeSite -lt $datetimeCycle) {
-            return (& $scriptBlockResult 'NotCurrent' $strSite $strCycle @() ('The site inventory scan ({0}, device local time) is older than the last hardware inventory cycle of the device ({1}). The site has not processed that report yet.' -f $strSite, $strCycle))
+            return (& $scriptBlockResult 'NotCurrent' $strSite $strCycle @() ('The last hardware inventory time of the site ({0}, device local time) is older than the last hardware inventory cycle of the device ({1}). The site has not processed that report yet.' -f $strSite, $strCycle))
         }
         $objReadComplete = $objSite.PSObject.Properties['ApplicationReadComplete']
         if ($null -ne $objReadComplete -and -not [bool]$objReadComplete.Value) {
@@ -1850,7 +1850,7 @@ function Test-DeviceInspectionInventory {
         if ($listApplication.Count -eq 0) {
             return (& $scriptBlockResult 'Current' $strSite $strCycle @() 'The site inventory is current and its applications match the device.')
         }
-        & $scriptBlockResult 'Corrupt' $strSite $strCycle $listApplication.ToArray() ('The site inventory is current (scan {0}, device local time), but {1} applications differ from the device. The inventory on the site can be corrupt. An application removed or changed after the last cycle also shows as a difference. Repair inventory runs a full hardware inventory.' -f $strSite, $listApplication.Count)
+        & $scriptBlockResult 'Corrupt' $strSite $strCycle $listApplication.ToArray() ('The site inventory is current (last hardware inventory time {0}, device local time), but {1} applications differ from the device. The inventory on the site can be corrupt. An application removed or changed after the last cycle also shows as a difference. Repair inventory runs a full hardware inventory.' -f $strSite, $listApplication.Count)
     }
 }
 
@@ -1860,7 +1860,7 @@ function ConvertTo-DeviceInspectionReport {
     #
     # .DESCRIPTION
     # Builds the report as one string with sections: operating system, client
-    # health, site record, collections, deployments, installed applications
+    # health, discovery data and hardware inventory, collections, deployments, installed applications
     # (device and site), client application policy, problems, problem detail. Long
     # lists stop after MaximumListedItems entries and show how many entries were
     # left out. The problem detail section shows the raw exception text from
@@ -1907,7 +1907,7 @@ function ConvertTo-DeviceInspectionReport {
         if ($null -ne $Inspection.SiteServer) {
             $strSiteText = '{0} (site code {1})' -f $Inspection.SiteServer, $Inspection.SiteCode
         }
-        $listLine.Add(('Site server: {0}' -f $strSiteText))
+        $listLine.Add(('SMS Provider: {0}' -f $strSiteText))
         $listLine.Add('')
 
         $arrCollection = @()
@@ -1941,7 +1941,7 @@ function ConvertTo-DeviceInspectionReport {
         }
         $listLine.Add('')
 
-        $listLine.Add('== Site record ==')
+        $listLine.Add('== Discovery data and hardware inventory (site) ==')
         if ($null -eq $Inspection.Site) {
             $listLine.Add('  No data.')
         } elseif (-not $Inspection.Site.Found) {
@@ -1955,7 +1955,7 @@ function ConvertTo-DeviceInspectionReport {
             $listLine.Add(('  Operating system:          {0}' -f $objSite.OperatingSystem))
             $listLine.Add(('  Last hardware inventory:   {0}' -f (Get-SiteHardwareInventoryFact -Site $objSite).Value))
             $arrCollection = @($objSite.Collections | ForEach-Object { '  {0}  {1}' -f $_.CollectionId, $_.Name })
-            $arrDeployment = @($objSite.Deployments | ForEach-Object { '  {0} | {1} | {2} | via {3}' -f $_.Name, $_.Type, $_.Intent, $_.CollectionName })
+            $arrDeployment = @($objSite.Deployments | ForEach-Object { '  {0} | {1} | {2} | collection {3}' -f $_.Name, $_.Type, $_.Intent, $_.CollectionName })
             $arrSiteApplication = @($objSite.InstalledApplications | ForEach-Object { '  {0} {1}' -f $_.Name, $_.Version })
         }
         $listLine.Add('')
@@ -2015,17 +2015,17 @@ function ConvertTo-DeviceInspectionReport {
 
 function Test-DeviceInspectorInput {
     # .SYNOPSIS
-    # Checks the device name and the site server that a person typed in the window.
+    # Checks the device name and the SMS Provider that a person typed in the window.
     #
     # .DESCRIPTION
     # Collects one message for each wrong value. The function reads nothing and
-    # changes nothing. An empty site server is allowed and means: read the device only.
+    # changes nothing. An empty SMS Provider is allowed and means: read the device only.
     #
     # .PARAMETER ComputerName
     # The device name as typed.
     #
     # .PARAMETER SiteServer
-    # The site server (SMS Provider computer) as typed. May be empty.
+    # The SMS Provider computer as typed. May be empty.
     #
     # .PARAMETER SiteCode
     # The site code as typed. May be empty.
@@ -2070,16 +2070,16 @@ function Test-DeviceInspectorInput {
             $listError.Add('Enter the device name. Use letters, digits, dots, hyphens and underscores.')
         }
         if (-not [string]::IsNullOrEmpty($strServer) -and $strServer -notmatch '^[A-Za-z0-9_.-]{1,255}$') {
-            $listError.Add('The site server is a computer name or an FQDN.')
+            $listError.Add('The SMS Provider is a computer name or an FQDN.')
         }
         if (-not [string]::IsNullOrEmpty($strCode) -and $strCode -notmatch '^[A-Za-z0-9]{3}$') {
             $listError.Add('The site code is three letters or digits.')
         }
         if ([string]::IsNullOrEmpty($strServer) -and -not [string]::IsNullOrEmpty($strCode)) {
-            $listError.Add('A site code needs a site server.')
+            $listError.Add('A site code needs an SMS Provider.')
         }
         if (-not [string]::IsNullOrEmpty($strServer) -and [string]::IsNullOrEmpty($strCode)) {
-            $listError.Add('A site server needs a site code. Enter it in Options.')
+            $listError.Add('An SMS Provider needs a site code. Enter it in Options.')
         }
         [pscustomobject]@{
             IsValid = ($listError.Count -eq 0)
@@ -2093,17 +2093,17 @@ function Test-DeviceInspectorInput {
 
 function Get-SiteHardwareInventoryFact {
     # .SYNOPSIS
-    # Chooses the text of the Last hardware inventory fact of the site record.
+    # Chooses the text of the Last hardware inventory row of the discovery data and hardware inventory group.
     #
     # .DESCRIPTION
     # The panel, the text report and the HTML export use this one function. The JSON
     # export holds the same choice in LastHardwareInventorySource.
     #
-    # When the site has a row in SMS_G_System_WORKSTATION_STATUS, the fact is that scan
+    # When the site has a row in SMS_G_System_WORKSTATION_STATUS, the property is that
     # time. The site stores it as the local clock time of the client, with no zone, so
     # the tool does not convert it. The label says so.
     #
-    # When the class has no row (or the read failed), the fact is the Get-CMDevice
+    # When the class has no row (or the read failed), the property is the Get-CMDevice
     # value in UTC. The label says that this value can lag a processed report.
     #
     # .PARAMETER Site
@@ -2159,7 +2159,7 @@ function Get-SiteHardwareInventoryFact {
 
 function ConvertTo-DeviceInspectionFactRow {
     # .SYNOPSIS
-    # Turns the facts of an inspection into rows of group, name and value.
+    # Turns the data of an inspection into rows of group, name and value.
     #
     # .PARAMETER Inspection
     # The object that Get-DeviceInspection returns.
@@ -2167,7 +2167,7 @@ function ConvertTo-DeviceInspectionFactRow {
     # .EXAMPLE
     # $arrRow = ConvertTo-DeviceInspectionFactRow -Inspection $objInspection
     #
-    # # Rows for the operating system, the client health and the site record.
+    # # Rows for the operating system, the client health, the discovery data and the hardware inventory.
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
@@ -2194,7 +2194,7 @@ function ConvertTo-DeviceInspectionFactRow {
         if ($null -ne $Inspection.SiteServer) {
             $strSiteText = '{0} (site code {1})' -f $Inspection.SiteServer, $Inspection.SiteCode
         }
-        & $scriptBlockRow 'Inspection' 'Site server' $strSiteText
+        & $scriptBlockRow 'Inspection' 'SMS Provider' $strSiteText
         if ($null -ne $Inspection.Device) {
             $objOperatingSystem = $Inspection.Device.OperatingSystem
             if ($null -ne $objOperatingSystem) {
@@ -2214,15 +2214,15 @@ function ConvertTo-DeviceInspectionFactRow {
         }
         if ($null -ne $Inspection.Site) {
             if ($Inspection.Site.Found) {
-                & $scriptBlockRow 'Site record' 'Resource ID' $Inspection.Site.ResourceId
-                & $scriptBlockRow 'Site record' 'Client installed' $Inspection.Site.ClientInstalled
-                & $scriptBlockRow 'Site record' 'Client version' $Inspection.Site.ClientVersion
-                & $scriptBlockRow 'Site record' 'Active' $Inspection.Site.Active
-                & $scriptBlockRow 'Site record' 'Operating system' $Inspection.Site.OperatingSystem
-                & $scriptBlockRow 'Site record' 'Last logon user' $Inspection.Site.LastLogonUserName
-                & $scriptBlockRow 'Site record' 'Last hardware inventory' (Get-SiteHardwareInventoryFact -Site $Inspection.Site).Value
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Resource ID' $Inspection.Site.ResourceId
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Client installed' $Inspection.Site.ClientInstalled
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Client version' $Inspection.Site.ClientVersion
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Active' $Inspection.Site.Active
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Operating system' $Inspection.Site.OperatingSystem
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Last logon user' $Inspection.Site.LastLogonUserName
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Last hardware inventory' (Get-SiteHardwareInventoryFact -Site $Inspection.Site).Value
             } else {
-                & $scriptBlockRow 'Site record' 'Status' 'The site has no record of this device.'
+                & $scriptBlockRow 'Discovery data and hardware inventory' 'Status' 'The site has no record of this device.'
             }
         }
         $objCheckProperty = $Inspection.PSObject.Properties['InventoryCheck']
@@ -2377,7 +2377,7 @@ function ConvertTo-DeviceInspectionApplicationRow {
 
 function ConvertTo-DeviceInspectionUpdateRow {
     # .SYNOPSIS
-    # Turns the update facts of an inspection into rows.
+    # Turns the update data of an inspection into rows.
     #
     # .DESCRIPTION
     # One row for each update that the site lists as required for the device, and one
@@ -2654,9 +2654,9 @@ function ConvertTo-DeviceInspectionHtml {
         if ($null -ne $Inspection.SiteServer) {
             $strSiteText = '{0} (site code {1})' -f $Inspection.SiteServer, $Inspection.SiteCode
         }
-        $listLine.Add(('<p class="meta">Inspected at (UTC) {0}. Site server: {1}. Read only: this report changes nothing.</p>' -f (& $scriptBlockEncode $Inspection.InspectedAt), (& $scriptBlockEncode $strSiteText)))
+        $listLine.Add(('<p class="meta">Inspected at (UTC) {0}. SMS Provider: {1}. Read only: this report changes nothing.</p>' -f (& $scriptBlockEncode $Inspection.InspectedAt), (& $scriptBlockEncode $strSiteText)))
         $arrFact = @(ConvertTo-DeviceInspectionFactRow -Inspection $Inspection)
-        $listLine.Add((& $scriptBlockTable 'Device facts' $arrFact @('Group', 'Name', 'Value')))
+        $listLine.Add((& $scriptBlockTable 'Device data' $arrFact @('Group', 'Name', 'Value')))
         $arrApplication = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $Inspection)
         $listLine.Add((& $scriptBlockTable 'Installed applications' $arrApplication @('Name', 'Version', 'Publisher', 'InstallDate', 'Type', 'View', 'KeyName')))
         $arrUpdate = @(ConvertTo-DeviceInspectionUpdateRow -Inspection $Inspection)

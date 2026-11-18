@@ -153,7 +153,7 @@ Section 'actions' {
     Set-Text (Get-El $win 'txtDevice') $Capture.Device; Invoke-El (Get-El $win 'btnInspect'); Wait-Idle
     Toggle-El (Get-El $win 'toggleActions'); Start-Sleep -Milliseconds 800
     Shot $win 'actions-device-buttons'
-    Invoke-El (Get-El $win 'btnPolicyUpdate'); $dlg = Find-Top 'Client Policy Update' 15
+    Invoke-El (Get-El $win 'btnPolicyUpdate'); $dlg = Find-Top 'Machine Policy Cycle' 15
     Shot $dlg 'actions-confirm-dialog'
     Invoke-El (Get-El $dlg 'btnActionDryRun')
     if (-not (Wait-RunRow 10)) { throw 'The running-actions list did not show the dry run.' }
