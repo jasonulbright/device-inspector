@@ -170,6 +170,7 @@ $lblRuns   = $window.FindName('lblRuns')
 $gridRuns  = $window.FindName('gridRuns')
 
 $progressOverlay  = $window.FindName('progressOverlay')
+$btnCancelWork     = $window.FindName('btnCancelWork')
 $txtProgressTitle = $window.FindName('txtProgressTitle')
 $txtProgressStep  = $window.FindName('txtProgressStep')
 
@@ -535,7 +536,7 @@ function Start-BackgroundWork {
     )
     Initialize-BgRunspace
     Stop-BackgroundWork
-    $script:BgState = [hashtable]::Synchronized(@{ Step = $Step; Done = $false; Result = $null; ErrorMsg = $null })
+    $script:BgState = [hashtable]::Synchronized(@{ Step = $Step; Done = $false; Result = $null; ErrorMsg = $null; Cancel = $false })
     $script:BgOnDone = $OnDone
     $script:IsBusy = $true
     Update-ControlState
@@ -567,6 +568,25 @@ function Start-BackgroundWork {
     $script:BgTimer.Start()
 }
 
+# Cancel stops the running read. The cancel flag lets a worker that reads it stop at its next step; the pipeline is stopped
+# without blocking the window, and the background runspace is dropped, so that the next read never queues behind a call
+# that is stuck on an unresponsive provider.
+function Invoke-CancelWork {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification='Stops ephemeral background work only.')]
+    param()
+    if (-not $script:IsBusy -or -not $script:BgPowerShell) { return }
+    if ($script:BgState) { $script:BgState['Cancel'] = $true }
+    Stop-BackgroundWork
+    Close-SuiteBgRunspace -Runspace $script:BgRunspace
+    $script:BgRunspace = $null
+    $script:BgState = $null
+    $script:IsBusy = $false
+    $progressOverlay.Visibility = [System.Windows.Visibility]::Collapsed
+    Update-ControlState
+    Add-LogLine 'Cancelled. Nothing was changed.'
+    Set-StatusText 'Cancelled.'
+}
+$btnCancelWork.Add_Click({ Invoke-CancelWork })
 function Invoke-Inspect {
     $check = Test-DeviceInspectorInput -ComputerName ([string]$txtDevice.Text) -SiteServer ([string]$txtSiteServer.Text) -SiteCode ([string]$global:Prefs.SiteCode)
     if (-not $check.IsValid) {
