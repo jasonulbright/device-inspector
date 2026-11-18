@@ -208,10 +208,10 @@ Describe 'Update facts' {
             Mock Get-CMDevice { [pscustomobject]@{ ResourceID = 5; IsClient = $true; ClientVersion = '1'; IsActive = $true; DeviceOS = 'x'; LastLogonUser = 'u'; LastHardwareScan = $null } }
             Mock Invoke-SiteQuery {
                 if ($Query -like '*SMS_UpdateComplianceStatus*') { [pscustomobject]@{ CI_ID = 11 }; [pscustomobject]@{ CI_ID = 12 } }
-            }
-            Mock Get-CMSoftwareUpdate {
-                [pscustomobject]@{ CI_ID = 11; ArticleID = '5001'; LocalizedDisplayName = 'Live'; Severity = 10; IsExpired = $false; IsSuperseded = $false }
-                [pscustomobject]@{ CI_ID = 12; ArticleID = '5002'; LocalizedDisplayName = 'Expired'; Severity = 8; IsExpired = $true; IsSuperseded = $true }
+                if ($Query -like '*FROM SMS_SoftwareUpdate*') {
+                    [pscustomobject]@{ CI_ID = 11; ArticleID = '5001'; LocalizedDisplayName = 'Live'; Severity = 10; IsExpired = $false; IsSuperseded = $false }
+                    [pscustomobject]@{ CI_ID = 12; ArticleID = '5002'; LocalizedDisplayName = 'Expired'; Severity = 8; IsExpired = $true; IsSuperseded = $true }
+                }
             }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             $objSite = Get-SiteFact -ComputerName 'A' -Problems $listProblem

@@ -163,6 +163,15 @@ Describe 'Get-SiteFact' {
                         [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true }
                         [pscustomobject]@{ CollectionID = "bad'id" }
                     }
+                    '*FROM SMS_DeploymentSummary*' {
+                    [pscustomobject]@{ DeploymentID = 'D1'; CollectionID = 'XYZ0001F'; CollectionName = 'Pilot'; SoftwareName = 'Example App'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = [datetime]::SpecifyKind([datetime]'2026-12-04T17:00:00', 'Unspecified') }
+                    [pscustomobject]@{ DeploymentID = 'D2'; CollectionID = 'OTHER001'; CollectionName = 'Other'; SoftwareName = 'Deployment to another collection'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = $null }
+                    }
+                    '*FROM SMS_SoftwareUpdate*' {
+                    [pscustomobject]@{ CI_ID = 101; ArticleID = '5001'; LocalizedDisplayName = 'Update B'; Severity = 8; IsExpired = $false; IsSuperseded = $true }
+                    [pscustomobject]@{ CI_ID = 102; ArticleID = '5002'; LocalizedDisplayName = 'Update A expired'; Severity = 10; IsExpired = $true; IsSuperseded = $false }
+                    [pscustomobject]@{ CI_ID = 999; ArticleID = '5999'; LocalizedDisplayName = 'Not needed by the device'; Severity = 10; IsExpired = $false; IsSuperseded = $false }
+                    }
                     '*SMS_UpdateComplianceStatus*' {
                         [pscustomobject]@{ CI_ID = 101 }
                         [pscustomobject]@{ CI_ID = 102 }
@@ -177,15 +186,8 @@ Describe 'Get-SiteFact' {
                 [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot' }
                 [pscustomobject]@{ CollectionID = 'ZZZ00000'; Name = 'Not a collection of the device' }
             }
-            Mock Get-CMDeployment {
-                [pscustomobject]@{ DeploymentID = 'D1'; CollectionID = 'XYZ0001F'; CollectionName = 'Pilot'; SoftwareName = 'Example App'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = [datetime]::SpecifyKind([datetime]'2026-12-04T17:00:00', 'Unspecified') }
-                [pscustomobject]@{ DeploymentID = 'D2'; CollectionID = 'OTHER001'; CollectionName = 'Other'; SoftwareName = 'Deployment to another collection'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = $null }
-            }
-            Mock Get-CMSoftwareUpdate {
-                [pscustomobject]@{ CI_ID = 101; ArticleID = '5001'; LocalizedDisplayName = 'Update B'; Severity = 8; IsExpired = $false; IsSuperseded = $true }
-                [pscustomobject]@{ CI_ID = 102; ArticleID = '5002'; LocalizedDisplayName = 'Update A expired'; Severity = 10; IsExpired = $true; IsSuperseded = $false }
-                [pscustomobject]@{ CI_ID = 999; ArticleID = '5999'; LocalizedDisplayName = 'Not needed by the device'; Severity = 10; IsExpired = $false; IsSuperseded = $false }
-            }
+            Mock Get-CMDeployment { }
+            Mock Get-CMSoftwareUpdate { }
         }
     }
 
@@ -360,22 +362,55 @@ Describe 'Get-SiteFact' {
         }
     }
 
-    It 'reads collections, deployments and updates with one cmdlet call each' {
+    It 'reads the collection names with one cmdlet call and the deployments and updates with a query that names the collections and the update IDs' {
         InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             Should -Invoke Get-CMDeviceCollection -Times 1 -Exactly
-            Should -Invoke Get-CMDeployment -Times 1 -Exactly
-            Should -Invoke Get-CMSoftwareUpdate -Times 1 -Exactly
+            Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_DeploymentSummary WHERE CollectionID IN (''SMS00001'', ''XYZ0001F'')' }
+            Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_SoftwareUpdate WHERE CI_ID IN (101, 102)' }
+            Should -Invoke Get-CMDeployment -Times 0 -Exactly
+            Should -Invoke Get-CMSoftwareUpdate -Times 0 -Exactly
         }
     }
 
-    It 'uses a query only for the four reads that have no cmdlet' {        InModuleScope DeviceInspectorCommon {
+    It 'asks for the required updates in queries of 100 IDs' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery {
+                if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } }
+                if ($Query -like '*SMS_UpdateComplianceStatus*') { 1..230 | ForEach-Object { [pscustomobject]@{ CI_ID = $_ } } }
+            }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
-            Should -Invoke Invoke-SiteQuery -Times 5 -Exactly
+            Should -Invoke Invoke-SiteQuery -Times 3 -Exactly -ParameterFilter { $Query -like '*FROM SMS_SoftwareUpdate WHERE CI_ID IN (*' }
+        }
+    }
+
+    It 'retries a transient fault of the deployment read and gives no problem' {
+        InModuleScope DeviceInspectorCommon {
+            $script:intHit = 0
+            Mock Invoke-SiteQuery {
+                if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } }
+                if ($Query -like '*FROM SMS_DeploymentSummary*') {
+                    $script:intHit++
+                    if ($script:intHit -eq 1) { throw 'The operation has timed out.' }
+                    [pscustomobject]@{ DeploymentID = 'D1'; CollectionID = 'XYZ0001F'; CollectionName = 'Pilot'; SoftwareName = 'Example App'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = $null }
+                }
+            }
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            @($objSite.Deployments).Count | Should -Be 1
+            @($listProblem | Where-Object { $_ -like 'Site deployments*' }).Count | Should -Be 0
+            $script:intHit | Should -Be 2
+        }
+    }
+
+    It 'uses a query for the reads that have no cmdlet and for the two reads that the site filters (deployments and required updates)' {        InModuleScope DeviceInspectorCommon {
+            $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
+            $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
+            Should -Invoke Invoke-SiteQuery -Times 7 -Exactly
             Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_G_System_WORKSTATION_STATUS *' }
-            Should -Invoke Invoke-SiteQuery -Times 0 -Exactly -ParameterFilter { $Query -like '*SMS_R_System*' -or $Query -like '*SMS_DeploymentSummary*' -or $Query -like '*FROM SMS_SoftwareUpdate*' -or $Query -like '*FROM SMS_Collection *' }
+            Should -Invoke Invoke-SiteQuery -Times 0 -Exactly -ParameterFilter { $Query -like '*SMS_R_System*' -or $Query -like '*FROM SMS_Collection *' }
         }
     }
 
@@ -1078,7 +1113,7 @@ Describe 'Exception text and the Problems list' {
             InModuleScope DeviceInspectorCommon {
                 Mock Invoke-SiteQuery { if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } } }
                 Mock Get-CMDeviceCollection { throw 'secret-boom-1' }
-                Mock Get-CMDeployment { throw 'secret-boom-1' }
+                Mock Invoke-SiteQuery { if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } }; if ($Query -like '*FROM SMS_DeploymentSummary*') { throw 'secret-boom-1' } }
                 $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
                 $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
                 $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem -ProblemDetail $listDetail

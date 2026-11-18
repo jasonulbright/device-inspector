@@ -1591,10 +1591,11 @@ Describe 'Device list' {
                 [pscustomobject]@{ Name = 'WS02'; ResourceID = 2; IsClient = $true; IsActive = $false; ClientVersion = '5.00'; DeviceOS = 'Windows'; LastLogonUser = 'b'; LastActiveTime = [datetime]'2026-11-10T08:00:00' }
                 [pscustomobject]@{ Name = 'WS01'; ResourceID = 1; IsClient = $true; IsActive = $true; ClientVersion = '5.00'; DeviceOS = 'Windows'; LastLogonUser = 'a'; LastActiveTime = $null }
             }
-            Mock Get-CMCollectionMember {
-                [pscustomobject]@{ Name = 'WS03'; ResourceID = 3; ResourceType = 5; IsClient = $true; IsActive = $true; DeviceOS = 'Windows' }
-                [pscustomobject]@{ Name = 'user1'; ResourceID = 9; ResourceType = 4 }
+            Mock Invoke-SiteQuery {
+                if ($Query -like 'SELECT ResourceID FROM SMS_CM_RES_COLL_*') { [pscustomobject]@{ ResourceID = 3 } }
+                elseif ($Query -like '*FROM SMS_CM_RES_COLL_*ORDER BY Name') { [pscustomobject]@{ Name = 'WS03'; ResourceID = 3; IsClient = $true; IsActive = $true; DeviceOS = 'Windows' } }
             }
+            Mock Get-CMCollectionMember { }
         }
     }
 
@@ -1614,8 +1615,38 @@ Describe 'Device list' {
         $objList.Total | Should -Be 1
         $objList.Devices[0].Name | Should -Be 'WS03'
         $objList.Devices[0].LastLogonUser | Should -Be ''
-        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 1 -Exactly -ParameterFilter { $CollectionId -eq 'SMS00001' -and $Name -eq 'WS*' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like 'SELECT ResourceID FROM SMS_CM_RES_COLL_SMS00001 WHERE ResourceType = 5 AND Name LIKE ''WS%''' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_CM_RES_COLL_SMS00001 WHERE ResourceType = 5 AND Name LIKE ''WS%'' ORDER BY Name' }
         Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDevice -Times 0 -Exactly
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMCollectionMember -Times 0 -Exactly
+    }
+
+    It 'counts the members of a collection in the site and reads only the first Maximum rows' {
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery {
+                if ($Query -like 'SELECT ResourceID FROM SMS_CM_RES_COLL_*') { 1..50000 | ForEach-Object { [pscustomobject]@{ ResourceID = $_ } } }
+                else { 1..5 | ForEach-Object { [pscustomobject]@{ Name = ('WS{0:d5}' -f $_); ResourceID = $_; IsClient = $true; IsActive = $true } } }
+            }
+        }
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'SMS00001' -Maximum 5
+        @($objList.Devices).Count | Should -Be 5
+        $objList.Total | Should -Be 50000
+        $objList.Truncated | Should -BeTrue
+        $objList.Devices[0].Name | Should -Be 'WS00001'
+    }
+
+    It 'retries a transient fault of the member read' {
+        $env:DI_TEST_HIT = '0'
+        InModuleScope DeviceInspectorCommon {
+            Mock Invoke-SiteQuery {
+                if ($Query -like 'SELECT ResourceID FROM SMS_CM_RES_COLL_*') { $env:DI_TEST_HIT = [string]([int]$env:DI_TEST_HIT + 1); if ($env:DI_TEST_HIT -eq '1') { throw 'The operation has timed out.' }; [pscustomobject]@{ ResourceID = 3 } }
+                else { [pscustomobject]@{ Name = 'WS03'; ResourceID = 3; IsClient = $true; IsActive = $true } }
+            }
+        }
+        $objList = Get-DeviceInspectorDeviceList -SiteServer 'sms01' -SiteCode 'XYZ' -CollectionId 'SMS00001'
+        $objList.Total | Should -Be 1
+        $env:DI_TEST_HIT | Should -Be '2'
+        Remove-Item -Path Env:DI_TEST_HIT -ErrorAction SilentlyContinue
     }
 
     It 'returns at most Maximum devices and says that the list is cut' {

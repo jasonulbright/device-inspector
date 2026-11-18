@@ -977,8 +977,7 @@ function Get-SiteFact {
             $Problems.Add(('Site collection membership: {0}' -f $strFailedText))
         }
 
-        # Each of the next three reads is one call for the whole site, then a filter.
-        # One call for each collection or update took about ten times longer on the lab.
+        # The collection names are one call for the site. The deployments and the required updates are read with a query that names the collections and the update IDs of the device.
         $hashtableCollectionName = @{}
         if ($listCollectionId.Count -gt 0) {
             try {
@@ -1007,7 +1006,11 @@ function Get-SiteFact {
         $listDeployment = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
         if ($listCollectionId.Count -gt 0) {
             try {
-                foreach ($objRow in @(Get-CMDeployment -WarningAction SilentlyContinue -ErrorAction Stop)) {
+                # The query names the collections of the device: the provider returns only their deployments, not every
+                # deployment of the site. The collection IDs passed the pattern of eight letters and digits above.
+                $strCollectionIn = (@($listCollectionId | Select-Object -Unique | ForEach-Object { "'{0}'" -f $_ }) -join ', ')
+                $strDeploymentQuery = 'SELECT DeploymentID, CollectionID, CollectionName, SoftwareName, FeatureType, DeploymentIntent, EnforcementDeadline FROM SMS_DeploymentSummary WHERE CollectionID IN ({0})' -f $strCollectionIn
+                foreach ($objRow in @(Invoke-SuiteCMRead -Description 'Site deployments' -ScriptBlock { Invoke-SiteQuery -Query $strDeploymentQuery })) {
                     if ($listCollectionId -notcontains [string]$objRow.CollectionID) {
                         continue
                     }
@@ -1036,7 +1039,14 @@ function Get-SiteFact {
                 $listUpdateId.Add([int]$objRow.CI_ID)
             }
             if ($listUpdateId.Count -gt 0) {
-                foreach ($objUpdate in @(Get-CMSoftwareUpdate -Fast -IncludeUpgrade -ErrorAction Stop)) {
+                # Only the updates that the device needs are read, 100 IDs per query, not the whole update catalog.
+                $listUpdateRow = New-Object -TypeName 'System.Collections.Generic.List[object]'
+                for ($intStart = 0; $intStart -lt $listUpdateId.Count; $intStart += 100) {
+                    $strIdIn = ($listUpdateId.GetRange($intStart, [Math]::Min(100, $listUpdateId.Count - $intStart)) -join ', ')
+                    $strUpdateQuery = 'SELECT CI_ID, ArticleID, LocalizedDisplayName, Severity, IsExpired, IsSuperseded FROM SMS_SoftwareUpdate WHERE CI_ID IN ({0})' -f $strIdIn
+                    $listUpdateRow.AddRange([object[]]@(Invoke-SuiteCMRead -Description 'Site required updates' -ScriptBlock { Invoke-SiteQuery -Query $strUpdateQuery }))
+                }
+                foreach ($objUpdate in $listUpdateRow) {
                     if ($listUpdateId -contains [int]$objUpdate.CI_ID -and -not [bool]$objUpdate.IsExpired) {
                         $listRequiredUpdate.Add([pscustomobject]@{
                                 CIId         = [int]$objUpdate.CI_ID
@@ -2866,6 +2876,27 @@ function Select-DeviceInspectorAddableCollection {
     }
 }
 
+function Read-DeviceInspectorCollectionMember {
+    # Reads the systems of one collection for the device list: the provider counts the matching systems with a one-column
+    # read and returns only the first Maximum rows, sorted by name; the rest is never transferred. Both reads retry transient
+    # faults. This is a function of its own, without a process block, so that the retry helper sees its variables.
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$CollectionId,
+        [Parameter(Mandatory = $false)][AllowEmptyString()][string]$NamePattern = '',
+        [Parameter(Mandatory = $true)][int]$Maximum
+    )
+    $strWhere = 'ResourceType = 5'
+    if (-not [string]::IsNullOrEmpty($NamePattern)) {
+        $strLike = (($NamePattern -replace '_', '[_]') -replace '\*', '%') -replace '\?', '_'
+        $strWhere = '{0} AND Name LIKE ''{1}''' -f $strWhere, $strLike
+    }
+    $strCountQuery = 'SELECT ResourceID FROM SMS_CM_RES_COLL_{0} WHERE {1}' -f $CollectionId, $strWhere
+    $strRowQuery = 'SELECT ResourceID, Name, IsClient, IsActive, ClientVersion, DeviceOS, LastLogonUser, LastActiveTime FROM SMS_CM_RES_COLL_{0} WHERE {1} ORDER BY Name' -f $CollectionId, $strWhere
+    $intTotal = @(Invoke-SuiteCMRead -Description ('Members of collection {0}' -f $CollectionId) -ScriptBlock { Invoke-SiteQuery -Query $strCountQuery }).Count
+    $arrRow = @(Invoke-SuiteCMRead -Description ('Members of collection {0}' -f $CollectionId) -ScriptBlock { Invoke-SiteQuery -Query $strRowQuery | Select-Object -First $Maximum })
+    [pscustomobject]@{ Rows = $arrRow; Total = $intTotal }
+}
 function Get-DeviceInspectorDeviceList {
     # .SYNOPSIS
     # Lists the devices of the site by name pattern, by collection, or both.
@@ -2967,18 +2998,15 @@ function Get-DeviceInspectorDeviceList {
         try {
             $objConnection = Connect-InspectorSite @hashtableConnect
             if ([string]::IsNullOrEmpty($CollectionId)) {
-                $arrRaw = @(Get-CMDevice -Name $NamePattern -Fast -ErrorAction Stop)
+                $arrRaw = @(Invoke-SuiteCMRead -Description ('Devices named {0}' -f $NamePattern) -ScriptBlock { Get-CMDevice -Name $NamePattern -Fast -ErrorAction Stop })
+                $intTotal = $null
             } else {
-                $hashtableMember = @{ CollectionId = $CollectionId; ErrorAction = 'Stop' }
-                if (-not [string]::IsNullOrEmpty($NamePattern)) {
-                    $hashtableMember['Name'] = $NamePattern
-                }
-                $arrRaw = @(Get-CMCollectionMember @hashtableMember | Where-Object {
-                        $objType = & $scriptBlockValue $_ 'ResourceType'
-                        $null -eq $objType -or [int]$objType -eq 5
-                    })
+                $objMemberRead = Read-DeviceInspectorCollectionMember -CollectionId $CollectionId -NamePattern $NamePattern -Maximum $Maximum
+                $arrRaw = @($objMemberRead.Rows)
+                $intTotal = $objMemberRead.Total
             }
             $arrSorted = @($arrRaw | Sort-Object -Property { [string](& $scriptBlockValue $_ 'Name') })
+            if ($null -eq $intTotal) { $intTotal = $arrSorted.Count }
             $listDevice = New-Object -TypeName 'System.Collections.Generic.List[pscustomobject]'
             foreach ($objItem in @($arrSorted | Select-Object -First $Maximum)) {
                 $objLastActive = & $scriptBlockValue $objItem 'LastActiveTime'
@@ -2995,8 +3023,8 @@ function Get-DeviceInspectorDeviceList {
             }
             [pscustomobject]@{
                 Devices   = $listDevice.ToArray()
-                Total     = $arrSorted.Count
-                Truncated = ($arrSorted.Count -gt $Maximum)
+                Total     = $intTotal
+                Truncated = ($intTotal -gt $Maximum)
             }
         } finally {
             Disconnect-InspectorSite -Connection $objConnection
