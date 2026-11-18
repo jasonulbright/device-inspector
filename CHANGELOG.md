@@ -25,6 +25,7 @@ All notable changes to Device Inspector are documented in this file.
 - Vendor SuiteCommon with the atomic settings save: the settings file is written to a temp file and replaced in one step, so a failed write cannot leave it truncated.
 - Capture tool lock follows D-16: the lock text is owner|pid|start, a lock is stale only after 30 minutes with no running owner process, a live owner lock is never removed, a removed lock is reported, and the holder refreshes it.
 - Read the deployments and the required updates of a device with a query that names its collections and update IDs, not the whole site; list the systems of a collection with a count and only the first rows from the site, and retry transient faults.
+- Search devices by name with a query on All Systems with a LIKE filter and a limit, not Get-CMDevice, so a pattern on a large site returns only the first rows and the count.
 
 ## [2026.11.15.0017] - 2026-11-15
 

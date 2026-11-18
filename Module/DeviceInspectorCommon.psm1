@@ -2877,7 +2877,7 @@ function Select-DeviceInspectorAddableCollection {
 }
 
 function Read-DeviceInspectorCollectionMember {
-    # Reads the systems of one collection for the device list: the provider counts the matching systems with a one-column
+    # Reads the systems of one collection (All Systems for a name search) for the device list: the provider counts the matching systems with a one-column
     # read and returns only the first Maximum rows, sorted by name; the rest is never transferred. Both reads retry transient
     # faults. This is a function of its own, without a process block, so that the retry helper sees its variables.
     [CmdletBinding()]
@@ -2998,8 +2998,11 @@ function Get-DeviceInspectorDeviceList {
         try {
             $objConnection = Connect-InspectorSite @hashtableConnect
             if ([string]::IsNullOrEmpty($CollectionId)) {
-                $arrRaw = @(Invoke-SuiteCMRead -Description ('Devices named {0}' -f $NamePattern) -ScriptBlock { Get-CMDevice -Name $NamePattern -Fast -ErrorAction Stop })
-                $intTotal = $null
+                # The name search is a query on the members of All Systems with a LIKE filter and a limit, not Get-CMDevice: that cmdlet
+                # returns every match, and a pattern such as A* on a large site matches tens of thousands of devices.
+                $objNameRead = Read-DeviceInspectorCollectionMember -CollectionId 'SMS00001' -NamePattern $NamePattern -Maximum $Maximum
+                $arrRaw = @($objNameRead.Rows)
+                $intTotal = $objNameRead.Total
             } else {
                 $objMemberRead = Read-DeviceInspectorCollectionMember -CollectionId $CollectionId -NamePattern $NamePattern -Maximum $Maximum
                 $arrRaw = @($objMemberRead.Rows)
