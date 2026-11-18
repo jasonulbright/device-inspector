@@ -4,6 +4,12 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Use ConfigMgr terms in the window text and the guide. The Device panel shows the **Discovery data and hardware inventory** group and a **Property** column. The Inspect bar and **Options** name the SMS Provider.
+- Rename the first action button to **Machine Policy Cycle...**, after the Machine Policy Retrieval & Evaluation Cycle client action. The action dialogs and the guide use the same names.
+- Retake the guide images that show the changed text.
+
 ## [2026.11.18.0018] - 2026-11-18
 
 ## 14 changes: filtered deployment and update reads, limited name search, Cancel

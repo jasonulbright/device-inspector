@@ -4,12 +4,12 @@ Export JSON and Export HTML save the inspection to a file.
 
 ## What it does
 
-**Export JSON** writes all facts of the inspection as JSON (UTF-8 without a byte order mark, dates in ISO 8601 UTC). **Export HTML** writes a self-contained report page.
+**Export JSON** writes all data of the inspection as JSON (UTF-8 without a byte order mark, dates in ISO 8601 UTC). **Export HTML** writes a self-contained report page.
 
 ## When to use it
 
-- Use the JSON file to keep the facts or to process them in a script.
-- Use the HTML file to share the facts with a person.
+- Use the JSON file to keep the data or to process it in a script.
+- Use the HTML file to share the data with a person.
 
 ## Requirements
 
@@ -34,12 +34,12 @@ Select **Cancel** in the dialog to stop. The tool writes nothing.
 
 | Button | File | Content |
 |---|---|---|
-| **Export JSON** | `.json` | All facts, with every list entry, and the inventory check (`InventoryCheck`). |
-| **Export HTML** | `.html` | One page with the same facts. The page has no script and no external resource. |
+| **Export JSON** | `.json` | All data, with every list entry, and the inventory check (`InventoryCheck`). |
+| **Export HTML** | `.html` | One page with the same data. The page has no script and no external resource. |
 
 ## Limits
 
-- The files hold the facts of the last inspection. A change of the boxes does not change them.
+- The files hold the data of the last inspection. A change of the boxes does not change them.
 - The HTML page lists the entries of the lists that it shows. Its Installed applications table has one row for each uninstall registry key of the device, with the name, version, publisher, install date, type, view and key name. It omits the client application policy entries, with their install and evaluation states. Use the JSON file for the complete inspection. The command-line report defaults to at most 25 entries in each of the collections, deployments, updates and applications lists. Use `-MaximumListedItems` to change this. See [Command line](command-line.md).
 
 ## Troubleshooting

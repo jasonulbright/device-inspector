@@ -16,7 +16,7 @@ None. Some fixes need rights on the site or on the device.
 
 ## Steps
 
-1. Read the message. A message in `<angle brackets>` shows a value that the tool inserts.
+1. Review the message. A message in `<angle brackets>` shows a value that the tool inserts.
 2. Find the message in the tables below.
 3. Do the fix.
 4. Select **Inspect** again.
@@ -31,11 +31,11 @@ None. Some fixes need rights on the site or on the device.
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| A message opens when you select **Inspect**. | A box holds a wrong value. | Read the message. See [Inspect bar](core/inspect.md). |
+| A message opens when you select **Inspect**. | A box holds a wrong value. | Review the message. See [Inspect bar](core/inspect.md). |
 | **Export JSON** and **Export HTML** are off. | No inspection exists yet. | Select **Inspect**. |
-| A message says "A site server needs a site code. Enter it in Options." | The site server is set and the site code is empty. | Enter the site code in **Options**. |
-| **OK** in **Options** opens a message box with the title **Device Inspector**, and the dialog stays open. | The site server or the site code has a wrong value. | Read the message. Correct the value. See [Options dialog](core/options.md). |
-| The status bar shows "Set a site server in Options, or clear Site Only." | **Site Only** is on and the site server is empty. | Set the site server in **Options**, or clear **Site Only** to inspect the device. |
+| A message says "An SMS Provider needs a site code. Enter it in Options." | The SMS Provider is set and the site code is empty. | Enter the site code in **Options**. |
+| **OK** in **Options** opens a message box with the title **Device Inspector**, and the dialog stays open. | The SMS Provider or the site code has a wrong value. | Review the message. Correct the value. See [Options dialog](core/options.md). |
+| The status bar shows "Set an SMS Provider in Options, or clear Site Only." | **Site Only** is on and the SMS Provider is empty. | Set the SMS Provider in **Options**, or clear **Site Only** to inspect the device. |
 
 ## Problems panel
 
@@ -44,10 +44,10 @@ None. Some fixes need rights on the site or on the device.
 | Device: Connecting to remote server `<name>` failed ... the server name cannot be resolved. | The device name is wrong, or the name does not resolve. | Check the name and the DNS. |
 | Device: ... Access is denied. | The account has no remote management right on the device. | Run the tool as an account with the right. |
 | Device: ... WinRM cannot process the request. | The device is off, or WinRM is not on. | Start the device. Check the WinRM service and the firewall. |
-| Site: no device named `<name>` exists in site `<code>`. | The site has no record with that name. | Check the name. The device must be in the site. |
+| Site: no device named `<name>` exists in site `<code>`. | The site has no device with that name. | Check the name. The device must be in the site. |
 | Device: Client health: the CcmExec service does not exist. | The device has no ConfigMgr client. | Install the client, or inspect another device. |
-| Site: Cannot open site `<code>` on `<server>`. Check the site code and the site server name, and the account rights. ... | The site drive did not open: a wrong site code or server name, no network path, or no right on the site. | Check the values in **Options**. See [Permissions](reference/permissions.md). |
-| Site: Cannot open site `<code>` on `<server>`. The site server is this computer, and Windows does not allow credentials for a local connection. ... | The script ran with `-Credential` on the site server, and the site server name is an alias that the tool does not know as this computer. | Enter the name of this computer as the site server in **Options**, or run without `-Credential`. With the short name, the full name, `localhost` or an IP address of this computer, the tool uses the signed-in account for the site and keeps the credential for the device. |
+| Site: Cannot open site `<code>` on `<server>`. Check the site code and the SMS Provider name, and the account rights. ... | The site drive did not open: a wrong site code or server name, no network path, or no right on the site. | Check the values in **Options**. See [Permissions](reference/permissions.md). |
+| Site: Cannot open site `<code>` on `<server>`. The SMS Provider is this computer, and Windows does not allow credentials for a local connection. ... | The script ran with `-Credential` on the SMS Provider, and the SMS Provider name is an alias that the tool does not know as this computer. | Enter the name of this computer as the SMS Provider in **Options**, or run without `-Credential`. With the short name, the full name, `localhost` or an IP address of this computer, the tool uses the signed-in account for the site and keeps the credential for the device. |
 | Site: `<n>` resource records share the name `<name>`. The first one is used. | The site has several records with one name. | Compare the records in the console. Confirm that a record is no longer needed before you delete it. Deleting a client record removes its history and its earlier associations. |
 
 ## Command line
@@ -60,7 +60,7 @@ None. Some fixes need rights on the site or on the device.
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| The Applications list is empty. | The device part failed or **Site Only** was on. | Read the **Problems** panel. Clear **Site Only** and inspect again. |
+| The Applications list is empty. | The device part failed or **Site Only** was on. | Review the **Problems** panel. Clear **Site Only** and inspect again. |
 | **Uninstall...** or **Repair...** is off for an application. | The entry is a system component, or an EXE entry without a quiet uninstall string. Repair is off for every EXE entry. | Hover over the entry. The tooltip gives the reason. See [Applications](core/applications.md#when-uninstall-and-repair-are-on). |
 | A new install is not in the Applications list. | The list shows the state at the time of the inspection. | Inspect the device again. |
 

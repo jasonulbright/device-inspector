@@ -1,6 +1,6 @@
 # Getting started
 
-This page shows how to install Device Inspector, set the site server, and inspect the first device.
+This page shows how to install Device Inspector, set the SMS Provider, and inspect the first device.
 
 ## What it does
 
@@ -39,30 +39,30 @@ The window connects with the Windows account that runs it. It stores no password
 
 ![Device Inspector at the first start](images/start-first-run.png)
 
-The status bar says "Enter a device name and click Inspect | read only". The version shows under the title in the sidebar.
+The status bar says "Enter a device name and select Inspect | read only". The version shows under the title in the sidebar.
 
 ### Inspect the first device
 
-1. Select **Options**. Enter the site server (the SMS Provider computer), for example `sms01.example.com`, and the site code, for example `XYZ`. Select **OK**. See [Options dialog](core/options.md).
+1. Select **Options**. Enter the SMS Provider computer, for example `sms01.example.com`, and the site code, for example `XYZ`. Select **OK**. See [Options dialog](core/options.md).
 2. In the first box, enter the device name, for example `WS01`.
-3. Check that the second box shows the site server. The box is read-only. The footer shows the site code and the site server at the right end: `Site XYZ`, a middle dot, and `sms01.example.com`. Select the footer text to open **Options**.
+3. Check that the second box shows the SMS Provider computer. The box is read-only. The footer shows the site code and the SMS Provider at the right end: `Site XYZ`, a middle dot, and `sms01.example.com`. Select the footer text to open **Options**.
 4. Select **Inspect**. A progress overlay shows "Connecting...", then "Reading the site and the device...".
-5. Read the summary line and the table on the **Device** panel.
+5. Review the summary line and the table on the **Device** panel.
 
 ![The Device panel after Inspect](images/device-panel.png)
 
-A site server with no site code is an error. In Options, **OK** opens a message box with the title **Device Inspector**, and the dialog stays open. On the Inspect bar, **Inspect** opens a message with the title **Inspect** and does not run. Both messages say "A site server needs a site code. Enter it in Options.".
+An SMS Provider with no site code is an error. In Options, **OK** opens a message box with the title **Device Inspector**, and the dialog stays open. On the Inspect bar, **Inspect** opens a message with the title **Inspect** and does not run. Both messages say "An SMS Provider needs a site code. Enter it in Options.".
 
-![The message of the Options dialog for a site server with no site code](images/options-needs-site-code.png)
+![The message of the Options dialog for an SMS Provider with no site code](images/options-needs-site-code.png)
 
 The sidebar shows six panels. See [Inspect bar](core/inspect.md) for every control.
 
 ### Leave one source out
 
-- To read only the device, leave the site server empty.
+- To read only the device, leave the SMS Provider empty.
 - To read only the site, select **Site Only**.
 
-The tool saves the device name and **Site Only** when you select **Inspect** with valid inputs. It saves a site server that is not empty on **Inspect**, and on **OK** in Options.
+The tool saves the device name and **Site Only** when you select **Inspect** with valid inputs. It saves an SMS Provider that is not empty on **Inspect**, and on **OK** in Options.
 
 ### Start the tool on a computer without the console
 
@@ -72,7 +72,7 @@ The tool checks for the console at start. When the ConfigurationManager module i
 
 ### Start the tool again
 
-The tool keeps the device name, the site server and the settings. It does not keep the inspection. The window opens on the panel that was open when you closed it.
+The tool keeps the device name, the SMS Provider and the settings. It does not keep the inspection. The window opens on the panel that was open when you closed it.
 
 ![The window after a restart](images/start-reopen-saved-state.png)
 

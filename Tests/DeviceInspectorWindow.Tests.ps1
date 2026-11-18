@@ -84,7 +84,7 @@ Describe 'Test-DeviceInspectorInput' {
     It 'refuses a site server without a site code' {
         $objInput = Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'sms01'
         $objInput.IsValid | Should -BeFalse
-        $objInput.Errors | Should -Contain 'A site server needs a site code. Enter it in Options.'
+        $objInput.Errors | Should -Contain 'An SMS Provider needs a site code. Enter it in Options.'
     }
 
     It 'refuses a bad site server, a bad site code and a site code without a site server' {
@@ -92,7 +92,7 @@ Describe 'Test-DeviceInspectorInput' {
         (Test-DeviceInspectorInput -ComputerName 'a' -SiteServer 'sms01' -SiteCode 'ABCD').IsValid | Should -BeFalse
         $objInput = Test-DeviceInspectorInput -ComputerName 'a' -SiteCode 'ABC'
         $objInput.IsValid | Should -BeFalse
-        $objInput.Errors | Should -Contain 'A site code needs a site server.'
+        $objInput.Errors | Should -Contain 'A site code needs an SMS Provider.'
     }
 }
 
@@ -101,19 +101,19 @@ Describe 'Panel rows' {
         $script:objInspection = New-WindowTestInspection
     }
 
-    It 'makes fact rows for the device, the client health and the site record' {
+    It 'makes rows for the device, the client health, the discovery data and the hardware inventory' {
         $arrRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $script:objInspection)
         @($arrRow | Where-Object { $_.Group -eq 'Operating system (device)' }).Count | Should -Be 3
         @($arrRow | Where-Object { $_.Group -eq 'Client health (device)' }).Count | Should -Be 6
-        @($arrRow | Where-Object { $_.Group -eq 'Site record' }).Count | Should -Be 7
+        @($arrRow | Where-Object { $_.Group -eq 'Discovery data and hardware inventory' }).Count | Should -Be 7
         @($arrRow | Where-Object { $_.Name -eq 'Service CcmExec' })[0].Value | Should -Be 'Running (start mode Auto)'
     }
 
-    It 'says so in a fact row when the site has no record of the device' {
+    It 'says so in a fact row when the site does not know the device' {
         $objNone = New-WindowTestInspection
         $objNone.Site = [pscustomobject]@{ Found = $false }
         $arrRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objNone)
-        @($arrRow | Where-Object { $_.Group -eq 'Site record' })[0].Value | Should -Be 'The site has no record of this device.'
+        @($arrRow | Where-Object { $_.Group -eq 'Discovery data and hardware inventory' })[0].Value | Should -Be 'The site does not know this device.'
     }
 
     It 'makes one application row for each uninstall key of the device, with no status and no inventory version' {

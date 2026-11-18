@@ -16,22 +16,22 @@ None.
 
 ## What the tool reads
 
-| Source | Command | Facts |
+| Source | Command | Data |
 |---|---|---|
-| Site | `Get-CMSite` | No fact. The tool runs it once, when it opens the site drive, to check that the site answers. |
-| Site | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | Device record (resource ID, client installed, client version, active, operating system, last logon user). Its last hardware scan is the fallback for the Last hardware inventory fact. |
+| Site | `Get-CMSite` | No data. The tool runs it once, when it opens the site drive, to check that the site answers. |
+| Site | `Get-CMDevice -Name <name> -Fast -DisableWildcardHandling` | Device object (resource ID, client installed, client version, active, operating system, last logon user). Its last hardware inventory time is the fallback for the Last hardware inventory property. |
 | Site | `Get-CMDevice -Name <pattern> -Fast`, `Get-CMCollectionMember -CollectionId <ID>` | The Device List panel: the devices that match a name pattern or a collection. |
-| Site | `Invoke-CMWmiQuery` on `SMS_G_System_WORKSTATION_STATUS` | The hardware scan time, as the local clock time of the client. One read serves the Last hardware inventory fact and the inventory check. |
+| Site | `Invoke-CMWmiQuery` on `SMS_G_System_WORKSTATION_STATUS` | The last hardware inventory time, as the local clock time of the client. One read serves the Last hardware inventory property and the inventory check. |
 | Site | `Invoke-CMWmiQuery` on `SMS_G_System_ADD_REMOVE_PROGRAMS` and `SMS_G_System_ADD_REMOVE_PROGRAMS_64` | Installed applications from hardware inventory (32-bit and 64-bit). |
 | Site | `Invoke-CMWmiQuery` on `SMS_FullCollectionMembership` | Collection memberships (collection IDs, and `IsDirect` for the membership rule). |
 | Site | `Get-CMDeviceCollection` | Collection names. One call, then a filter. |
 | Site | `Get-CMDeployment` | Deployments targeted at those collections. One call, then a filter. |
 | Site | `Invoke-CMWmiQuery` on `SMS_UpdateComplianceStatus` (status 2), then `Get-CMSoftwareUpdate -Fast -IncludeUpgrade` | Updates that the site lists as required for the device. Expired updates are left out. |
-| The device | `Invoke-Command` with one script block | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last hardware inventory cycle, last discovery data cycle). Installed applications from the uninstall registry keys (one entry for each key, with the view, the key name and the uninstall strings). Client application policy (`CCM_Application`, for the text report and the JSON export only). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
+| The device | `Invoke-Command` with one script block | Operating system (caption, version, build, architecture, last boot). Client health (`CcmExec` service state and start mode, client version, assigned site code, current management point, last Hardware Inventory Cycle, last Discovery Data Collection Cycle). Installed applications from the uninstall registry keys (one entry for each key, with the view, the key name and the uninstall strings). Client application policy (`CCM_Application`, for the text report and the JSON export only). Pending updates in the client policy (`CCM_SoftwareUpdate`). |
 
-`Invoke-CMWmiQuery` is a ConfigurationManager cmdlet. The tool uses it only for the four reads that no cmdlet returns: the installed applications of hardware inventory, the collection memberships of the device, the required updates of the device and the hardware scan time of the device (for the Last hardware inventory fact and the inventory check). See [Data sources](data-sources.md).
+`Invoke-CMWmiQuery` is a ConfigurationManager cmdlet. The tool uses it only for the four reads that no cmdlet returns: the installed applications of hardware inventory, the collection memberships of the device, the required updates of the device and the last hardware inventory time of the device (for the Last hardware inventory property and the inventory check). See [Data sources](data-sources.md).
 
-Two "last hardware inventory" values exist on purpose. The site value is the scan date that the site stored. The device value is the start time of the last hardware inventory cycle on the client. They can differ.
+Two "last hardware inventory" values exist on purpose. The site value is the last hardware inventory time that the site stored. The device value is the start time of the last Hardware Inventory Cycle on the client. They can differ.
 
 ## Read-only design
 

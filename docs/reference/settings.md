@@ -19,8 +19,8 @@ Write access for your account to the folder of the script.
 | Setting | Where in the window | Key in `DeviceInspector.prefs.json` | Default | Saved |
 |---|---|---|---|---|
 | Theme | Toggle at the bottom of the sidebar | `DarkMode` | `true` (dark) | At once |
-| Site server | **Options** | `SMSProvider` | Empty, or `SUITE_CM_PROVIDER` | **OK** in Options |
-| Site code | **Options** | `SiteCode` | Empty, or `SUITE_CM_SITECODE`. Required when a site server is set. | **OK** in Options |
+| SMS Provider | **Options** | `SMSProvider` | Empty, or `SUITE_CM_PROVIDER` | **OK** in Options |
+| Site code | **Options** | `SiteCode` | Empty, or `SUITE_CM_SITECODE`. Required when an SMS Provider is set. | **OK** in Options |
 | Last device | The device box | `LastDevice` | Empty | **Inspect** |
 | Site Only | **Site Only** | `SiteOnly` | `false` | **Inspect** |
 
@@ -36,7 +36,7 @@ Write access for your account to the folder of the script.
 
 | Variable | Effect |
 |---|---|
-| `SUITE_CM_PROVIDER` | Fills an empty site server. The suite launcher sets it. |
+| `SUITE_CM_PROVIDER` | Fills an empty SMS Provider. The suite launcher sets it. |
 | `SUITE_CM_SITECODE` | Fills an empty site code. The suite launcher sets it. |
 
 A value that is saved in `DeviceInspector.prefs.json` and is not empty wins over the variable. An empty saved value is filled from the variable.

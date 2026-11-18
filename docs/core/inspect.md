@@ -1,6 +1,6 @@
 # Inspect bar
 
-The Inspect bar is the row above every panel. It holds the device name, the site server, Site Only, Inspect and the two export buttons.
+The Inspect bar is the row above every panel. It holds the device name, the SMS Provider, Site Only, Inspect and the two export buttons.
 
 ## What it does
 
@@ -8,12 +8,12 @@ The Inspect bar is the row above every panel. It holds the device name, the site
 
 ## When to use it
 
-Use it each time you want the facts of a device, or when you want them again after a change.
+Use it each time you want the data of a device, or when you want it again after a change.
 
 ## Requirements
 
 - A device name.
-- A site server and its site code (set in **Options**), unless you want only the device facts.
+- An SMS Provider and its site code (set in **Options**), unless you want only the data from the device.
 - The rights in [Permissions](../reference/permissions.md).
 
 ## Steps
@@ -21,7 +21,7 @@ Use it each time you want the facts of a device, or when you want them again aft
 ### Inspect a device
 
 1. In the first box, enter the device name. Use letters, digits, dots, hyphens and underscores.
-2. Check the second box. It shows the site server from **Options** as read-only text. To change it, select **Options**. The footer shows the same site server and the site code at the right end: `Site XYZ`, a middle dot, and `sms01.example.com`.
+2. Check the second box. It shows the SMS Provider computer from **Options** as read-only text. To change it, select **Options**. The footer shows the same SMS Provider and the site code at the right end: `Site XYZ`, a middle dot, and `sms01.example.com`.
 3. Select **Inspect**. You can also press Enter in the device box.
 4. Wait for the overlay to end. The log writes "Inspection of <device> finished: <n> problems." and the status bar shows the device, the time and the problem count.
 
@@ -40,11 +40,11 @@ The summary line on the **Device** panel counts the applications, the update row
 
 ### Read only the device
 
-1. In **Options**, clear the site server and the **Site Code**, then select **OK**. The site server box on the Inspect bar is then empty. With a site code left in **Options**, **OK** opens the message "A site code needs a site server." and the dialog stays open. The site server box on the Inspect bar is read-only. You change the site server only in **Options**.
+1. In **Options**, clear the SMS Provider and the **Site Code**, then select **OK**. The SMS Provider box on the Inspect bar is then empty. With a site code left in **Options**, **OK** opens the message "A site code needs an SMS Provider." and the dialog stays open. The SMS Provider box on the Inspect bar is read-only. You change the SMS Provider only in **Options**.
 2. Clear **Site Only** and enter a valid device name.
-3. Select **Inspect**. The tool does not contact the site. The site record is missing from the **Device** panel, and the Site server row says "not queried".
+3. Select **Inspect**. The tool does not contact the site. The **Discovery data and hardware inventory** group is missing from the **Device** panel, and the SMS Provider row says "not queried".
 
-![The Device panel after an inspection with no site server](../images/device-device-only.png)
+![The Device panel after an inspection with no SMS Provider](../images/device-device-only.png)
 
 ### Checks before the run
 
@@ -54,37 +54,37 @@ The tool checks the boxes before it reads anything. A wrong value opens a messag
 
 ![The message for a device name that is not valid](../images/inspect-bad-device.png)
 
-**Site Only** with no site server does not open a message. The log writes "Inspect: Site Only needs a site server." and the status bar shows "Set a site server in Options, or clear Site Only."
+**Site Only** with no SMS Provider does not open a message. The log writes "Inspect: Site Only needs an SMS Provider." and the status bar shows "Set an SMS Provider in Options, or clear Site Only."
 
-![The status bar after Site Only with no site server](../images/inspect-site-only-no-server.png)
+![The status bar after Site Only with no SMS Provider](../images/inspect-site-only-no-server.png)
 
 ## Options and settings of this page
 
 | Control | Effect |
 |---|---|
-| Device box | The device name. The watermark shows `Device name, e.g. WS01`. |
-| Site server box | The SMS Provider computer from **Options**. The box is read-only. When it is empty, the watermark shows `Set in Options`. |
+| Device box | The device name. The watermark shows `For example WS01`. |
+| SMS Provider box | The SMS Provider computer from **Options**. The box is read-only. When it is empty, the watermark shows `Set in Options`. |
 | **Site Only** | Skips the connection to the device. |
 | **Inspect** | Reads the device and the site. |
 | **Export JSON**, **Export HTML** | Save the inspection. See [Export](export.md). They turn on when an inspection exists. |
 
-The site code comes from **Options**. It is required whenever a site server is set. The tool saves the device name and **Site Only** when you select **Inspect** with valid inputs. It saves the site server on **Inspect** only when the box is not empty, and when you select **OK** in Options.
+The site code comes from **Options**. It is required whenever an SMS Provider is set. The tool saves the device name and **Site Only** when you select **Inspect** with valid inputs. It saves the SMS Provider on **Inspect** only when the box is not empty, and when you select **OK** in Options.
 
 The **Enable Actions** switch at the bottom of the sidebar is off at each start. While it is off, the tool only reads. See [Actions](actions.md).
 
 ## Limits
 
 - The tool inspects one device at a time.
-- A device name that has several resource records in the site uses the first record and adds a problem line.
+- A device name that has several resources in the site uses the first resource and adds a problem line.
 
 ## Troubleshooting
 
 | Message | Cause | Fix |
 |---|---|---|
 | Enter the device name. Use letters, digits, dots, hyphens and underscores. | The trimmed name is empty, is longer than 255 characters, starts with a dot or holds another character. | Enter 1 to 255 letters, digits, dots, hyphens or underscores. Do not start with a dot. |
-| The site server is a computer name or an FQDN. | The saved site server has another character. | Correct it in **Options**. |
-| A site code needs a site server. | A site code is set in Options and the site server is empty. | Set a site server in **Options**, or clear the site code. |
-| A site server needs a site code. Enter it in Options. | The site server box holds a value and Options holds no site code. | Enter the site code in **Options**. |
+| Enter the SMS Provider as a computer name or an FQDN. | The saved SMS Provider has another character. | Correct it in **Options**. |
+| A site code needs an SMS Provider. | A site code is set in Options and the SMS Provider is empty. | Set an SMS Provider in **Options**, or clear the site code. |
+| An SMS Provider needs a site code. Enter it in Options. | The SMS Provider box holds a value and Options holds no site code. | Enter the site code in **Options**. |
 
 ## Links
 

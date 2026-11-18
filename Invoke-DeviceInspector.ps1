@@ -1,5 +1,5 @@
 # .SYNOPSIS
-# Prints a read-only report of one device and optionally writes the same facts as JSON.
+# Prints a read-only report of one device and optionally writes the same data as JSON.
 #
 # .DESCRIPTION
 # Imports the DeviceInspector module from the src folder next to this script,
@@ -11,16 +11,16 @@
 # The device name.
 #
 # .PARAMETER SiteServer
-# The site server (SMS Provider) name. Omit it to skip the site facts.
+# The SMS Provider computer name. Omit it to skip the site data.
 #
 # .PARAMETER SiteCode
 # The site code. It is required with SiteServer.
 #
 # .PARAMETER Credential
-# An optional credential for the site server and the device.
+# An optional credential for the SMS Provider and the device.
 #
 # .PARAMETER SkipDevice
-# Skip the facts from the device itself.
+# Skip the data from the device itself.
 #
 # .PARAMETER JsonPath
 # A path for the JSON file. The file is written in UTF-8 without a byte order mark.

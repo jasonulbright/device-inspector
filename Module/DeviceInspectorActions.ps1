@@ -16,8 +16,8 @@ $script:scriptBlockPolicyUpdate = {
     $listStep = New-Object -TypeName 'System.Collections.Generic.List[string]'
     $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
     $arrSchedule = @(
-        @{ Id = '{00000000-0000-0000-0000-000000000021}'; Name = 'Machine policy retrieval (Machine Policy Assignments Request)' }
-        @{ Id = '{00000000-0000-0000-0000-000000000022}'; Name = 'Machine policy evaluation (Machine Policy Evaluation)' }
+        @{ Id = '{00000000-0000-0000-0000-000000000021}'; Name = 'Request Machine Assignments' }
+        @{ Id = '{00000000-0000-0000-0000-000000000022}'; Name = 'Evaluate Machine Policies' }
     )
     try {
         $objClient = Get-CimInstance -Namespace 'root\ccm' -ClassName 'SMS_Client'
@@ -52,7 +52,7 @@ $script:scriptBlockPolicyUpdate = {
         }
         $listStep.Add(('Triggered {0} {1}.' -f $hashtableSchedule.Name, $hashtableSchedule.Id))
     }
-    $strSummary = 'The client requested and evaluated machine policy.'
+    $strSummary = 'The client started the Machine Policy Retrieval & Evaluation Cycle.'
     if ($DryRun) {
         $strSummary = 'Dry run: the client answers. Nothing changed.'
     }
@@ -139,7 +139,7 @@ $script:scriptBlockFullInventory = {
         return [pscustomobject]@{ Succeeded = $false; Summary = ('The cycle did not start (return value {0}). The next scheduled cycle sends a full report.' -f $objReturnValue); Steps = @($listStep) }
     }
     $listStep.Add(('Triggered Hardware Inventory {0}.' -f $strActionId))
-    [pscustomobject]@{ Succeeded = $true; Summary = 'The client started a hardware inventory cycle with no status record, so it sends a full report. InventoryAgent.log on the device shows the report.'; Steps = @($listStep) }
+    [pscustomobject]@{ Succeeded = $true; Summary = 'The client started the Hardware Inventory Cycle with no status record, so it sends a full report. InventoryAgent.log shows the progress.'; Steps = @($listStep) }
 }
 
 # Runs on the device. Installs the updates of the client policy that the client
@@ -618,7 +618,7 @@ function New-DeviceInspectorActionRecord {
     # The window does not show them. The action log file holds them.
     #
     # .EXAMPLE
-    # $objResult = New-DeviceInspectorActionRecord -Action 'Client policy update' -ComputerName 'WS01' -DryRun $true -Succeeded $true -Summary 'Done.' -Steps @()
+    # $objResult = New-DeviceInspectorActionRecord -Action 'Machine policy cycle' -ComputerName 'WS01' -DryRun $true -Succeeded $true -Summary 'Done.' -Steps @()
     #
     # # $objResult.Mode = 'DRY RUN'
     #
@@ -732,7 +732,7 @@ function Invoke-ActionOnDevice {
     # An optional credential for the WinRM connection.
     #
     # .EXAMPLE
-    # $objResult = Invoke-ActionOnDevice -Action 'Client policy update' -ComputerName 'WS01' -ScriptBlock $script:scriptBlockPolicyUpdate -DryRun
+    # $objResult = Invoke-ActionOnDevice -Action 'Machine policy cycle' -ComputerName 'WS01' -ScriptBlock $script:scriptBlockPolicyUpdate -DryRun
     #
     # # $objResult.Steps lists what the action would do.
     #
@@ -815,7 +815,7 @@ function Invoke-DeviceInspectorPolicyUpdate {
     #
     # .DESCRIPTION
     # Runs on the device over WinRM. It triggers the client schedules Machine Policy
-    # Assignments Request and Machine Policy Evaluation with the TriggerSchedule
+    # Request Machine Assignments and Evaluate Machine Policies with the TriggerSchedule
     # method of SMS_Client, in that order. With DryRun it checks that the client
     # answers and lists the two steps, and changes nothing.
     #
@@ -863,7 +863,7 @@ function Invoke-DeviceInspectorPolicyUpdate {
 
     process {
         $hashtableAction = @{
-            Action       = 'Client policy update'
+            Action       = 'Machine policy cycle'
             ComputerName = $ComputerName
             ScriptBlock  = $script:scriptBlockPolicyUpdate
             DryRun       = $DryRun
@@ -1463,7 +1463,7 @@ function ConvertTo-DeviceInspectorActionText {
     # .EXAMPLE
     # ConvertTo-DeviceInspectorActionText -Result $objResult
     #
-    # # <UTC time> | <ID> | <domain\account> | WS01 | Client policy update | DRY RUN | OK | Dry run: ...
+    # # <UTC time> | <ID> | <domain\account> | WS01 | Machine policy cycle | DRY RUN | OK | Dry run: ...
     #
     # .INPUTS
     # None. You can't pipe objects to this function.
@@ -1988,7 +1988,7 @@ function New-DeviceInspectorActionRun {
     # same resource ID are runs on the same device, even when the names differ.
     #
     # .EXAMPLE
-    # $objRun = New-DeviceInspectorActionRun -ActionId 'a1b2c3d4' -Action 'Client policy update' -ComputerName 'WS01' -DryRun $false
+    # $objRun = New-DeviceInspectorActionRun -ActionId 'a1b2c3d4' -Action 'Machine policy cycle' -ComputerName 'WS01' -DryRun $false
     #
     # # $objRun.Mode = 'RUN'
     #
@@ -2133,7 +2133,7 @@ function Get-DeviceInspectorRunBlock {
     # .EXAMPLE
     # Get-DeviceInspectorRunBlock -Run $arrRun -ComputerName 'WS01'
     #
-    # # Returns 'Client policy update (ID a1b2c3d4) is running on WS01 since 10:15:02. ...'
+    # # Returns 'Machine policy cycle (ID a1b2c3d4) is running on WS01 since 10:15:02. ...'
     #
     # .INPUTS
     # None. You can't pipe objects to this function.

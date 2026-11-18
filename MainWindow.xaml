@@ -289,7 +289,7 @@
                         <Button x:Name="btnViewDeviceList"  Content="Device List"  Style="{StaticResource ViewButtonStyle}"
                                 ToolTip="Search the devices of the site by name or collection."/>
                         <Button x:Name="btnViewDevice"      Content="Device"       Style="{StaticResource ViewButtonStyle}"
-                                ToolTip="Show the operating system, the client health and the site record of the device."/>
+                                ToolTip="Show the operating system, the client health, the discovery data and the hardware inventory of the device."/>
                         <Button x:Name="btnViewApps"        Content="Applications" Style="{StaticResource ViewButtonStyle}"
                                 ToolTip="Show the applications that the device lists in its uninstall registry keys."/>
                         <Button x:Name="btnViewUpdates"     Content="Updates"      Style="{StaticResource ViewButtonStyle}"
@@ -301,7 +301,7 @@
 
                         <Button x:Name="btnOptions" Content="Options"
                                 Style="{StaticResource OptionsButtonStyle}"
-                                ToolTip="Set the site server and the site code."/>
+                                ToolTip="Set the SMS Provider and the site code."/>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>
@@ -324,7 +324,7 @@
                 <StackPanel>
                     <TextBlock x:Name="txtModuleTitle" Text="Device" FontSize="18" FontWeight="SemiBold"/>
                     <TextBlock x:Name="txtModuleSubtitle"
-                               Text="Enter a device name, then click Inspect. The inspection only reads."
+                               Text="Enter a device name, then select Inspect. The inspection only reads."
                                FontSize="11"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource MahApps.Brushes.Gray1}"
@@ -347,14 +347,14 @@
 
                     <Button x:Name="btnInspect" Grid.Column="0" Content="Inspect"
                             Style="{StaticResource PrimaryButtonStyle}"
-                            ToolTip="Read the device and the site without any change."/>
+                            ToolTip="Get the data of the device and the site. Nothing changes."/>
                     <TextBlock Grid.Column="1" Text="Device" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBox x:Name="txtDevice" Height="26" Grid.Column="2" FontSize="12" Padding="6,4,6,4" Margin="0,0,12,0"
-                             Controls:TextBoxHelper.Watermark="e.g. WS01"/>
-                    <TextBlock Grid.Column="3" Text="Site Server" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                             Controls:TextBoxHelper.Watermark="For example WS01"/>
+                    <TextBlock Grid.Column="3" Text="SMS Provider" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBox x:Name="txtSiteServer" Height="26" Grid.Column="4" FontSize="12" Padding="6,4,6,4" Margin="0,0,12,0" IsReadOnly="True"
                              Controls:TextBoxHelper.Watermark="Set in Options"
-                             ToolTip="The site server from Options. Change it in Options."/>
+                             ToolTip="The SMS Provider from Options. Change it in Options."/>
                     <CheckBox x:Name="chkSiteOnly" Grid.Column="5" Content="Site Only" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center"
                               ToolTip="Skip the connection to the device and read only the site."/>
                     <Button x:Name="btnExportJson" Grid.Column="6" Content="Export JSON" Style="{StaticResource SquareInlineButtonStyle}"
@@ -403,18 +403,18 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="txtListName" Height="26" Grid.Column="0" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
-                                 Controls:TextBoxHelper.Watermark="Name, * as a wildcard, e.g. WS*"/>
+                                 Controls:TextBoxHelper.Watermark="Name or wildcard, for example WS*"/>
                         <TextBox x:Name="txtListCollection" Height="26" Grid.Column="1" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
                                  Controls:TextBoxHelper.Watermark="Collection ID (optional)"/>
                         <Button x:Name="btnListSearch" Grid.Column="2" Content="Search"
                                 Style="{StaticResource PrimaryButtonStyle}"
-                                ToolTip="Read the matching devices from the site without any change."/>
+                                ToolTip="Get the matching devices from the site. Nothing changes."/>
                         <Button x:Name="btnListInspect" Grid.Column="3" Content="Inspect Selected"
                                 Style="{StaticResource SquareInlineButtonStyle}" Margin="0"
                                 ToolTip="Inspect the selected device."/>
                     </Grid>
                     <TextBlock x:Name="txtListSummary" Grid.Row="1" FontSize="12" TextWrapping="Wrap" Margin="8,0,8,8"
-                               Text="Enter a name pattern or a collection ID, then select Search. The search uses the site server and the site code."/>
+                               Text="Enter a name pattern or a collection ID, then select Search. The search uses the SMS Provider and the site code."/>
                     <DataGrid x:Name="gridDeviceList" Grid.Row="2" SelectionMode="Single"
                               Style="{StaticResource ViewDataGrid}"
                               ColumnHeaderStyle="{StaticResource GridHeaderStyle}"
@@ -444,15 +444,15 @@
                     <TextBlock x:Name="txtSummary" Grid.Row="0" FontSize="12" TextWrapping="Wrap" Margin="8,0,8,10"
                                Text="No inspection yet."/>
                     <WrapPanel x:Name="panelDeviceActions" Grid.Row="1" Margin="8,0,8,10">
-                        <Button x:Name="btnPolicyUpdate" Content="Client Policy Update..."
+                        <Button x:Name="btnPolicyUpdate" Content="Machine Policy Cycle..."
                                 Style="{StaticResource SquareInlineButtonStyle}"
-                                ToolTip="Request and evaluate the machine policy on the device (needs Enable Actions)."/>
+                                ToolTip="Start the Machine Policy Retrieval &amp; Evaluation Cycle on the device (needs Enable Actions)."/>
                         <Button x:Name="btnFullInventory" Content="Full Hardware Inventory..."
                                 Style="{StaticResource SquareInlineButtonStyle}"
-                                ToolTip="Delete the hardware inventory state on the device and start a full hardware inventory (needs Enable Actions)."/>
+                                ToolTip="Run the Hardware inventory cycle (full resynchronization) on the device (needs Enable Actions)."/>
                         <Button x:Name="btnRepairInventory" Content="Repair Inventory..."
                                 Style="{StaticResource SquareInlineButtonStyle}"
-                                ToolTip="Run a full hardware inventory when the inventory check says Corrupt (needs Enable Actions)."/>
+                                ToolTip="Run the Hardware inventory cycle (full resynchronization) when the inventory check says Corrupt (needs Enable Actions)."/>
                     </WrapPanel>
                     <DataGrid x:Name="gridFacts" Grid.Row="2"
                               Style="{StaticResource ViewDataGrid}"
@@ -460,7 +460,7 @@
                               CellStyle="{StaticResource GridCellStyle}">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Group" Width="2*" Binding="{Binding Group}"/>
-                            <DataGridTextColumn Header="Fact"  Width="2*" Binding="{Binding Name}"/>
+                            <DataGridTextColumn Header="Property" Width="2*" Binding="{Binding Name}"/>
                             <DataGridTextColumn Header="Value" Width="4*" Binding="{Binding Value}"/>
                         </DataGrid.Columns>
                     </DataGrid>

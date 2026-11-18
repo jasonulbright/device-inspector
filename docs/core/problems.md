@@ -4,7 +4,7 @@ The Problems panel lists the parts of the inspection that failed. The other part
 
 ## What it does
 
-The tool reads many parts: the operating system, the client health, the applications, the pending updates, the site record, the inventory, the memberships, the deployments and the required updates. A failed part adds one line here. The other panels show what the other parts returned.
+The tool reads many parts: the operating system, the client health, the applications, the pending updates, the discovery data and hardware inventory of the site, the inventory, the memberships, the deployments and the required updates. A failed part adds one line here. The other panels show what the other parts returned.
 
 ## When to use it
 
@@ -16,17 +16,17 @@ An inspection.
 
 ## Steps
 
-### Read the problems
+### Review the problems
 
 1. Look at the **Problems** entry of the sidebar. It shows the count, for example **Problems (2)**. With no problem, it shows **Problems**.
 2. Select **Problems**.
-3. Read one line for each problem. A line starts with `Site:` or `Device:`, or with the name of the part.
+3. Review one line for each problem. A line starts with `Site:` or `Device:`, or with the name of the part.
 
 ![The Problems panel for a device that does not exist](../images/problems-unreachable.png)
 
 The same lines are in the log, each with the word `problem:`.
 
-With no problem, the panel says "No problems. Every part of the inspection ran." This covers only the sources that you selected. **Site Only** skips the device checks. An inspection with no site server skips the site checks.
+With no problem, the panel says "No problems. Every part of the inspection ran." This covers only the sources that you selected. **Site Only** skips the device checks. An inspection with no SMS Provider skips the site checks.
 
 ![The Problems panel of a device with no problem](../images/problems-panel.png)
 
@@ -45,8 +45,8 @@ With no problem, the panel says "No problems. Every part of the inspection ran."
 | `Device: the read failed. The log file has the reason.` | The device did not answer. The log file, and the **Problem detail** section of an export, hold the WinRM error. |
 | `Device: Operating system: the read failed.`, `Device: Client details: the read failed.`, `Device: Client health: the read failed.`, `Device: Installed applications: the read failed.`, `Device: Client application policy: the read failed.`, `Device: Pending updates: the read failed.` | One part of the device read failed. Each line ends with "The log file has the reason." |
 | `Device: Client health: the CcmExec service does not exist.` | The device has no ConfigMgr client. |
-| `Site: Cannot open site <code> on <server>. ...` | The site drive did not open. No site fact was read. |
-| `Site: the read failed. The log file has the reason.` | The device lookup on the site (`Get-CMDevice`) failed. No site fact was read. |
+| `Site: Cannot open site <code> on <server>. ...` | The site drive did not open. No site data was read. |
+| `Site: the read failed. The log file has the reason.` | The device lookup on the site (`Get-CMDevice`) failed. No site data was read. |
 | `Site installed applications (<class>): the read failed.`, `Site collection membership: the read failed.`, `Site collection names: the read failed.`, `Site deployments: the read failed.`, `Site required updates: the read failed.` | One part of the site read failed. Each line ends with "The log file has the reason." |
 
 ## Limits

@@ -874,7 +874,7 @@ Describe 'Titles are in Title Case (d)' {
         $objFunction | Should -Not -BeNullOrEmpty
         . ([scriptblock]::Create($objFunction.Extent.Text))
         $hashExpected = [ordered]@{
-            'Client policy update'            = 'Client Policy Update'
+            'Machine policy cycle'             = 'Machine Policy Cycle'
             'Full hardware inventory'         = 'Full Hardware Inventory'
             'Corrupt-inventory repair'        = 'Corrupt-Inventory Repair'
             'Check 32-bit entries'            = 'Check 32-bit Entries'

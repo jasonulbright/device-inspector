@@ -257,7 +257,7 @@ Describe 'Get-SiteFact' {
             $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             $objSite.LastHardwareInventorySource | Should -Be 'Get-CMDevice'
             $listProblem.Count | Should -Be 1
-            $listProblem[0] | Should -Be 'Site hardware scan time: the read failed. The log file has the reason.'
+            $listProblem[0] | Should -Be 'Site last hardware inventory time: the read failed. The log file has the reason.'
             $listProblem[0] | Should -Not -BeLike '*class read failed*'
         }
     }
@@ -614,7 +614,7 @@ Describe 'Connect-InspectorSite with a credential' {
                 param ($Server, [System.Management.Automation.PSCredential]$Cred)
                 Connect-InspectorSite -SiteServer $Server -SiteCode 'XYZ' -Credential $Cred -Verbose 4>&1
             })
-        @($arrVerbose | Where-Object { [string]$_ -eq 'The site server is this computer. Windows does not allow credentials for a local connection, so the signed-in account is used.' }).Count | Should -Be 1
+        @($arrVerbose | Where-Object { [string]$_ -eq 'The SMS Provider is this computer. Windows does not allow credentials for a local connection, so the signed-in account is used.' }).Count | Should -Be 1
     }
 
     It 'keeps the credential for a remote site server' {
@@ -630,7 +630,7 @@ Describe 'Connect-InspectorSite with a credential' {
         { InModuleScope DeviceInspectorCommon -Parameters @{ Cred = $script:objTestCredential } {
                 param ([System.Management.Automation.PSCredential]$Cred)
                 Connect-InspectorSite -SiteServer 'sms01.example.com' -SiteCode 'XYZ' -Credential $Cred
-            } } | Should -Throw 'Cannot open site XYZ on sms01.example.com. The site server is this computer, and Windows does not allow credentials for a local connection.*The log file has the reason.'
+            } } | Should -Throw 'Cannot open site XYZ on sms01.example.com. The SMS Provider is this computer, and Windows does not allow credentials for a local connection.*The log file has the reason.'
     }
 }
 
@@ -759,12 +759,12 @@ Describe 'Get-DeviceInspection' {
     It 'shows the fixed message of Connect-InspectorSite and keeps its raw text in ProblemDetail' {
         InModuleScope DeviceInspectorCommon {
             Mock Connect-InspectorSite {
-                $exceptionFixed = New-Object -TypeName 'System.InvalidOperationException' -ArgumentList 'Cannot open site XYZ on sms01. Check the site code and the site server name, and the account rights. The log file has the reason.'
+                $exceptionFixed = New-Object -TypeName 'System.InvalidOperationException' -ArgumentList 'Cannot open site XYZ on sms01. Check the site code and the SMS Provider name, and the account rights. The log file has the reason.'
                 $exceptionFixed.Data['RawText'] = 'secret-boom-1'
                 throw $exceptionFixed
             }
             $objInspection = Get-DeviceInspection -ComputerName 'WS01' -SiteServer 'sms01' -SiteCode 'XYZ' -SkipDevice
-            $objInspection.Problems | Should -Contain 'Site: Cannot open site XYZ on sms01. Check the site code and the site server name, and the account rights. The log file has the reason.'
+            $objInspection.Problems | Should -Contain 'Site: Cannot open site XYZ on sms01. Check the site code and the SMS Provider name, and the account rights. The log file has the reason.'
             @($objInspection.Problems | Where-Object { $_ -like '*secret-boom-1*' }).Count | Should -Be 0
             $objInspection.ProblemDetail | Should -Contain 'Site: secret-boom-1'
         }
@@ -939,7 +939,7 @@ Describe 'ConvertTo-DeviceInspectionReport' {
         $strReport | Should -BeLike '*Service CcmExec:           Running*'
         $strReport | Should -BeLike '*Resource ID:               5*'
         $strReport | Should -BeLike '*SMS00001  All Systems*'
-        $strReport | Should -BeLike '*Example App | Application | Required | via Pilot*'
+        $strReport | Should -BeLike '*Example App | Application | Required | collection Pilot*'
         $strReport | Should -BeLike '*DeviceApp 2*'
         $strReport | Should -BeLike '*SiteApp 1*'
         $strReport | Should -BeLike '*PolicyApp | NotInstalled | evaluation state 3*'
@@ -954,14 +954,14 @@ Describe 'ConvertTo-DeviceInspectionReport' {
     It 'prints No data for skipped parts' {
         $objSkipped = [pscustomobject]@{ ComputerName = 'X'; InspectedAt = 't'; SiteServer = $null; SiteCode = $null; Site = $null; Device = $null; Problems = @() }
         $strReport = ConvertTo-DeviceInspectionReport -Inspection $objSkipped
-        $strReport | Should -BeLike '*Site server: not queried*'
+        $strReport | Should -BeLike '*SMS Provider: not queried*'
         $strReport | Should -BeLike '*No data.*'
         $strReport | Should -BeLike '*== Problems (0) ==*'
     }
 
-    It 'says when the site has no record' {
+    It 'says when the site does not know the device' {
         $objMissing = [pscustomobject]@{ ComputerName = 'X'; InspectedAt = 't'; SiteServer = 's'; SiteCode = 'XYZ'; Site = [pscustomobject]@{ Found = $false }; Device = $null; Problems = @() }
-        ConvertTo-DeviceInspectionReport -Inspection $objMissing | Should -BeLike '*The site has no record of this device.*'
+        ConvertTo-DeviceInspectionReport -Inspection $objMissing | Should -BeLike '*The site does not know this device.*'
     }
 
     It 'limits long lists' {
@@ -1060,7 +1060,7 @@ Describe 'Last hardware inventory fact' {
     It 'shows the class time with its label in the panel rows, the report and the HTML' {
         $objSite = [pscustomobject]@{ Found = $true; ResourceId = 5; ClientInstalled = $true; ClientVersion = '5'; Active = $true; OperatingSystem = 'os'; LastLogonUserName = 'u'; LastHardwareInventory = '2026-11-05T17:41:51Z'; HardwareScanClientTime = '2026-11-10T19:22:32'; LastHardwareInventorySource = 'SMS_G_System_WORKSTATION_STATUS'; InstalledApplications = @(); Collections = @(); Deployments = @(); RequiredUpdates = @() }
         $objInspection = & $script:fnInspection $objSite
-        $objRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection) | Where-Object { $_.Group -eq 'Site record' -and $_.Name -eq 'Last hardware inventory' }
+        $objRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection) | Where-Object { $_.Group -eq 'Discovery data and hardware inventory' -and $_.Name -eq 'Last hardware inventory' }
         $objRow.Value | Should -Be '2026-11-10T19:22:32 (device local time)'
         ConvertTo-DeviceInspectionReport -Inspection $objInspection | Should -BeLike '*Last hardware inventory:   2026-11-10T19:22:32 (device local time)*'
         ConvertTo-DeviceInspectionHtml -Inspection $objInspection | Should -BeLike '*2026-11-10T19:22:32 (device local time)*'
@@ -1070,7 +1070,7 @@ Describe 'Last hardware inventory fact' {
     It 'shows the Get-CMDevice value and says it can lag when the class has no row' {
         $objSite = [pscustomobject]@{ Found = $true; ResourceId = 5; ClientInstalled = $true; ClientVersion = '5'; Active = $true; OperatingSystem = 'os'; LastLogonUserName = 'u'; LastHardwareInventory = '2026-11-05T17:41:51Z'; HardwareScanClientTime = $null; LastHardwareInventorySource = 'Get-CMDevice'; InstalledApplications = @(); Collections = @(); Deployments = @(); RequiredUpdates = @() }
         $objInspection = & $script:fnInspection $objSite
-        $objRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection) | Where-Object { $_.Group -eq 'Site record' -and $_.Name -eq 'Last hardware inventory' }
+        $objRow = @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection) | Where-Object { $_.Group -eq 'Discovery data and hardware inventory' -and $_.Name -eq 'Last hardware inventory' }
         $objRow.Value | Should -BeLike '2026-11-05T17:41:51Z (UTC, from Get-CMDevice; can lag*'
         ConvertTo-DeviceInspectionHtml -Inspection $objInspection | Should -BeLike '*can lag a processed report*'
     }
@@ -1093,7 +1093,7 @@ Describe 'Exception text and the Problems list' {
                 $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
                 $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem -ProblemDetail $listDetail
                 $arrExpectedLabel = @(
-                    'Site hardware scan time'
+                    'Site last hardware inventory time'
                     'Site installed applications (SMS_G_System_ADD_REMOVE_PROGRAMS)'
                     'Site installed applications (SMS_G_System_ADD_REMOVE_PROGRAMS_64)'
                     'Site collection membership'

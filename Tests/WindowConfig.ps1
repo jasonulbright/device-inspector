@@ -30,7 +30,7 @@ $script:SampleRows = @{
     gridFacts       = @(
         [PSCustomObject]@{ Group = 'Operating system (device)'; Name = 'Caption'; Value = 'Windows 11 Enterprise' }
         [PSCustomObject]@{ Group = 'Client health (device)'; Name = 'Service CcmExec'; Value = 'Running (start mode Auto)' }
-        [PSCustomObject]@{ Group = 'Site record'; Name = 'Resource ID'; Value = '16777221' }
+        [PSCustomObject]@{ Group = 'Discovery data and hardware inventory'; Name = 'Resource ID'; Value = '16777221' }
     )
     gridApps        = @(
         [PSCustomObject]@{ Name = 'Sample application'; Version = '2.0'; Publisher = 'Sample publisher'; InstallDate = '20261101'; Type = 'MSI'; View = '64-bit' }
@@ -59,7 +59,7 @@ $script:MainMeasureScript = {
     # Entered text, so the contrast of the input text is measured too.
     $w.FindName('txtDevice').Text = 'device-a'
     $w.FindName('txtSiteServer').Text = 'site.example.test'
-    $w.FindName('txtSummary').Text = 'Device device-a; client service Running; site record found; 2 applications; 2 update rows; 1 collections; 0 problems.'
+    $w.FindName('txtSummary').Text = 'Device device-a; client service Running; discovery data found; 2 applications; 2 update rows; 1 collections; 0 problems.'
     $w.FindName('txtProblems').Text = 'No problems. Every part of the inspection ran.'
     $w.FindName('txtLog').Text = '09:00:00  Device Inspector ready.'
     $w.FindName('txtVersion').Text = 'v2026.11.07.0004'
@@ -141,7 +141,7 @@ $script:ActionDialogMeasureScript = {
     $w = Open-TestWindow -XamlText $Arguments.Xaml -Dark $Arguments.Dark -Width 560 -Height 300
     try {
     $w.FindName('txtDeviceCount').Text = 'This action changes 1 device: device-a'
-    $w.FindName('txtActionMessage').Text = 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it.'
+    $w.FindName('txtActionMessage').Text = 'The Configuration Manager client on the device requests machine policy from its management point, then evaluates it (Machine Policy Retrieval & Evaluation Cycle).'
     Set-DialogTheme -Dialog $w -IsDark $Arguments.Dark
     Wait-Layout $w
     $out = [PSCustomObject]@{
@@ -202,7 +202,7 @@ $script:MessageBoxMeasureScript = {
             elseif ($global:HarnessTicks -ge 100) { foreach ($b in @($global:HarnessOwner.OwnedWindows | Where-Object { $_ -is [MahApps.Metro.Controls.MetroWindow] })) { $b.Close() } }
         })
     $timer.Start()
-    try { [void](Show-ThemedMessage -Owner $owner -Title 'Device Inspector' -Message 'A site server needs a site code. Enter it in Options.' -Icon Warn) }
+    try { [void](Show-ThemedMessage -Owner $owner -Title 'Device Inspector' -Message 'An SMS Provider needs a site code. Enter it in Options.' -Icon Warn) }
     finally { $timer.Stop() }
     $global:HarnessBox
     }

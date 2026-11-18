@@ -236,7 +236,7 @@ Describe 'Set-ActiveView and Update-StatusBarSummary' {
 
     It 'tells the person to inspect a device when there is no inspection' {
         Update-StatusBarSummary
-        $txtStatus.Text | Should -Be 'Enter a device name and click Inspect   |   read only'
+        $txtStatus.Text | Should -Be 'Enter a device name and select Inspect   |   read only'
     }
 
     It 'shows the device, the time, the problem count, the mode and the running actions' {

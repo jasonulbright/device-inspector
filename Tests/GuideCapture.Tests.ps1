@@ -259,6 +259,17 @@ Describe 'Capture scripts' {
         $steps | Should -Match '''first run'' -notin \$selectedSections -and ''options'' -notin'
     }
 
+    It 'stops only the processes that the run started, by process id, and finds only windows of the app process' {
+        foreach ($f in $script:CaptureFiles) {
+            $text = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir $f.File))
+            $text | Should -Not -Match 'CommandLine' -Because $f.File
+            $text | Should -Not -Match 'taskkill' -Because $f.File
+        }
+        $lib = [System.IO.File]::ReadAllText((Join-Path $script:CaptureDir 'guilib.ps1'))
+        $lib | Should -Match 'ProcessIdProperty'
+        $lib | Should -Match 'Stop-Process -Id \$script:proc\.Id'
+    }
+
     It 'documents the one command that retakes every capture in the guide index' {
         $index = [System.IO.File]::ReadAllText((Join-Path $script:Root 'docs\index.md'))
         $index | Should -Match '(?m)^## Retake the captures'

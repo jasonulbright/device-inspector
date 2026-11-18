@@ -5,7 +5,8 @@ $t = Get-Content -LiteralPath $f -Raw
 $t = $t -replace '(?s)(function Resolve-ConfigurationManagerModulePath \{)', '$1 return $null;'
 Set-Content -LiteralPath $f -Value $t -Encoding UTF8
 Remove-Item Env:SMS_ADMIN_UI_PATH -ErrorAction SilentlyContinue
-Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', (Join-Path $appDir 'start-deviceinspector.ps1'))
+$script:proc = Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', (Join-Path $appDir 'start-deviceinspector.ps1')) -PassThru
+Add-PidLedger $script:proc.Id
 # The app stops before its window opens and shows a system message box titled with the app name.
 $m = Find-Top 'Device Inspector' 40
 Start-Sleep -Seconds 1

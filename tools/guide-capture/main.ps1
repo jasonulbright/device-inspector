@@ -8,6 +8,7 @@ $appDir = $GuideRoot
 $flag = 'finished'
 try {
     . (Join-Path $GuideRoot 'ui\guilib.ps1')
+    Add-PidLedger $PID
     # Settings that Invoke-GuideCapture.ps1 passes in (site code, SMS Provider, device names).
     $Capture = Get-Content -LiteralPath (Join-Path $GuideRoot 'ui\capture.json') -Raw | ConvertFrom-Json
     . (Join-Path $GuideRoot 'ui\steps.ps1')

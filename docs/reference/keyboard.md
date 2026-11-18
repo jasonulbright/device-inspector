@@ -28,7 +28,7 @@ None.
 ### Tab order
 
 1. The sidebar: **Device List**, **Device**, **Applications**, **Updates**, **Collections**, **Problems**, **Options**.
-2. The Inspect bar: **Inspect**, the device box, the site server box, **Site Only**, **Export JSON**, **Export HTML**. A button that is off is skipped.
+2. The Inspect bar: **Inspect**, the device box, the SMS Provider box, **Site Only**, **Export JSON**, **Export HTML**. A button that is off is skipped.
 3. The open panel: on the Device panel, the action buttons, then the grid.
 4. **Open Log File**, then the log.
 
