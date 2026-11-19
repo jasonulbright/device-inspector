@@ -3,7 +3,7 @@
     ModuleVersion     = '2026.11.18.0018'
     GUID              = '5b0d6f0e-6f6c-4c52-9a53-3a0d2f4c9b11'
     Author            = 'Jason Ulbright'
-    Description       = 'Inspection of one device: the discovery data and hardware inventory of the site, plus the operating system and client health of the device itself. Optional actions with a dry run and an action log.'
+    Description       = 'Inspection of one device: the discovery data and hardware inventory of the site, plus the operating system and the Configuration Manager client of the device itself. Optional actions with a dry run and an action log.'
     PowerShellVersion = '5.1'
 
     FunctionsToExport = @(
