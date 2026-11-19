@@ -1568,13 +1568,11 @@ Describe 'Add to collection' {
     }
 
     It 'lists <Count> collections with one SELECT and no per-collection cmdlet' -ForEach @(@{ Count = 2000 }, @{ Count = 20000 }) {
-        $global:Fx = $Count
-        Mock -ModuleName DeviceInspectorCommon Invoke-SiteQuery { 1..$global:Fx | ForEach-Object { [pscustomobject]@{ CollectionID = ('XYZ{0:D5}' -f $_); Name = ('C{0}' -f $_); MemberCount = $_; LimitToCollectionID = 'SMS00001' } } }
+        Mock -ModuleName DeviceInspectorCommon Invoke-SiteQuery -MockWith ([scriptblock]::Create(('1..{0} | ForEach-Object {{ [pscustomobject]@{{ CollectionID = ("XYZ{{0:D5}}" -f $_); Name = ("C{{0}}" -f $_); MemberCount = $_; LimitToCollectionID = "SMS00001" }} }}' -f $Count)))
         Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { throw 'the per-collection cmdlet must not be used' }
         @(Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ').Count | Should -Be $Count
         Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -match '^SELECT CollectionID, Name, MemberCount, LimitToCollectionID FROM SMS_Collection WHERE CollectionType = 2$' }
         Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDeviceCollection -Times 0 -Exactly
-        Remove-Variable -Name Fx -Scope Global -ErrorAction SilentlyContinue
     }
 
     It 'has a button and a menu entry that open the browser through the site gate' {
