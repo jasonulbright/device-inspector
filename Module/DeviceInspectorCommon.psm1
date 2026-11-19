@@ -981,7 +981,11 @@ function Get-SiteFact {
         $hashtableCollectionName = @{}
         if ($listCollectionId.Count -gt 0) {
             try {
-                foreach ($objCollection in @(Get-CMDeviceCollection -ErrorAction Stop)) {
+                # One query names the collections of the device. Get-CMDeviceCollection reads every collection of the site,
+                # with one provider round trip for each (89 s at 2,000 collections). The IDs passed the pattern above.
+                $strNameIn = (@($listCollectionId | Select-Object -Unique | ForEach-Object { "'{0}'" -f $_ }) -join ', ')
+                $strNameQuery = 'SELECT CollectionID, Name FROM SMS_Collection WHERE CollectionID IN ({0})' -f $strNameIn
+                foreach ($objCollection in @(Invoke-SiteQuery -Query $strNameQuery)) {
                     $hashtableCollectionName[[string]$objCollection.CollectionID] = [string]$objCollection.Name
                 }
             } catch {
@@ -2752,7 +2756,8 @@ function Get-DeviceInspectorCollectionList {
     #
     # .DESCRIPTION
     # Read only. Opens the site drive, reads all device collections with one
-    # Get-CMDeviceCollection call, and closes the drive. The objects have the
+    # SELECT of plain columns (Get-CMDeviceCollection makes one provider round trip
+    # for each collection), and closes the drive. The objects have the
     # property names that the collection browser of the window reads. The browser
     # shows a flat list, so FolderID is 0 for every collection.
     #
@@ -2806,7 +2811,7 @@ function Get-DeviceInspectorCollectionList {
         $objConnection = $null
         try {
             $objConnection = Connect-InspectorSite @hashtableConnect
-            foreach ($objCollection in @(Get-CMDeviceCollection -ErrorAction Stop)) {
+            foreach ($objCollection in @(Invoke-SiteQuery -Query 'SELECT CollectionID, Name, MemberCount, LimitToCollectionID FROM SMS_Collection WHERE CollectionType = 2')) {
                 $strId = [string]$objCollection.CollectionID
                 [pscustomobject]@{
                     CollectionID        = $strId
