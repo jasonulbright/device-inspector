@@ -344,34 +344,39 @@
             </Border>
 
             <Border Grid.Row="1" Padding="16,10,16,10">
+                <!-- Two rows, so that the boxes keep room at the minimum width (1024): the Device and SMS Provider boxes
+                     share the first row with Inspect; Site Only and the exports sit under them. -->
                 <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <Button x:Name="btnInspect" Grid.Column="0" Content="Inspect"
+                    <Button x:Name="btnInspect" Grid.Row="0" Grid.Column="0" Content="Inspect" Margin="0,0,12,0"
                             Style="{StaticResource PrimaryButtonStyle}"
                             ToolTip="Get the data of the device and the site. Nothing changes."/>
-                    <TextBlock Grid.Column="1" Text="Device" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBox x:Name="txtDevice" Height="26" Grid.Column="2" FontSize="12" Padding="6,4,6,4" Margin="0,0,12,0"
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Device" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="txtDevice" Height="26" Grid.Row="0" Grid.Column="2" MinWidth="140" FontSize="12" Padding="6,4,6,4" Margin="0,0,12,0"
                              Controls:TextBoxHelper.Watermark="For example WS01"/>
-                    <TextBlock Grid.Column="3" Text="SMS Provider" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBox x:Name="txtSiteServer" Height="26" Grid.Column="4" FontSize="12" Padding="6,4,6,4" Margin="0,0,12,0" IsReadOnly="True"
+                    <TextBlock Grid.Row="0" Grid.Column="3" Text="SMS Provider" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="txtSiteServer" Height="26" Grid.Row="0" Grid.Column="4" MinWidth="200" FontSize="12" Padding="6,4,6,4" IsReadOnly="True"
                              Controls:TextBoxHelper.Watermark="Set in Options"
                              ToolTip="The SMS Provider from Options. Change it in Options."/>
-                    <CheckBox x:Name="chkSiteOnly" Grid.Column="5" Content="Site Only" FontSize="12" Margin="0,0,12,0" VerticalAlignment="Center"
-                              ToolTip="Skip the connection to the device and read only the site."/>
-                    <Button x:Name="btnExportJson" Grid.Column="6" Content="Export JSON" Style="{StaticResource SquareInlineButtonStyle}"
-                            ToolTip="Save the inspection as a JSON file."/>
-                    <Button x:Name="btnExportHtml" Grid.Column="7" Content="Export HTML" Style="{StaticResource SquareInlineButtonStyle}" Margin="0"
-                            ToolTip="Save the inspection as an HTML report."/>
+                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Orientation="Horizontal" Margin="0,8,0,0">
+                        <CheckBox x:Name="chkSiteOnly" Content="Site Only" FontSize="12" Margin="0,0,16,0" VerticalAlignment="Center"
+                                  ToolTip="Skip the connection to the device and read only the site."/>
+                        <Button x:Name="btnExportJson" Content="Export JSON" Style="{StaticResource SquareInlineButtonStyle}" Margin="0,0,12,0"
+                                ToolTip="Save the inspection as a JSON file."/>
+                        <Button x:Name="btnExportHtml" Content="Export HTML" Style="{StaticResource SquareInlineButtonStyle}" Margin="0"
+                                ToolTip="Save the inspection as an HTML report."/>
+                    </StackPanel>
                 </Grid>
             </Border>
 
