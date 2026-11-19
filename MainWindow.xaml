@@ -212,6 +212,17 @@
                 </Style.Triggers>
             </Style>
 
+            <!-- Cell text that does not fit ends with an ellipsis, and the tooltip shows the full text. A cell with no text has no tooltip. -->
+            <Style x:Key="GridCellTextStyle" TargetType="TextBlock" BasedOn="{x:Static DataGridTextColumn.DefaultElementStyle}">
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Text, RelativeSource={RelativeSource Self}}" Value="">
+                        <Setter Property="ToolTipService.IsEnabled" Value="False"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
             <!-- Column headers keep the case of their text (Title Case). MahApps makes them upper case by default. -->
             <Style x:Key="GridHeaderStyle" TargetType="DataGridColumnHeader" BasedOn="{StaticResource MahApps.Styles.DataGridColumnHeader}">
                 <Setter Property="Padding" Value="6,0,6,0"/>
@@ -374,11 +385,12 @@
                               CellStyle="{StaticResource GridCellStyle}"
                               ToolTip="Show the actions that run on devices now.">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Device"  Width="2*"  Binding="{Binding ComputerName}"/>
-                            <DataGridTextColumn Header="Action"  Width="3*"  Binding="{Binding Action}"/>
-                            <DataGridTextColumn Header="Mode"    Width="80"  Binding="{Binding Mode}"/>
-                            <DataGridTextColumn Header="Started" Width="80"  Binding="{Binding StartedAt}"/>
-                            <DataGridTextColumn Header="ID"      Width="100" Binding="{Binding ActionId}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Device" Width="Auto" MinWidth="70" MaxWidth="160" Binding="{Binding ComputerName}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Action" Width="Auto" MinWidth="120" MaxWidth="360" Binding="{Binding Action}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Mode" Width="Auto" MaxWidth="200" MinWidth="60" Binding="{Binding Mode}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Started" Width="Auto" MaxWidth="200" MinWidth="70" Binding="{Binding StartedAt}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="ID" Width="Auto" MaxWidth="200" MinWidth="60" Binding="{Binding ActionId}"/>
+                            <DataGridTemplateColumn Header="" Width="*" MinWidth="0" CanUserResize="False" CanUserSort="False" IsReadOnly="True"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>
@@ -420,14 +432,15 @@
                               ColumnHeaderStyle="{StaticResource GridHeaderStyle}"
                               CellStyle="{StaticResource GridCellStyle}">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Device"           Width="2*"  Binding="{Binding Name}"/>
-                            <DataGridTextColumn Header="Resource ID"      Width="100" Binding="{Binding ResourceId}"/>
-                            <DataGridTextColumn Header="Client"           Width="60"  Binding="{Binding Client}"/>
-                            <DataGridTextColumn Header="Active"           Width="60"  Binding="{Binding Active}"/>
-                            <DataGridTextColumn Header="Client Version"   Width="120" Binding="{Binding ClientVersion}"/>
-                            <DataGridTextColumn Header="Operating System" Width="3*"  Binding="{Binding OperatingSystem}"/>
-                            <DataGridTextColumn Header="Last Logon User"  Width="2*"  Binding="{Binding LastLogonUser}"/>
-                            <DataGridTextColumn Header="Last Active (UTC)" Width="150" Binding="{Binding LastActive}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Device" Width="Auto" MinWidth="70" MaxWidth="200" Binding="{Binding Name}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Resource ID" Width="Auto" MaxWidth="200" Binding="{Binding ResourceId}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Client" Width="Auto" MaxWidth="200" Binding="{Binding Client}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Active" Width="Auto" MaxWidth="200" Binding="{Binding Active}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Client Version" Width="Auto" MaxWidth="200" Binding="{Binding ClientVersion}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Operating System" Width="Auto" MinWidth="100" MaxWidth="420" Binding="{Binding OperatingSystem}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Last Logon User" Width="Auto" MinWidth="80" MaxWidth="200" Binding="{Binding LastLogonUser}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Last Active (UTC)" Width="Auto" MaxWidth="200" Binding="{Binding LastActive}"/>
+                            <DataGridTemplateColumn Header="" Width="*" MinWidth="0" CanUserResize="False" CanUserSort="False" IsReadOnly="True"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -459,9 +472,9 @@
                               ColumnHeaderStyle="{StaticResource GridHeaderStyle}"
                               CellStyle="{StaticResource GridCellStyle}">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Group" Width="2*" Binding="{Binding Group}"/>
-                            <DataGridTextColumn Header="Property" Width="2*" Binding="{Binding Name}"/>
-                            <DataGridTextColumn Header="Value" Width="4*" Binding="{Binding Value}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Group" Width="Auto" MinWidth="100" MaxWidth="260" Binding="{Binding Group}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Property" Width="Auto" MinWidth="120" MaxWidth="320" Binding="{Binding Name}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Value" Width="*" MinWidth="160" Binding="{Binding Value}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -500,12 +513,13 @@
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Application"  Width="4*" Binding="{Binding Name}"/>
-                            <DataGridTextColumn Header="Version"      Width="2*" Binding="{Binding Version}"/>
-                            <DataGridTextColumn Header="Publisher"    Width="3*" Binding="{Binding Publisher}"/>
-                            <DataGridTextColumn Header="Install Date" Width="110" Binding="{Binding InstallDate}"/>
-                            <DataGridTextColumn Header="Type"         Width="70" Binding="{Binding Type}"/>
-                            <DataGridTextColumn Header="View"         Width="80" Binding="{Binding View}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Application" Width="Auto" MinWidth="140" MaxWidth="520" Binding="{Binding Name}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Version" Width="Auto" MinWidth="60" MaxWidth="120" Binding="{Binding Version}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Publisher" Width="Auto" MinWidth="80" MaxWidth="240" Binding="{Binding Publisher}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Install Date" Width="Auto" MaxWidth="200" Binding="{Binding InstallDate}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Type" Width="Auto" MaxWidth="200" Binding="{Binding Type}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="View" Width="Auto" MaxWidth="200" Binding="{Binding View}"/>
+                            <DataGridTemplateColumn Header="" Width="*" MinWidth="0" CanUserResize="False" CanUserSort="False" IsReadOnly="True"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -525,12 +539,12 @@
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Source"   Width="80"  Binding="{Binding Source}"/>
-                            <DataGridTextColumn Header="Article"  Width="90"  Binding="{Binding Article}"/>
-                            <DataGridTextColumn Header="Severity" Width="90"  Binding="{Binding Severity}"/>
-                            <DataGridTextColumn Header="State"    Width="170" Binding="{Binding State}"/>
-                            <DataGridTextColumn Header="Deadline (UTC)" Width="170" Binding="{Binding Deadline}"/>
-                            <DataGridTextColumn Header="Title"    Width="5*"  Binding="{Binding Title}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Source" Width="Auto" MaxWidth="200" Binding="{Binding Source}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Article" Width="Auto" MaxWidth="200" Binding="{Binding Article}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Severity" Width="Auto" MaxWidth="200" Binding="{Binding Severity}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="State" Width="Auto" MinWidth="70" MaxWidth="170" Binding="{Binding State}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Deadline (UTC)" Width="Auto" MaxWidth="200" Binding="{Binding Deadline}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Title" Width="*" MinWidth="140" Binding="{Binding Title}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
@@ -561,9 +575,10 @@
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Collection ID" Width="140" Binding="{Binding CollectionId}"/>
-                            <DataGridTextColumn Header="Collection"    Width="4*"  Binding="{Binding Name}"/>
-                            <DataGridTextColumn Header="Membership"    Width="170" Binding="{Binding Membership}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Collection ID" Width="Auto" MinWidth="90" MaxWidth="140" Binding="{Binding CollectionId}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Collection" Width="Auto" MinWidth="140" MaxWidth="600" Binding="{Binding Name}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Membership" Width="Auto" MinWidth="90" MaxWidth="170" Binding="{Binding Membership}"/>
+                            <DataGridTemplateColumn Header="" Width="*" MinWidth="0" CanUserResize="False" CanUserSort="False" IsReadOnly="True"/>
                         </DataGrid.Columns>
                     </DataGrid>
                     <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
@@ -574,11 +589,12 @@
                               ColumnHeaderStyle="{StaticResource GridHeaderStyle}"
                               CellStyle="{StaticResource GridCellStyle}">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Deployment" Width="4*"  Binding="{Binding Name}"/>
-                            <DataGridTextColumn Header="Type"       Width="150" Binding="{Binding Type}"/>
-                            <DataGridTextColumn Header="Intent"     Width="110" Binding="{Binding Intent}"/>
-                            <DataGridTextColumn Header="Collection" Width="3*"  Binding="{Binding Collection}"/>
-                            <DataGridTextColumn Header="Deadline (UTC)" Width="170" Binding="{Binding Deadline}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Deployment" Width="Auto" MinWidth="140" MaxWidth="520" Binding="{Binding Name}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Type" Width="Auto" MinWidth="70" MaxWidth="150" Binding="{Binding Type}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Intent" Width="Auto" MaxWidth="200" Binding="{Binding Intent}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Collection" Width="Auto" MinWidth="120" MaxWidth="360" Binding="{Binding Collection}"/>
+                            <DataGridTextColumn ElementStyle="{StaticResource GridCellTextStyle}" Header="Deadline (UTC)" Width="Auto" MaxWidth="200" Binding="{Binding Deadline}"/>
+                            <DataGridTemplateColumn Header="" Width="*" MinWidth="0" CanUserResize="False" CanUserSort="False" IsReadOnly="True"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>

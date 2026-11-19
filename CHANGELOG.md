@@ -8,6 +8,8 @@ All notable changes to Device Inspector are documented in this file.
 
 - Use ConfigMgr terms in the window text and the guide. The Device panel shows the **Discovery data and hardware inventory** group and a **Property** column. The Inspect bar and **Options** name the SMS Provider.
 - Rename the first action button to **Machine Policy Cycle...**, after the Machine Policy Retrieval & Evaluation Cycle client action. The action dialogs and the guide use the same names.
+- Size the grid columns to their text, up to a maximum width, so a short value no longer sits in a very wide column. Text that does not fit ends with an ellipsis, and the tooltip shows the whole text.
+- Describe the module with the ConfigMgr terms discovery data, hardware inventory and client health.
 - Retake the guide images that show the changed text.
 
 ### Fixed
