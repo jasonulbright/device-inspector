@@ -51,10 +51,10 @@ Describe 'Compact density at 1080p' {
         }
     }
 
-    It 'gives every data grid a star column, so the columns use the width' {
+    It 'gives every data grid one star column, so the columns use the width and no other column grows to fill it' {
         foreach ($g in @($script:Xaml.SelectNodes('//w:DataGrid', $script:Ns))) {
-            $star = @($g.SelectNodes('.//w:DataGridTextColumn[contains(@Width, "*")]', $script:Ns))
-            $star.Count | Should -BeGreaterThan 0 -Because $g.GetAttribute('Name', 'http://schemas.microsoft.com/winfx/2006/xaml')
+            $star = @($g.SelectNodes('.//w:DataGridTextColumn[contains(@Width, "*")] | .//w:DataGridTemplateColumn[contains(@Width, "*")]', $script:Ns))
+            $star.Count | Should -Be 1 -Because $g.GetAttribute('Name', 'http://schemas.microsoft.com/winfx/2006/xaml')
         }
     }
 }
