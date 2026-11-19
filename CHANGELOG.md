@@ -6,6 +6,7 @@ All notable changes to Device Inspector are documented in this file.
 
 ### Fixed
 
+- The module description names the Configuration Manager client of the device.
 - Inspecting a device and opening the collection browser no longer read every collection of the site one by one. Two queries replace the per-collection calls, which took minutes at 2,000 collections.
 
 ### Changed
