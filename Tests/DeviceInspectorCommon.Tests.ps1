@@ -163,6 +163,10 @@ Describe 'Get-SiteFact' {
                         [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true }
                         [pscustomobject]@{ CollectionID = "bad'id" }
                     }
+                    '*FROM SMS_Collection WHERE CollectionID IN*' {
+                        [pscustomobject]@{ CollectionID = 'SMS00001'; Name = 'All Systems' }
+                        [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot' }
+                    }
                     '*FROM SMS_DeploymentSummary*' {
                     [pscustomobject]@{ DeploymentID = 'D1'; CollectionID = 'XYZ0001F'; CollectionName = 'Pilot'; SoftwareName = 'Example App'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = [datetime]::SpecifyKind([datetime]'2026-12-04T17:00:00', 'Unspecified') }
                     [pscustomobject]@{ DeploymentID = 'D2'; CollectionID = 'OTHER001'; CollectionName = 'Other'; SoftwareName = 'Deployment to another collection'; FeatureType = 1; DeploymentIntent = 2; EnforcementDeadline = $null }
@@ -180,11 +184,6 @@ Describe 'Get-SiteFact' {
                         [pscustomobject]@{ LastHardwareScan = [datetime]'2026-11-10T19:22:32' }
                     }
                 }
-            }
-            Mock Get-CMDeviceCollection {
-                [pscustomobject]@{ CollectionID = 'SMS00001'; Name = 'All Systems' }
-                [pscustomobject]@{ CollectionID = 'XYZ0001F'; Name = 'Pilot' }
-                [pscustomobject]@{ CollectionID = 'ZZZ00000'; Name = 'Not a collection of the device' }
             }
             Mock Get-CMDeployment { }
             Mock Get-CMSoftwareUpdate { }
@@ -362,11 +361,13 @@ Describe 'Get-SiteFact' {
         }
     }
 
-    It 'reads the collection names with one cmdlet call and the deployments and updates with a query that names the collections and the update IDs' {
+    It 'reads the collection names, the deployments and the updates with queries that name the collections and the update IDs, and never lists every collection of the site' {
         InModuleScope DeviceInspectorCommon {
+            Mock Get-CMDeviceCollection { throw 'the per-collection cmdlet must not be used' }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
-            Should -Invoke Get-CMDeviceCollection -Times 1 -Exactly
+            Should -Invoke Get-CMDeviceCollection -Times 0 -Exactly
+            Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_Collection WHERE CollectionID IN (''SMS00001'', ''XYZ0001F'')' }
             Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_DeploymentSummary WHERE CollectionID IN (''SMS00001'', ''XYZ0001F'')' }
             Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_SoftwareUpdate WHERE CI_ID IN (101, 102)' }
             Should -Invoke Get-CMDeployment -Times 0 -Exactly
@@ -408,15 +409,15 @@ Describe 'Get-SiteFact' {
     It 'uses a query for the reads that have no cmdlet and for the two reads that the site filters (deployments and required updates)' {        InModuleScope DeviceInspectorCommon {
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
-            Should -Invoke Invoke-SiteQuery -Times 7 -Exactly
+            Should -Invoke Invoke-SiteQuery -Times 8 -Exactly
             Should -Invoke Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -like '*FROM SMS_G_System_WORKSTATION_STATUS *' }
-            Should -Invoke Invoke-SiteQuery -Times 0 -Exactly -ParameterFilter { $Query -like '*SMS_R_System*' -or $Query -like '*FROM SMS_Collection *' }
+            Should -Invoke Invoke-SiteQuery -Times 0 -Exactly -ParameterFilter { $Query -like '*SMS_R_System*' }
         }
     }
 
     It 'reports collection names that cannot be read as a problem and still lists the IDs' {
         InModuleScope DeviceInspectorCommon {
-            Mock Get-CMDeviceCollection { throw 'name lookup failed' }
+            Mock Invoke-SiteQuery { switch -Wildcard ($Query) { '*FROM SMS_Collection WHERE*' { throw 'name lookup failed' } '*SMS_FullCollectionMembership*' { [pscustomobject]@{ CollectionID = 'SMS00001'; IsDirect = $false }; [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } } } }
             $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
             $objSite = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem
             @($objSite.Collections).Count | Should -Be 2
@@ -1112,8 +1113,7 @@ Describe 'Exception text and the Problems list' {
         It 'keeps the text of a failed collection name read and deployment read out of Problems' {
             InModuleScope DeviceInspectorCommon {
                 Mock Invoke-SiteQuery { if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } } }
-                Mock Get-CMDeviceCollection { throw 'secret-boom-1' }
-                Mock Invoke-SiteQuery { if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } }; if ($Query -like '*FROM SMS_DeploymentSummary*') { throw 'secret-boom-1' } }
+                Mock Invoke-SiteQuery { if ($Query -like '*SMS_FullCollectionMembership*') { [pscustomobject]@{ CollectionID = 'XYZ0001F'; IsDirect = $true } }; if ($Query -like '*FROM SMS_Collection WHERE*' -or $Query -like '*FROM SMS_DeploymentSummary*') { throw 'secret-boom-1' } }
                 $listProblem = New-Object -TypeName 'System.Collections.Generic.List[string]'
                 $listDetail = New-Object -TypeName 'System.Collections.Generic.List[string]'
                 $null = Get-SiteFact -ComputerName 'WS01' -Problems $listProblem -ProblemDetail $listDetail

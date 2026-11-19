@@ -1549,6 +1549,7 @@ Describe 'Add to collection' {
     }
 
     It 'lists the device collections for the browser and closes the site drive' {
+        Mock -ModuleName DeviceInspectorCommon Invoke-SiteQuery { [pscustomobject]@{ CollectionID = 'XYZ00030'; Name = 'Pilot 2'; MemberCount = 3; LimitToCollectionID = 'SMS00001' } }
         $arrList = @(Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ')
         $arrList.Count | Should -Be 1
         $arrList[0].CollectionID | Should -Be 'XYZ00030'
@@ -1556,14 +1557,22 @@ Describe 'Add to collection' {
         $arrList[0].FolderID | Should -Be 0
         $arrList[0].LimitToCollectionID | Should -Be 'SMS00001'
         Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 1 -Exactly
-        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { throw 'provider error' }
+        Mock -ModuleName DeviceInspectorCommon Invoke-SiteQuery { throw 'provider error' }
         { Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ' } | Should -Throw '*provider error*'
         Should -Invoke -ModuleName DeviceInspectorCommon Disconnect-InspectorSite -Times 2 -Exactly
     }
 
     It 'marks built-in collections in the list' {
-        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { [pscustomobject]@{ CollectionID = 'SMS00001'; Name = 'All Systems'; MemberCount = 5; LimitToCollectionID = '' } }
+        Mock -ModuleName DeviceInspectorCommon Invoke-SiteQuery { [pscustomobject]@{ CollectionID = 'SMS00001'; Name = 'All Systems'; MemberCount = 5; LimitToCollectionID = '' } }
         @(Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ')[0].IsBuiltIn | Should -BeTrue
+    }
+
+    It 'lists <Count> collections with one SELECT and no per-collection cmdlet' -ForEach @(@{ Count = 2000 }, @{ Count = 20000 }) {
+        Mock -ModuleName DeviceInspectorCommon Invoke-SiteQuery -MockWith ([scriptblock]::Create(('1..{0} | ForEach-Object {{ [pscustomobject]@{{ CollectionID = ("XYZ{{0:D5}}" -f $_); Name = ("C{{0}}" -f $_); MemberCount = $_; LimitToCollectionID = "SMS00001" }} }}' -f $Count)))
+        Mock -ModuleName DeviceInspectorCommon Get-CMDeviceCollection { throw 'the per-collection cmdlet must not be used' }
+        @(Get-DeviceInspectorCollectionList -SiteServer 'sms01' -SiteCode 'XYZ').Count | Should -Be $Count
+        Should -Invoke -ModuleName DeviceInspectorCommon Invoke-SiteQuery -Times 1 -Exactly -ParameterFilter { $Query -match '^SELECT CollectionID, Name, MemberCount, LimitToCollectionID FROM SMS_Collection WHERE CollectionType = 2$' }
+        Should -Invoke -ModuleName DeviceInspectorCommon Get-CMDeviceCollection -Times 0 -Exactly
     }
 
     It 'has a button and a menu entry that open the browser through the site gate' {
