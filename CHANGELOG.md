@@ -4,23 +4,22 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
-### Fixed
+## [2026.11.20.0019] - 2026-11-20
 
-- The module description names the Configuration Manager client of the device.
-- Inspecting a device and opening the collection browser no longer read every collection of the site one by one. Two queries replace the per-collection calls, which took minutes at 2,000 collections.
+## 8 changes: two-query collection reads, ConfigMgr wording, grid columns sized to text
 
 ### Changed
 
-- The tooltips of the hardware inventory buttons write hardware inventory cycle in lower case, as Learn does.
-- Use ConfigMgr terms in the window text and the guide. The Device panel shows the **Discovery data and hardware inventory** group and a **Property** column. The Inspect bar and **Options** name the SMS Provider.
-- Rename the first action button to **Machine Policy Cycle...**, after the Machine Policy Retrieval & Evaluation Cycle client action. The action dialogs and the guide use the same names.
-- Size the grid columns to their text, up to a maximum width, so a short value no longer sits in a very wide column. Text that does not fit ends with an ellipsis, and the tooltip shows the whole text.
-- Describe the module with the ConfigMgr terms discovery data, hardware inventory and client health.
+- Write hardware inventory cycle in lower case in the button tooltips.
+- Use ConfigMgr terms in the window text, the guide and the module description.
+- Rename the first action button to Machine Policy Cycle... in the dialogs and the guide.
+- Size grid columns to their text; long text shows an ellipsis and a tooltip.
 - Retake the guide images that show the changed text.
 
 ### Fixed
 
-- Add a guard test that fails when a tool script stops a process by a command-line pattern or by name. The capture tool already stops only its own processes, by process id.
+- Inspect a device and open the collection browser with two queries, not one call per collection.
+- Add a guard test against stopping processes by command-line pattern or name.
 
 ## [2026.11.18.0018] - 2026-11-18
 
