@@ -810,8 +810,8 @@ function Show-OptionsDialog {
         </Grid.RowDefinitions>
         <Border Grid.Column="0" Grid.Row="0" Padding="6,12,0,12">
             <StackPanel>
-                <Button x:Name="btnCatConnection" Content="Connection" Style="{StaticResource CategoryRowStyle}"/>
-                <Button x:Name="btnCatAbout"      Content="About"      Style="{StaticResource CategoryRowStyle}"/>
+                <Button x:Name="btnCatConnection" Content="Connection" Style="{StaticResource CategoryRowStyle}" ToolTip="Show the SMS Provider and the site code settings."/>
+                <Button x:Name="btnCatAbout"      Content="About"      Style="{StaticResource CategoryRowStyle}" ToolTip="Show the version, the author and the license of Device Inspector."/>
             </StackPanel>
         </Border>
         <Border Grid.Column="1" Grid.Row="0" Background="{DynamicResource MahApps.Brushes.Gray8}"/>
@@ -820,10 +820,10 @@ function Show-OptionsDialog {
                 <TextBlock Text="Configuration Manager Connection" Style="{StaticResource OptLabel}" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
                 <TextBlock Text="SMS Provider (FQDN)" Style="{StaticResource OptLabel}" FontSize="14" FontWeight="Bold" Margin="0,4,0,2"/>
                 <TextBox x:Name="txtSmsProvider" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="For example sms01.example.com"/>
+                         Controls:TextBoxHelper.Watermark="For example sms01.example.com" ToolTip="Enter the fully qualified domain name of the SMS Provider computer."/>
                 <TextBlock Text="Site Code" Style="{StaticResource OptLabel}" FontSize="14" FontWeight="Bold" Margin="0,12,0,2"/>
                 <TextBox x:Name="txtSiteCode" FontSize="12" Padding="6,4,6,4"
-                         Controls:TextBoxHelper.Watermark="For example XYZ. Required." Width="240" HorizontalAlignment="Left"/>
+                         Controls:TextBoxHelper.Watermark="For example XYZ. Required." Width="240" HorizontalAlignment="Left" ToolTip="Enter the three-character site code of the site. The tool needs it to connect."/>
                 <TextBlock Text="The tool connects with the Windows account that runs it and stores no password. The tool needs the Configuration Manager console on this computer. The account needs local administrator rights on the device (WinRM). For the site, a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role. An account with fewer rights on the site is not tested. Only actions make changes."
                            FontSize="11" TextWrapping="Wrap" Margin="0,16,0,0"
                            Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
@@ -1038,8 +1038,8 @@ function Show-ActionConfirmDialog {
                    Foreground="{DynamicResource MahApps.Brushes.Gray1}"
                    Text="Dry run reads the current state and lists the steps. It changes nothing. Run and Dry run both go to the action log."/>
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="btnActionRun"    Content="Run"     Style="{StaticResource DialogAccentButton}"/>
-            <Button x:Name="btnActionDryRun" Content="Dry Run" Style="{StaticResource DialogButton}"/>
+            <Button x:Name="btnActionRun"    Content="Run"     Style="{StaticResource DialogAccentButton}" ToolTip="Run the action now. The result goes to the action log."/>
+            <Button x:Name="btnActionDryRun" Content="Dry Run" Style="{StaticResource DialogButton}" ToolTip="Read the current state and list the steps. Nothing changes."/>
             <Button x:Name="btnActionCancel" Content="Cancel"  Style="{StaticResource DialogButton}" IsCancel="True" IsDefault="True"/>
         </StackPanel>
     </Grid>
@@ -1376,8 +1376,8 @@ function Show-CloseWarningDialog {
         <TextBlock x:Name="txtIcon" Grid.Row="0" Grid.Column="0" FontSize="20" VerticalAlignment="Top" Margin="0,0,14,0"/>
         <TextBox x:Name="txtMsg" Grid.Row="0" Grid.Column="1" FontSize="13" TextWrapping="Wrap" IsReadOnly="True" BorderThickness="0" Background="Transparent" VerticalAlignment="Center"/>
         <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-            <Button x:Name="btnWait" Content="Wait" IsDefault="True" IsCancel="True" Style="{StaticResource DialogAccentButton}"/>
-            <Button x:Name="btnCloseAnyway" Content="Close Anyway" Style="{StaticResource DialogButton}"/>
+            <Button x:Name="btnWait" Content="Wait" IsDefault="True" IsCancel="True" Style="{StaticResource DialogAccentButton}" ToolTip="Keep the tool open until the running actions end."/>
+            <Button x:Name="btnCloseAnyway" Content="Close Anyway" Style="{StaticResource DialogButton}" ToolTip="Close the tool now. A running action can stop before it is complete."/>
         </StackPanel>
     </Grid>
 </Controls:MetroWindow>

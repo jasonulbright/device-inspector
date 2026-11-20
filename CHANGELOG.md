@@ -17,6 +17,7 @@ All notable changes to Device Inspector are documented in this file.
 - Size the grid columns to their text, up to a maximum width, so a short value no longer sits in a very wide column. Text that does not fit ends with an ellipsis, and the tooltip shows the whole text.
 - Describe the module with the ConfigMgr terms discovery data, hardware inventory and client health.
 - Retake the guide images that show the changed text.
+- Add tooltips to 13 controls that had none: the Device, device list, collection ID and application filter boxes, the Cancel button of the progress overlay, the **Options** categories and boxes, and the buttons of the action and close dialogs.
 
 ### Fixed
 

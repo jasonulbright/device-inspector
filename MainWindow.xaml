@@ -364,7 +364,7 @@
                             ToolTip="Get the data of the device and the site. Nothing changes."/>
                     <TextBlock Grid.Row="0" Grid.Column="1" Text="Device" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBox x:Name="txtDevice" Height="26" Grid.Row="0" Grid.Column="2" MinWidth="140" FontSize="12" Padding="6,4,6,4" Margin="0,0,12,0"
-                             Controls:TextBoxHelper.Watermark="For example WS01"/>
+                             Controls:TextBoxHelper.Watermark="For example WS01" ToolTip="Enter the name of the device to inspect. Press Enter to start the inspection."/>
                     <TextBlock Grid.Row="0" Grid.Column="3" Text="SMS Provider" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBox x:Name="txtSiteServer" Height="26" Grid.Row="0" Grid.Column="4" MinWidth="200" FontSize="12" Padding="6,4,6,4" IsReadOnly="True"
                              Controls:TextBoxHelper.Watermark="Set in Options"
@@ -420,9 +420,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="txtListName" Height="26" Grid.Column="0" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
-                                 Controls:TextBoxHelper.Watermark="Name or wildcard, for example WS*"/>
+                                 Controls:TextBoxHelper.Watermark="Name or wildcard, for example WS*" ToolTip="Enter a device name, or a pattern with * and ? to match several devices."/>
                         <TextBox x:Name="txtListCollection" Height="26" Grid.Column="1" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
-                                 Controls:TextBoxHelper.Watermark="Collection ID (optional)"/>
+                                 Controls:TextBoxHelper.Watermark="Collection ID (optional)" ToolTip="Enter a collection ID of eight letters and digits to list only the devices of that collection."/>
                         <Button x:Name="btnListSearch" Grid.Column="2" Content="Search"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 ToolTip="Get the matching devices from the site. Nothing changes."/>
@@ -498,7 +498,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="txtAppFilter" Height="26" Grid.Column="0" FontSize="12" Padding="6,4,6,4" Margin="0,0,8,0"
-                                 Controls:TextBoxHelper.Watermark="Filter by application name..."/>
+                                 Controls:TextBoxHelper.Watermark="Filter by application name..." ToolTip="Show only the applications whose name contains the text."/>
                         <ComboBox x:Name="cboAppType" Grid.Column="1" Width="180" FontSize="12"
                                   ItemContainerStyle="{StaticResource ThemedComboBoxItemStyle}"
                                   ToolTip="Limit the rows by installer type.">
@@ -631,7 +631,7 @@
                                    HorizontalAlignment="Center"
                                    Margin="0,6,0,0"
                                    Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
-                        <Button x:Name="btnCancelWork" Content="Cancel" Style="{StaticResource SquareInlineButtonStyle}" Margin="0,14,0,0" HorizontalAlignment="Center"/>
+                        <Button x:Name="btnCancelWork" Content="Cancel" Style="{StaticResource SquareInlineButtonStyle}" Margin="0,14,0,0" HorizontalAlignment="Center" ToolTip="Stop the work that runs now. Nothing changes."/>
                     </StackPanel>
                 </Border>
             </Grid>
