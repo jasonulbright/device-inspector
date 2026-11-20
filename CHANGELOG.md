@@ -6,7 +6,7 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [2026.11.20.0019] - 2026-11-20
 
-## 8 changes: two-query collection reads, ConfigMgr wording, grid columns sized to text
+## 9 changes: two-query collection reads, ConfigMgr wording, tooltips, grid columns sized to text
 
 ### Changed
 
@@ -15,6 +15,7 @@ All notable changes to Device Inspector are documented in this file.
 - Rename the first action button to Machine Policy Cycle... in the dialogs and the guide.
 - Size grid columns to their text; long text shows an ellipsis and a tooltip.
 - Retake the guide images that show the changed text.
+- Add tooltips to buttons and fields.
 
 ### Fixed
 
