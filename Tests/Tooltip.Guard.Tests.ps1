@@ -4,7 +4,7 @@
 #
 # Rules:
 #   1. Each x:Name of the audit list exists once in the XAML of the app, and the control has a ToolTip attribute.
-#   2. The tooltip is not empty, holds ASCII only, ends with a period and has at most 200 characters.
+#   2. The tooltip is not empty, holds ASCII only, ends with a period and has at most 160 characters.
 #
 # A control that gets its tooltip from code (a context menu item, or a button that shows the reason it is off) is not in the list.
 
@@ -12,7 +12,7 @@ BeforeAll {
     $script:TtRepoRoot = Split-Path -Parent $PSScriptRoot
     $script:TtNamespace = 'http://schemas.microsoft.com/winfx/2006/xaml/presentation'
     $script:TtKeyNamespace = 'http://schemas.microsoft.com/winfx/2006/xaml'
-    $script:TtMaxLength = 200
+    $script:TtMaxLength = 160
 
     # The controls of the audit (Q-103): x:Name values of controls that had no tooltip.
     $script:TtAudited = @(
@@ -99,7 +99,7 @@ Describe 'Tooltip guard' {
         @(Get-TtTextProblem -Name 'a' -Tip '').Count | Should -Be 1
         @(Get-TtTextProblem -Name 'a' -Tip ('Caf' + [char]0xE9 + '.')).Count | Should -Be 1
         @(Get-TtTextProblem -Name 'a' -Tip 'No period').Count | Should -Be 1
-        @(Get-TtTextProblem -Name 'a' -Tip (('x' * 201) + '.')).Count | Should -Be 1
+        @(Get-TtTextProblem -Name 'a' -Tip (('x' * 161) + '.')).Count | Should -Be 1
         @(Get-TtTextProblem -Name 'a' -Tip 'Good tip.').Count | Should -Be 0
     }
 }

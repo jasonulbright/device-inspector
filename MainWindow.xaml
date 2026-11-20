@@ -631,7 +631,7 @@
                                    HorizontalAlignment="Center"
                                    Margin="0,6,0,0"
                                    Foreground="{DynamicResource MahApps.Brushes.Gray1}"/>
-                        <Button x:Name="btnCancelWork" Content="Cancel" Style="{StaticResource SquareInlineButtonStyle}" Margin="0,14,0,0" HorizontalAlignment="Center" ToolTip="Stop the work that runs now. Nothing changes."/>
+                        <Button x:Name="btnCancelWork" Content="Cancel" Style="{StaticResource SquareInlineButtonStyle}" Margin="0,14,0,0" HorizontalAlignment="Center" ToolTip="Stop the work that runs now."/>
                     </StackPanel>
                 </Border>
             </Grid>
