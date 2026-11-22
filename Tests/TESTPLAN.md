@@ -27,6 +27,7 @@ Window tests: `Window.Tests.ps1` and the other `*.Window.Tests.ps1` files open w
 | Encoding | `Encoding.Guard.Tests.ps1` | Plain ASCII in every PowerShell file and every file that PowerShell reads |
 | Documents and images | `Documentation.Tests.ps1`, `Readme.Images.Guard.Tests.ps1`, `GuideImages.Guard.Tests.ps1` | Index and links, every README image is current, every guide image was produced by a capture run |
 | Start script | `Shell.Logic.Tests.ps1`, `Script.Contract.Tests.ps1`, `Startup.Tests.ps1` | The pure functions of `start-deviceinspector.ps1` cut from its syntax tree (action gate, view switch, status line, filters, preferences, Title Case), every named parameter of a call into the module or SuiteCommon, and the start without the Configuration Manager console |
+| View data | `DeviceInspectorWindow.Tests.ps1` (Show-Inspection) | The rows that reach the controls, counted on real WPF controls that are not shown: an inspection in `Show-Inspection` (facts, applications, updates, collections and deployments grids, summary line, problems text) and the application filter |
 | Capture tool | `GuideCapture.Tests.ps1` | The capture scripts parse, carry no secret and take the lab lock |
 
 ## Not covered, and why

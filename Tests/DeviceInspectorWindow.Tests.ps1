@@ -1,5 +1,6 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
 [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingComputerNameHardcoded', '', Justification = 'Test inputs are fake computer names.')]
+[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '', Justification = 'The cut-out shell functions read these stand-in controls through scope.')]
 param ()
 
 BeforeAll {
@@ -336,5 +337,154 @@ Describe 'Window files' {
         (Get-Content -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'Invoke-DeviceInspector.ps1') -Raw) | Should -Match ('(?m)^#\s*Version:\s*{0}\s*$' -f [regex]::Escape($strManifestVersion))
         $strTopHeading = (Select-String -LiteralPath (Join-Path -Path $script:strRepositoryRoot -ChildPath 'CHANGELOG.md') -Pattern '^## \[([^\]]+)\]' | Where-Object { $_.Matches[0].Groups[1].Value -ne 'Unreleased' } | Select-Object -First 1).Matches[0].Groups[1].Value
         $strTopHeading | Should -Be $strManifestVersion
+    }
+}
+
+Describe 'Show-Inspection puts the inspection on the screen' {
+    # Show-Inspection of the start script runs with real WPF controls that are not shown. The test reads the
+    # rows that each grid holds and the text that the user sees. The script cannot be dot-sourced (it opens
+    # the window), so each function is cut out of its syntax tree and defined here.
+    BeforeAll {
+        Add-Type -AssemblyName PresentationFramework
+        # WPF controls need an STA thread. Windows PowerShell and PowerShell 7 start in STA; a harness that starts MTA must add -STA.
+        if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') { throw 'These tests create WPF controls and need an STA thread. Start the host with -STA.' }
+        # A column binds to a property by name. A renamed or missing property leaves the column blank, with no error.
+        # The check reads the column bindings of the grid from MainWindow.xaml and looks for each name on the first row.
+        [xml]$script:MainXaml = Get-Content -LiteralPath (Join-Path $script:strRepositoryRoot 'MainWindow.xaml') -Raw
+        $script:MainXamlNs = New-Object System.Xml.XmlNamespaceManager($script:MainXaml.NameTable)
+        $script:MainXamlNs.AddNamespace('w', 'http://schemas.microsoft.com/winfx/2006/xaml/presentation')
+        $script:MainXamlNs.AddNamespace('x', 'http://schemas.microsoft.com/winfx/2006/xaml')
+        function Assert-GridBinding {
+            param($Grid, [string]$GridName)
+            $node = $script:MainXaml.SelectSingleNode(('//w:DataGrid[@x:Name=''{0}'']' -f $GridName), $script:MainXamlNs)
+            if (-not $node) { throw "grid $GridName not found in MainWindow.xaml" }
+            $columns = $node.SelectSingleNode('*[contains(local-name(), ''Columns'')]')
+            $text = if ($columns) { $columns.OuterXml } else { '' }
+            # One {Binding ...} body at a time (one level of nested braces). A binding to the item of another element is not a row property.
+            $paths = @($(foreach ($m in [regex]::Matches($text, '\{Binding((?:[^{}]|\{[^{}]*\})*)\}')) {
+                    $body = $m.Groups[1].Value
+                    if ($body -match 'RelativeSource|ElementName|Source=') { continue }
+                    if ($body -match '^\s*(?:Path=)?([A-Za-z_][A-Za-z0-9_]*)\s*(?:[,}]|$)') { $Matches[1] }
+                    elseif ($body -match 'Path=([A-Za-z_][A-Za-z0-9_]*)') { $Matches[1] }
+                }) | Sort-Object -Unique)
+            $paths.Count | Should -BeGreaterThan 0 -Because "the grid $GridName has bound columns"
+            $Grid.Items.Count | Should -BeGreaterThan 0 -Because "the grid $GridName needs a row to check"
+            # WPF binds by exact name, so the match is case-sensitive.
+            $names = @($Grid.Items[0].PSObject.Properties.Name)
+            foreach ($path in $paths) { ($names -ccontains $path) | Should -BeTrue -Because "a column of $GridName binds to $path" }
+        }
+
+        $objShowAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path -Path $script:strRepositoryRoot -ChildPath 'start-deviceinspector.ps1'), [ref]$null, [ref]$null)
+        foreach ($strName in 'Show-Inspection', 'Update-AppFilter', 'Get-AppTypeFilter') {
+            $objDef = $objShowAst.Find({ param($objNode) $objNode -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $objNode.Name -eq $strName }, $true)
+            if (-not $objDef) { throw "function $strName not found in the script" }
+            . ([scriptblock]::Create($objDef.Extent.Text))
+        }
+        function Update-ControlState { }
+        function Update-StatusBarSummary { }
+    }
+
+    BeforeEach {
+        $gridFacts = New-Object System.Windows.Controls.DataGrid
+        $gridApps = New-Object System.Windows.Controls.DataGrid
+        $gridUpdates = New-Object System.Windows.Controls.DataGrid
+        $gridCollections = New-Object System.Windows.Controls.DataGrid
+        $gridDeployments = New-Object System.Windows.Controls.DataGrid
+        $txtProblems = New-Object System.Windows.Controls.TextBox
+        $txtSummary = New-Object System.Windows.Controls.TextBlock
+        $txtAppFilter = New-Object System.Windows.Controls.TextBox
+        $cboAppType = New-Object System.Windows.Controls.ComboBox
+        $btnViewProblems = New-Object System.Windows.Controls.Button
+    }
+
+    It 'fills every panel grid with the rows of the inspection' {
+        $objInspection = New-WindowTestInspection
+        Show-Inspection -Inspection $objInspection
+        $gridFacts.Items.Count | Should -Be @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection).Count
+        $gridFacts.Items.Count | Should -BeGreaterThan 10
+        $gridApps.Items.Count | Should -Be 4
+        $gridUpdates.Items.Count | Should -Be 3
+        $gridCollections.Items.Count | Should -Be 1
+        $gridDeployments.Items.Count | Should -Be 1
+        $gridCollections.Items[0].Name | Should -Be 'All Systems'
+        @($gridApps.Items | ForEach-Object Name) | Should -Contain '7-zip'
+        Assert-GridBinding -Grid $gridFacts -GridName 'gridFacts'
+        Assert-GridBinding -Grid $gridApps -GridName 'gridApps'
+        Assert-GridBinding -Grid $gridUpdates -GridName 'gridUpdates'
+        Assert-GridBinding -Grid $gridCollections -GridName 'gridCollections'
+        Assert-GridBinding -Grid $gridDeployments -GridName 'gridDeployments'
+    }
+
+    It 'says what was found in the summary line, and lists the problems with the count on the button' {
+        Show-Inspection -Inspection (New-WindowTestInspection)
+        $txtSummary.Text | Should -Match 'Device WS01'
+        $txtSummary.Text | Should -Match '4 applications'
+        $txtSummary.Text | Should -Match '3 update rows'
+        $txtSummary.Text | Should -Match '1 problems'
+        $txtProblems.Text | Should -Be '- Device: example problem <b>'
+        $btnViewProblems.Content | Should -Be 'Problems (1)'
+    }
+
+    It 'shows no problem line when every part of the inspection ran' {
+        $objClean = New-WindowTestInspection
+        $objClean.Problems = @()
+        Show-Inspection -Inspection $objClean
+        $txtProblems.Text | Should -Be 'No problems. Every part of the inspection ran.'
+        $btnViewProblems.Content | Should -Be 'Problems'
+    }
+
+    It 'shows empty grids for a device that the site does not know and that has no update or application facts' {
+        $objBare = New-WindowTestInspection
+        # The site object of a device that the site does not know: Found is false and every other property is empty.
+        foreach ($objProperty in @($objBare.Site.PSObject.Properties)) { $objProperty.Value = $null }
+        $objBare.Site.Found = $false
+        $objBare.Site.Collections = @()
+        $objBare.Site.Deployments = @()
+        $objBare.Site.RequiredUpdates = @()
+        $objBare.Site.InstalledApplications = @()
+        $objBare.Device.InstalledApplications = @()
+        $objBare.Device.PendingUpdates = @()
+        Show-Inspection -Inspection $objBare
+        $gridApps.Items.Count | Should -Be 0
+        $gridUpdates.Items.Count | Should -Be 0
+        $gridCollections.Items.Count | Should -Be 0
+        $gridDeployments.Items.Count | Should -Be 0
+        $gridFacts.Items.Count | Should -BeGreaterThan 0
+        $txtSummary.Text | Should -Match 'the site does not know the device'
+    }
+
+    It 'shows the one application row of a device that has exactly one (a single object is not a list)' {
+        $objOne = New-WindowTestInspection
+        $objOne.Device.InstalledApplications = @($objOne.Device.InstalledApplications[0])
+        $objOne.Site.Collections = @($objOne.Site.Collections[0])
+        { Show-Inspection -Inspection $objOne } | Should -Not -Throw
+        $gridApps.Items.Count | Should -Be 1
+        $gridCollections.Items.Count | Should -Be 1
+    }
+
+    It 'narrows the application grid with the filter text and shows all rows again when the text is cleared' {
+        Show-Inspection -Inspection (New-WindowTestInspection)
+        $txtAppFilter.Text = 'zip'
+        Update-AppFilter
+        $gridApps.Items.Count | Should -Be 1
+        $gridApps.Items[0].Name | Should -Be '7-zip'
+        $txtAppFilter.Text = ''
+        Update-AppFilter
+        $gridApps.Items.Count | Should -Be 4
+    }
+
+    It 'narrows the application grid with the type filter' {
+        $objInspection = New-WindowTestInspection
+        Show-Inspection -Inspection $objInspection
+        $intMsi = @(ConvertTo-DeviceInspectionApplicationRow -Inspection $objInspection | Where-Object { $_.Type -eq 'MSI' }).Count
+        $intMsi | Should -BeGreaterThan 0
+        $intMsi | Should -BeLessThan 4
+        $objItem = New-Object System.Windows.Controls.ComboBoxItem
+        $objItem.Content = 'MSI'
+        [void]$cboAppType.Items.Add($objItem)
+        $cboAppType.SelectedItem = $objItem
+        Update-AppFilter
+        $gridApps.Items.Count | Should -Be $intMsi
+        @($gridApps.Items | Where-Object { $_.Type -ne 'MSI' }).Count | Should -Be 0
     }
 }
