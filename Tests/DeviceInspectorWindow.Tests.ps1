@@ -338,3 +338,101 @@ Describe 'Window files' {
         $strTopHeading | Should -Be $strManifestVersion
     }
 }
+
+Describe 'Show-Inspection puts the inspection on the screen' {
+    # Show-Inspection of the start script runs with real WPF controls that are not shown. The test reads the
+    # rows that each grid holds and the text that the user sees. The script cannot be dot-sourced (it opens
+    # the window), so each function is cut out of its syntax tree and defined here.
+    BeforeAll {
+        Add-Type -AssemblyName PresentationFramework
+        $objShowAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path -Path $script:strRepositoryRoot -ChildPath 'start-deviceinspector.ps1'), [ref]$null, [ref]$null)
+        foreach ($strName in 'Show-Inspection', 'Update-AppFilter', 'Get-AppTypeFilter') {
+            $objDef = $objShowAst.Find({ param($objNode) $objNode -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $objNode.Name -eq $strName }, $true)
+            if (-not $objDef) { throw "function $strName not found in the script" }
+            . ([scriptblock]::Create($objDef.Extent.Text))
+        }
+        function Update-ControlState { }
+        function Update-StatusBarSummary { }
+    }
+
+    BeforeEach {
+        $gridFacts = New-Object System.Windows.Controls.DataGrid
+        $gridApps = New-Object System.Windows.Controls.DataGrid
+        $gridUpdates = New-Object System.Windows.Controls.DataGrid
+        $gridCollections = New-Object System.Windows.Controls.DataGrid
+        $gridDeployments = New-Object System.Windows.Controls.DataGrid
+        $txtProblems = New-Object System.Windows.Controls.TextBox
+        $txtSummary = New-Object System.Windows.Controls.TextBlock
+        $txtAppFilter = New-Object System.Windows.Controls.TextBox
+        $cboAppType = New-Object System.Windows.Controls.ComboBox
+        $btnViewProblems = New-Object System.Windows.Controls.Button
+    }
+
+    It 'fills every panel grid with the rows of the inspection' {
+        $objInspection = New-WindowTestInspection
+        Show-Inspection -Inspection $objInspection
+        $gridFacts.Items.Count | Should -Be @(ConvertTo-DeviceInspectionFactRow -Inspection $objInspection).Count
+        $gridFacts.Items.Count | Should -BeGreaterThan 10
+        $gridApps.Items.Count | Should -Be 4
+        $gridUpdates.Items.Count | Should -Be 3
+        $gridCollections.Items.Count | Should -Be 1
+        $gridDeployments.Items.Count | Should -Be 1
+        $gridCollections.Items[0].Name | Should -Be 'All Systems'
+        @($gridApps.Items | ForEach-Object Name) | Should -Contain '7-zip'
+    }
+
+    It 'says what was found in the summary line, and lists the problems with the count on the button' {
+        Show-Inspection -Inspection (New-WindowTestInspection)
+        $txtSummary.Text | Should -Match 'Device WS01'
+        $txtSummary.Text | Should -Match '4 applications'
+        $txtSummary.Text | Should -Match '3 update rows'
+        $txtSummary.Text | Should -Match '1 problems'
+        $txtProblems.Text | Should -Be '- Device: example problem <b>'
+        $btnViewProblems.Content | Should -Be 'Problems (1)'
+    }
+
+    It 'shows no problem line when every part of the inspection ran' {
+        $objClean = New-WindowTestInspection
+        $objClean.Problems = @()
+        Show-Inspection -Inspection $objClean
+        $txtProblems.Text | Should -Be 'No problems. Every part of the inspection ran.'
+        $btnViewProblems.Content | Should -Be 'Problems'
+    }
+
+    It 'shows empty grids for a device that the site does not know and that has no update or application facts' {
+        $objBare = New-WindowTestInspection
+        $objBare.Site.Found = $false
+        $objBare.Site.Collections = @()
+        $objBare.Site.Deployments = @()
+        $objBare.Site.RequiredUpdates = @()
+        $objBare.Device.InstalledApplications = @()
+        $objBare.Device.PendingUpdates = @()
+        Show-Inspection -Inspection $objBare
+        $gridApps.Items.Count | Should -Be 0
+        $gridUpdates.Items.Count | Should -Be 0
+        $gridCollections.Items.Count | Should -Be 0
+        $gridDeployments.Items.Count | Should -Be 0
+        $gridFacts.Items.Count | Should -BeGreaterThan 0
+        $txtSummary.Text | Should -Match 'the site does not know the device'
+    }
+
+    It 'shows the one application row of a device that has exactly one (a single object is not a list)' {
+        $objOne = New-WindowTestInspection
+        $objOne.Device.InstalledApplications = @($objOne.Device.InstalledApplications[0])
+        $objOne.Site.Collections = @($objOne.Site.Collections[0])
+        { Show-Inspection -Inspection $objOne } | Should -Not -Throw
+        $gridApps.Items.Count | Should -Be 1
+        $gridCollections.Items.Count | Should -Be 1
+    }
+
+    It 'narrows the application grid with the filter text and shows all rows again when the text is cleared' {
+        Show-Inspection -Inspection (New-WindowTestInspection)
+        $txtAppFilter.Text = 'zip'
+        Update-AppFilter
+        $gridApps.Items.Count | Should -Be 1
+        $gridApps.Items[0].Name | Should -Be '7-zip'
+        $txtAppFilter.Text = ''
+        Update-AppFilter
+        $gridApps.Items.Count | Should -Be 4
+    }
+}
