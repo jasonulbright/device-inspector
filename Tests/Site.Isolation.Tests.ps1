@@ -1,4 +1,6 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.1.0' }
+[System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidGlobalVars', '', Justification = 'The extracted start script functions read the global preferences path and the global preferences.')]
+param()
 
 <#
 .SYNOPSIS
