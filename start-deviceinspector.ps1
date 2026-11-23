@@ -104,8 +104,7 @@ if (-not $script:Site.Active) {
 
 $script:ToolLogPath = Join-Path $__txDir ('DeviceInspector-{0}.log' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 Initialize-Logging -LogPath $script:ToolLogPath
-if ($script:Site.Active) { Write-Log ('Site {0}; data in {1}' -f $script:Site.SiteFolder, $script:Site.ToolFolder) }
-elseif ($script:Site.Reason) { Write-Log ('No site data folder: {0}' -f $script:Site.Reason) }
+# The site line and the reason for no site go to the window log when it loads (Add-LogLine); that also writes the tool log.
 
 $xamlPath = Join-Path $PSScriptRoot 'MainWindow.xaml'
 [xml]$xaml = Get-Content -LiteralPath $xamlPath -Raw
@@ -2012,6 +2011,7 @@ $window.Add_Loaded({
     Update-FooterSite
     $null = Start-SuiteSiteWatch -Window $window -Site $script:Site
     if ($script:Site.Active) { Add-LogLine ('Site {0}; data in {1}' -f $script:Site.SiteFolder, $script:Site.ToolFolder) }
+    elseif ($script:Site.Reason) { Add-LogLine ('No site data folder: {0}' -f $script:Site.Reason) }
     Update-ControlState
     Update-StatusBarSummary
     Add-LogLine 'Device Inspector ready. Enter a device name, then select Inspect. Set the SMS Provider in Options. The tool only reads until you turn on Enable Actions.'
