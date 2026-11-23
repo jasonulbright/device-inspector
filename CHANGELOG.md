@@ -4,6 +4,10 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Keep the action log, reports and site settings per site under the data folder.
+
 ## [2026.11.20.0019] - 2026-11-20
 
 ## 9 changes: two-query collection reads, ConfigMgr wording, tooltips, grid columns sized to text

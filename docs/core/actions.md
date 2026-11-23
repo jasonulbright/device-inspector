@@ -215,7 +215,7 @@ The repair runs the same device steps as **Full Hardware Inventory**, under the 
 
 ## The action log
 
-The action log is `Logs\DeviceInspector-actions.log` in the script folder. The tool appends to it and never deletes it. It keeps every run and every dry run of every session. Each entry has one line with the UTC time, the action ID, the account, the device, the action, the mode (`RUN` or `DRY RUN`), the outcome and a summary, then one indented line for each step. A line break in a field from the device becomes a space.
+The action log is `DeviceInspector-actions.log` in the site folder (`%LOCALAPPDATA%\AppPackagerData\sites\<SITE>\tools\device-inspector`), or `Logs\DeviceInspector-actions.log` in the script folder when no site is chosen. See [Files and logs](../reference/files-and-logs.md). The tool appends to it and never deletes it. It keeps every run and every dry run of every session of the site. Each entry has one line with the UTC time, the action ID, the account, the device, the action, the mode (`RUN` or `DRY RUN`), the outcome and a summary, then one indented line for each step. A line break in a field from the device becomes a space.
 
 The outcomes are:
 
@@ -252,7 +252,7 @@ The ID joins the lines of one run: the `STARTED` line and the `OK` or `FAILED` l
 |---|---|---|
 | Cannot run the action on <device>: ... | WinRM to the device failed. On a run, a step can have run before the failure. | Check that the device is on and that your account is a local administrator on it. Inspect the device to see its state. |
 | <step> failed. The earlier steps, if any, ran. | A method call on the client failed. | Review the step lines in the log. Check `PolicyAgent.log` on the device. |
-| The action log cannot be written, so the run does not start. | The `Logs` folder is not writable. | Make the folder of the script writable. |
+| The action log cannot be written, so the run does not start. | The folder of the action log is not writable. | Make the site folder (or the `Logs` folder of the script, when no site is chosen) writable. |
 | <action> (ID <id>) is running on <device> since <time>. A device runs one action at a time. Wait until it ends. | The device has a running action. | Wait until the row of the device leaves the list **Running Actions**, or act on another device. |
 | A line with the outcome `CLOSED` and no result line for the ID. | You closed the window while the run was open. The tool stopped waiting, and the run can have stopped before it was complete. | Inspect the device to see its state. Run the action again if the state is not what you want. |
 | The Configuration Manager client does not answer: ... | The client is not installed or its WMI namespace is broken. | Install or repair the client. |

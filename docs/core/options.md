@@ -21,7 +21,7 @@ None. The dialog does not connect to the site.
 1. Select **Options** in the sidebar.
 2. Select **Connection**.
 3. In **SMS Provider (FQDN)**, enter a computer name or an FQDN. The empty box shows the hint `For example sms01.example.com`.
-4. In **Site Code**, enter the three letters or digits of the site code, for example `XYZ`. The empty box shows the hint `For example XYZ. Required.` The site code is required when an SMS Provider is set.
+4. In **Site Code**, enter the three letters or digits of the site code, for example `XYZ`. The empty box shows the hint `For example XYZ. Required.` The site code is required when an SMS Provider is set. When the suite launcher chose a site, the box is read-only. See [Sites](#sites).
 5. Select **OK**. The tool saves the two values and copies the SMS Provider to the SMS Provider box of the Inspect bar. Select **Cancel** or press Esc to discard the change.
 
 ![The Connection section of the Options dialog](../images/options-connection.png)
@@ -39,6 +39,20 @@ Select **OK** in the message box, correct the value, and select **OK** in the di
 
 ![The message for a wrong site code](../images/options-bad-site-code.png)
 
+### Sites
+
+The AppPackager Suite launcher chooses the site. When a site is chosen, **Site Code** is read-only. The tooltip says: The site is chosen in the AppPackager Suite launcher. Restart this tool after you change it. **SMS Provider (FQDN)** stays editable and is saved with the site.
+
+The tool keeps its site data per site in `%LOCALAPPDATA%\AppPackagerData\sites\<SITE>\tools\device-inspector`, for example `sites\AB1\tools\device-inspector`. The site data are the site settings (`prefs.json`: the SMS Provider, the site code and the last device), the action log `DeviceInspector-actions.log` and the `reports` folder. A site such as `CD2` has its own folder and shows none of the data of `AB1`.
+
+A tool that is open keeps its site until you restart it. When the launcher chooses another site, the footer shows a note, for example: The launcher now uses site CD2. This window keeps site AB1 until you restart it.
+
+The first start after an update copies the old data of the site into the site folder. The tool keeps the old files. The log shows `Site AB1; data in <folder>` at each start. When no site is chosen, the tool uses its old places beside the script.
+
+![The Site Code field and its tooltip](../images/options-site.png)
+
+![The footer note after the launcher chose another site](../images/footer-site-note.png)
+
 ### View the version
 
 1. Select **About**.
@@ -55,7 +69,7 @@ Select **OK** in the message box, correct the value, and select **OK** in the di
 | Control | Default | Effect |
 |---|---|---|
 | **SMS Provider (FQDN)** | Empty, or the value that the suite launcher hands over | The SMS Provider computer. The footer and the read-only SMS Provider box on the Inspect bar show this value, for example `Site MCM`, a middle dot, and `cm01.contoso.com`. |
-| **Site Code** | Empty, or the value that the suite launcher hands over | A three-character site code. Required with an SMS Provider. The tool no longer asks the provider for it. |
+| **Site Code** | Empty, or the value that the suite launcher hands over | A three-character site code. Required with an SMS Provider. The tool no longer asks the provider for it. Read-only when the launcher chose a site. |
 
 The text under the boxes says that the tool connects with the Windows account that runs it and stores no password, that the tool needs the Configuration Manager console on this computer, that the account needs local administrator rights on the device (WinRM), and that a domain admin account that is a local administrator of the SMS Provider computer needs no Configuration Manager role, that an account with fewer rights on the site is not tested, and that the tool only reads. The rights statement was tested on the lab only. For another account, check the Configuration Manager roles and scopes in your site. An account with other rights is not tested.
 

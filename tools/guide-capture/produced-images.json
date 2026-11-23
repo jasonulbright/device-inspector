@@ -1,5 +1,5 @@
 {
-  "Count": 49,
+  "Count": 51,
   "Images": [
     "actions-close-warning.png",
     "actions-confirm-dialog.png",
@@ -29,6 +29,7 @@
     "export-save-dialog.png",
     "exported.png",
     "focus-inspect.png",
+    "footer-site-note.png",
     "inspect-bad-device.png",
     "inspect-by-enter.png",
     "inspect-empty-device.png",
@@ -39,6 +40,7 @@
     "options-connection.png",
     "options-light.png",
     "options-needs-site-code.png",
+    "options-site.png",
     "problems-light.png",
     "problems-panel.png",
     "problems-server.png",

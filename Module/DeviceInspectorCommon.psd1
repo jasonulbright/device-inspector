@@ -25,6 +25,8 @@
         'ConvertTo-DeviceInspectionJson'
         'ConvertTo-DeviceInspectionHtml'
         'Write-DeviceInspectionFile'
+        'Resolve-DeviceInspectorReportsPath'
+        'Resolve-DeviceInspectorActionLogPath'
         'Write-DeviceInspectionFullLog'
         'Test-DeviceInspectionInventory'
         'Get-DeviceInspectorActionBlock'
