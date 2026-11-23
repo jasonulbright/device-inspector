@@ -4,6 +4,10 @@ All notable changes to Device Inspector are documented in this file.
 
 ## [Unreleased]
 
+## [2026.11.22.0020] - 2026-11-22
+
+## 1 change: data per site under the data folder
+
 ### Changed
 
 - Keep the action log, reports and site settings per site under the data folder.
