@@ -1,6 +1,6 @@
 @{
     RootModule        = 'DeviceInspectorCommon.psm1'
-    ModuleVersion     = '2026.11.20.0019'
+    ModuleVersion     = '2026.11.22.0020'
     GUID              = '5b0d6f0e-6f6c-4c52-9a53-3a0d2f4c9b11'
     Author            = 'Jason Ulbright'
     Description       = 'Inspection of one device: the discovery data and hardware inventory of the site, plus the operating system and the Configuration Manager client of the device itself. Optional actions with a dry run and an action log.'
