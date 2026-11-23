@@ -5,6 +5,10 @@ param([string]$GuideRoot)
 $ErrorActionPreference = 'Stop'
 $OutDir = Join-Path $GuideRoot 'ui\out'; New-Item -ItemType Directory $OutDir -Force | Out-Null
 $appDir = $GuideRoot
+# The capture never touches a real profile: the site data of the app goes to a folder below the guide root, and no site is chosen
+# by the environment. The steps set APP_PACKAGER_SITE themselves where a section needs a chosen site. The prefs file that the steps write can still name a site.
+$env:APP_PACKAGER_DATA_ROOT = Join-Path $GuideRoot 'data'
+foreach ($__n in 'APP_PACKAGER_SITE', 'SUITE_CM_SITECODE', 'SUITE_CM_PROVIDER') { Remove-Item -LiteralPath ('Env:' + $__n) -ErrorAction SilentlyContinue }
 $flag = 'finished'
 try {
     . (Join-Path $GuideRoot 'ui\guilib.ps1')

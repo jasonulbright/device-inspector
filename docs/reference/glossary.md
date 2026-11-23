@@ -28,6 +28,7 @@ None.
 | Problem | A part of the inspection that failed. The other parts still run. |
 | Quiet uninstall string | The `QuietUninstallString` value of an uninstall key. It holds a command line that uninstalls the application without a window. The tool runs it as written and adds no switches. |
 | Resource ID | The ID that the site gives to the device. |
+| Site folder | The folder `%LOCALAPPDATA%\AppPackagerData\sites\<SITE>\tools\device-inspector`. It holds the site data of the tool: the site settings, the action log and the reports. The suite launcher chooses the site. |
 | Site drive | The `CMSite` PowerShell drive that the tool opens for the site code. The ConfigurationManager cmdlets work only from it. It exists only in the PowerShell session of the tool. |
 | Site Only | The option that skips the connection to the device. |
 | SMS Provider | The SMS Provider: the computer that gives access to the site data. The SMS Provider box names it. |

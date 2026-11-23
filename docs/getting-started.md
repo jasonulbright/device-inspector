@@ -28,7 +28,7 @@ The window connects with the Windows account that runs it. It stores no password
 ### Install
 
 1. Download `DeviceInspector-<version>.zip` from the Releases page of the project.
-2. Extract the zip to a folder that your account can write to. The tool writes its files next to the script.
+2. Extract the zip to a folder that your account can write to. The tool writes its global files next to the script. It writes the data of a site below `%LOCALAPPDATA%\AppPackagerData`. See [Options](core/options.md#sites).
 3. Start the tool from a PowerShell prompt in the folder:
 
    ```powershell

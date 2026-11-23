@@ -21,7 +21,7 @@ An inspection. Before **Inspect**, both buttons are off.
 
 1. Select **Inspect** and wait for the result.
 2. Select **Export JSON** or **Export HTML**. The buttons are at the right end of the Inspect bar.
-3. In the **Save As** dialog, keep the name `DeviceInspector-<device>-<yyyyMMdd-HHmmss>` or enter another. The dialog opens in the `Reports` folder.
+3. In the **Save As** dialog, keep the name `DeviceInspector-<device>-<yyyyMMdd-HHmmss>` or enter another. The dialog opens in the `reports` folder of the site (`%LOCALAPPDATA%\AppPackagerData\sites\<SITE>\tools\device-inspector\reports`), or in the `Reports` folder beside the script when no site is chosen.
 4. Select **Save**. The log writes "Exported JSON:" (or HTML) and the path.
 
 ![The Save As dialog of Export JSON](../images/export-save-dialog.png)
@@ -46,7 +46,7 @@ Select **Cancel** in the dialog to stop. The tool writes nothing.
 
 | Message | Cause | Fix |
 |---|---|---|
-| Export JSON failed: ... (dialog **Export**) | The tool could not write the file. | Choose a folder that your account can write to. When the `Reports` folder does not exist and the tool cannot create it, make the application folder writable, or ask an administrator to create the `Reports` folder beside the script. Then export again. |
+| Export JSON failed: ... (dialog **Export**) | The tool could not write the file. | Choose a folder that your account can write to. When the reports folder does not exist and the tool cannot create it, make the site folder writable (or the application folder, when no site is chosen), or ask an administrator to create the folder. Then export again. |
 
 ## Links
 

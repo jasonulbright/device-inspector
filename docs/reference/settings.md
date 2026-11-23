@@ -6,6 +6,8 @@ This page lists every setting of Device Inspector with its default and the place
 
 The tool saves its settings in `DeviceInspector.prefs.json` and the window state in `DeviceInspector.windowstate.json`. Both files are in the folder of the script. The tool creates them on first use.
 
+When the AppPackager Suite launcher chose a site, the tool keeps the site settings (the SMS Provider, the site code and the last device) per site in `%LOCALAPPDATA%\AppPackagerData\sites\<SITE>\tools\device-inspector\prefs.json`, for example `sites\AB1\tools\device-inspector`. The other settings (the theme and Site Only) and the window state stay in the folder of the script. The launcher chooses the site code. The tool never changes it. See [Options](../core/options.md#sites).
+
 ## When to use it
 
 Use this page to find where a setting lives, or to reset the tool.
@@ -16,13 +18,13 @@ Write access for your account to the folder of the script.
 
 ## Settings
 
-| Setting | Where in the window | Key in `DeviceInspector.prefs.json` | Default | Saved |
-|---|---|---|---|---|
-| Theme | Toggle at the bottom of the sidebar | `DarkMode` | `true` (dark) | At once |
-| SMS Provider | **Options** | `SMSProvider` | Empty, or `SUITE_CM_PROVIDER` | **OK** in Options |
-| Site code | **Options** | `SiteCode` | Empty, or `SUITE_CM_SITECODE`. Required when an SMS Provider is set. | **OK** in Options |
-| Last device | The device box | `LastDevice` | Empty | **Inspect** |
-| Site Only | **Site Only** | `SiteOnly` | `false` | **Inspect** |
+| Setting | Where in the window | Key | Default | Saved | Stored |
+|---|---|---|---|---|---|
+| Theme | Toggle at the bottom of the sidebar | `DarkMode` | `true` (dark) | At once | `DeviceInspector.prefs.json` |
+| SMS Provider | **Options** | `SMSProvider` | Empty, or `SUITE_CM_PROVIDER` | **OK** in Options | The site, or `DeviceInspector.prefs.json` with no site |
+| Site code | **Options** (read-only when the launcher chose a site) | `SiteCode` | Empty, or `SUITE_CM_SITECODE`. Required when an SMS Provider is set. | **OK** in Options | The site, or `DeviceInspector.prefs.json` with no site |
+| Last device | The device box | `LastDevice` | Empty | **Inspect** | The site, or `DeviceInspector.prefs.json` with no site |
+| Site Only | **Site Only** | `SiteOnly` | `false` | **Inspect** | `DeviceInspector.prefs.json` |
 
 ### Window state
 
@@ -39,14 +41,14 @@ Write access for your account to the folder of the script.
 | `SUITE_CM_PROVIDER` | Fills an empty SMS Provider. The suite launcher sets it. |
 | `SUITE_CM_SITECODE` | Fills an empty site code. The suite launcher sets it. |
 
-A value that is saved in `DeviceInspector.prefs.json` and is not empty wins over the variable. An empty saved value is filled from the variable.
+With no site chosen, a value that is saved in `DeviceInspector.prefs.json` and is not empty wins over the variable, and an empty saved value is filled from the variable. With a site chosen, the site decides and the tool ignores the two variables.
 
 ## Steps
 
 ### Reset the tool
 
 1. Close the tool.
-2. Delete `DeviceInspector.prefs.json` and `DeviceInspector.windowstate.json`.
+2. Delete `DeviceInspector.prefs.json` and `DeviceInspector.windowstate.json`. To reset the site settings too, delete `prefs.json` in the folder of the site.
 3. Start the tool. It opens with the defaults.
 
 ## Limits

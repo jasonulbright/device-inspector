@@ -78,22 +78,34 @@ if (-not $__console.Available) {
 }
 
 $global:PrefsPath = Join-Path $PSScriptRoot 'DeviceInspector.prefs.json'
+
+# The site is chosen in the suite launcher. With a site, the first start copies the old site data into
+# sites\<SITE>\tools\device-inspector (old files stay). With no site the tool keeps its old paths.
+$script:Site = Resolve-SuiteToolSite -Tool 'device-inspector' -ToolRoot $PSScriptRoot -LegacyPrefsPath $global:PrefsPath
+
 function Get-DiPreferences {
-    return Read-SuiteSettings -Path $global:PrefsPath -Defaults @{ DarkMode = $true; SiteCode = ''; SMSProvider = ''; LastDevice = ''; SiteOnly = $false }
+    $site = if ($script:Site) { $script:Site } else { [pscustomobject]@{ Active = $false } }
+    # With a site, SiteCode, SMSProvider and LastDevice come from the prefs of the site. The other keys stay in the old file.
+    return Read-SuiteToolPrefs -Path $global:PrefsPath -Site $site -SiteKeys @('SiteCode', 'SMSProvider', 'LastDevice') -Defaults @{ DarkMode = $true; SiteCode = ''; SMSProvider = ''; LastDevice = ''; SiteOnly = $false }
 }
 function Save-DiPreferences {
     param([Parameter(Mandatory)][hashtable]$Prefs)
-    $null = Save-SuiteSettings -Path $global:PrefsPath -Settings $Prefs
+    $site = if ($script:Site) { $script:Site } else { [pscustomobject]@{ Active = $false } }
+    $null = Save-SuiteToolPrefs -Path $global:PrefsPath -Settings $Prefs -Site $site -SiteKeys @('SiteCode', 'SMSProvider', 'LastDevice')
 }
 $global:Prefs = Get-DiPreferences
 
-# The suite launcher hands its site code and provider to each tool it starts.
-# A value saved in this tool wins; the launcher value fills an empty one.
-if (-not $global:Prefs.SiteCode    -and $env:SUITE_CM_SITECODE) { $global:Prefs.SiteCode    = [string]$env:SUITE_CM_SITECODE }
-if (-not $global:Prefs.SMSProvider -and $env:SUITE_CM_PROVIDER) { $global:Prefs.SMSProvider = [string]$env:SUITE_CM_PROVIDER }
+# The suite launcher hands its site code and provider to each tool it starts. With a site, the site decides and
+# these two variables are ignored here. With no site, a value saved in this tool wins and the variable fills an empty one.
+if (-not $script:Site.Active) {
+    if (-not $global:Prefs.SiteCode    -and $env:SUITE_CM_SITECODE) { $global:Prefs.SiteCode    = [string]$env:SUITE_CM_SITECODE }
+    if (-not $global:Prefs.SMSProvider -and $env:SUITE_CM_PROVIDER) { $global:Prefs.SMSProvider = [string]$env:SUITE_CM_PROVIDER }
+}
 
 $script:ToolLogPath = Join-Path $__txDir ('DeviceInspector-{0}.log' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 Initialize-Logging -LogPath $script:ToolLogPath
+if ($script:Site.Active) { Write-Log ('Site {0}; data in {1}' -f $script:Site.SiteFolder, $script:Site.ToolFolder) }
+elseif ($script:Site.Reason) { Write-Log ('No site data folder: {0}' -f $script:Site.Reason) }
 
 $xamlPath = Join-Path $PSScriptRoot 'MainWindow.xaml'
 [xml]$xaml = Get-Content -LiteralPath $xamlPath -Raw
@@ -306,7 +318,8 @@ $script:AppRows    = @()
 $script:IsBusy     = $false
 # Actions are off at each start. The switch is not saved.
 $script:ActionsEnabled = $false
-$script:ActionLogPath  = Join-Path $__txDir 'DeviceInspector-actions.log'
+# The action log is a store of the site (DeviceInspector-actions.log); with no site it is Logs\DeviceInspector-actions.log.
+$script:ActionLogPath  = Resolve-DeviceInspectorActionLogPath -ToolRoot $PSScriptRoot -Site $script:Site -Create
 # An action on a device runs in its own runspace and does not set IsBusy. RunList holds the
 # running device actions (the list in the window is bound to it). RunJobs holds the plumbing
 # of each run. IsBusy stays only for the work that must be exclusive: an inspection, a device
@@ -650,9 +663,7 @@ function Save-TextExport {
         $sfd = New-Object Microsoft.Win32.SaveFileDialog
         $sfd.Filter = $Filter
         $sfd.FileName = ('DeviceInspector-{0}-{1}.{2}' -f $script:Inspection.ComputerName, (Get-Date -Format 'yyyyMMdd-HHmmss'), $Extension)
-        $reportsDir = Join-Path $PSScriptRoot 'Reports'
-        if (-not (Test-Path -LiteralPath $reportsDir)) { New-Item -ItemType Directory -Path $reportsDir -Force | Out-Null }
-        $sfd.InitialDirectory = $reportsDir
+        $sfd.InitialDirectory = Resolve-DeviceInspectorReportsPath -ToolRoot $PSScriptRoot -Site $script:Site -Create
         if ($sfd.ShowDialog() -eq $true) {
             $written = Write-DeviceInspectionFile -Path $sfd.FileName -Text (& $GetText)
             Add-LogLine ('Exported {0}: {1}' -f $Kind, $written)
@@ -863,12 +874,18 @@ function Show-OptionsDialog {
     $btnOk          = $dlg.FindName('btnOk')
     $btnCancel      = $dlg.FindName('btnCancel')
     $txtSiteCode.Text    = [string]$global:Prefs.SiteCode
+    if ($script:Site.Active) {
+        # The launcher chooses the site. A tool that is open keeps its site until it restarts.
+        $txtSiteCode.IsReadOnly = $true
+        $txtSiteCode.ToolTip = 'The site is chosen in the AppPackager Suite launcher. Restart this tool after you change it.'
+    }
     $txtSmsProvider.Text = [string]$global:Prefs.SMSProvider
     $btnCatConnection.Add_Click({ $paneConnection.Visibility = [System.Windows.Visibility]::Visible; $paneAbout.Visibility = [System.Windows.Visibility]::Collapsed })
     $btnCatAbout.Add_Click({      $paneConnection.Visibility = [System.Windows.Visibility]::Collapsed; $paneAbout.Visibility = [System.Windows.Visibility]::Visible })
     $btnOk.Add_Click({
         $neutralName = 'name'
-        $check = Test-DeviceInspectorInput -ComputerName $neutralName -SiteServer ([string]$txtSmsProvider.Text) -SiteCode ([string]$txtSiteCode.Text)
+        $newSite = if ($script:Site.Active) { [string]$global:Prefs.SiteCode } else { [string]$txtSiteCode.Text }
+        $check = Test-DeviceInspectorInput -ComputerName $neutralName -SiteServer ([string]$txtSmsProvider.Text) -SiteCode $newSite
         if (-not $check.IsValid) {
             # The title differs from the owner title (Options), so the two windows are not confused.
             [void](Show-ThemedMessage -Owner $dlg -Title 'Device Inspector' -Message ($check.Errors -join [Environment]::NewLine) -Icon Warn)
@@ -1993,6 +2010,8 @@ $window.Add_Loaded({
     $txtSiteServer.Text = [string]$global:Prefs['SMSProvider']
     $chkSiteOnly.IsChecked = [bool]$global:Prefs['SiteOnly']
     Update-FooterSite
+    $null = Start-SuiteSiteWatch -Window $window -Site $script:Site
+    if ($script:Site.Active) { Add-LogLine ('Site {0}; data in {1}' -f $script:Site.SiteFolder, $script:Site.ToolFolder) }
     Update-ControlState
     Update-StatusBarSummary
     Add-LogLine 'Device Inspector ready. Enter a device name, then select Inspect. Set the SMS Provider in Options. The tool only reads until you turn on Enable Actions.'

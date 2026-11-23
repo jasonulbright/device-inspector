@@ -3191,7 +3191,126 @@ function Write-DeviceInspectionFile {
 
 #endregion Window support
 
+#region Site data (Q-112f)
+
+function Resolve-DeviceInspectorReportsPath {
+    # .SYNOPSIS
+    # Returns the folder for exported reports.
+    #
+    # .DESCRIPTION
+    # With an active site the folder is the reports store of the site, in the tool folder of the site below the data folder.
+    # With no site the folder is Reports beside the script, as in earlier versions.
+    #
+    # .PARAMETER ToolRoot
+    # The tool folder (the script folder). It holds the old Reports folder.
+    #
+    # .PARAMETER Site
+    # The result of Resolve-SuiteToolSite. A value that is not active gives the old folder.
+    #
+    # .PARAMETER Create
+    # Creates the folder when it does not exist.
+    #
+    # .EXAMPLE
+    # $strDir = Resolve-DeviceInspectorReportsPath -ToolRoot $PSScriptRoot -Site $script:Site -Create
+    #
+    # # Returns the reports folder of the active site.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] The folder path.
+    #
+    # .NOTES
+    # This function does not support positional parameters.
+    #
+    # Version: 1.0.20261122.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ToolRoot,
+
+        [Parameter(Mandatory = $false)]
+        $Site,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$Create
+    )
+
+    process {
+        $strLegacy = Join-Path -Path $ToolRoot -ChildPath 'Reports'
+        if ($Site -and $Site.Active) {
+            return (Resolve-SuiteToolPath -Site $Site -Name 'reports' -LegacyPath $strLegacy -Create:$Create)
+        }
+        if ($Create.IsPresent) { [void][System.IO.Directory]::CreateDirectory($strLegacy) }
+        $strLegacy
+    }
+}
+
+function Resolve-DeviceInspectorActionLogPath {
+    # .SYNOPSIS
+    # Returns the path of the action log file.
+    #
+    # .DESCRIPTION
+    # With an active site the file is DeviceInspector-actions.log in the tool folder of the site, below the data folder.
+    # With no site the file is DeviceInspector-actions.log in the Logs folder beside the script, as in earlier versions.
+    # The tool log and the startup transcripts stay in Logs: they are not site data.
+    #
+    # .PARAMETER ToolRoot
+    # The tool folder (the script folder). It holds the old Logs folder.
+    #
+    # .PARAMETER Site
+    # The result of Resolve-SuiteToolSite. A value that is not active gives the old path.
+    #
+    # .PARAMETER Create
+    # Creates the folder of the file when it does not exist.
+    #
+    # .EXAMPLE
+    # $strPath = Resolve-DeviceInspectorActionLogPath -ToolRoot $PSScriptRoot -Site $script:Site -Create
+    #
+    # # Returns the action log path of the active site.
+    #
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    #
+    # .OUTPUTS
+    # [string] The file path.
+    #
+    # .NOTES
+    # This function does not support positional parameters.
+    #
+    # Version: 1.0.20261122.0
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ToolRoot,
+
+        [Parameter(Mandatory = $false)]
+        $Site,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$Create
+    )
+
+    process {
+        $strLegacy = Join-Path -Path (Join-Path -Path $ToolRoot -ChildPath 'Logs') -ChildPath 'DeviceInspector-actions.log'
+        if ($Site -and $Site.Active) {
+            return (Resolve-SuiteToolPath -Site $Site -Name 'DeviceInspector-actions.log' -LegacyPath $strLegacy -File -Create:$Create)
+        }
+        if ($Create.IsPresent) {
+            [void][System.IO.Directory]::CreateDirectory((Split-Path -Path $strLegacy -Parent))
+        }
+        $strLegacy
+    }
+}
+
+#endregion Site data
+
 # The actions live in their own file, so the read-only guard test can parse this file alone.
 . (Join-Path -Path $PSScriptRoot -ChildPath 'DeviceInspectorActions.ps1')
 
-Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Get-DeviceInspectorCollectionList', 'Select-DeviceInspectorAddableCollection', 'Get-DeviceInspectorDeviceList', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord', 'New-DeviceInspectorActionId', 'New-DeviceInspectorActionRun', 'Get-DeviceInspectorRunningAction', 'Get-DeviceInspectorRunBlock', 'Get-DeviceInspectorDeviceKey', 'Test-DeviceInspectorRunFinished', 'Resolve-DeviceInspectorRunResult', 'Register-DeviceInspectorActionRun', 'Unregister-DeviceInspectorActionRun', 'Add-DeviceInspectorActionId', 'Write-DeviceInspectorCloseLog', 'Get-DeviceInspectorCloseWarningText', 'Get-DeviceInspectorApplicationLabel', 'Test-DeviceInspectorProcessOwner', 'Test-DeviceInspectorExitNeeded'
+Export-ModuleMember -Function 'Get-DeviceInspection', 'ConvertTo-DeviceInspectionReport', 'Test-DeviceInspectorInput', 'Test-DeviceInspectorConsole', 'ConvertTo-DeviceInspectionFactRow', 'ConvertTo-DeviceInspectionApplicationRow', 'ConvertTo-DeviceInspectionUpdateRow', 'ConvertTo-DeviceInspectionCollectionRow', 'ConvertTo-DeviceInspectionDeploymentRow', 'ConvertTo-DeviceInspectionJson', 'ConvertTo-DeviceInspectionHtml', 'Write-DeviceInspectionFile', 'Resolve-DeviceInspectorReportsPath', 'Resolve-DeviceInspectorActionLogPath', 'Write-DeviceInspectionFullLog', 'Test-DeviceInspectionInventory', 'Get-DeviceInspectorActionBlock', 'Get-DeviceInspectorCollectionList', 'Select-DeviceInspectorAddableCollection', 'Get-DeviceInspectorDeviceList', 'Invoke-DeviceInspectorPolicyUpdate', 'Invoke-DeviceInspectorFullInventory', 'Invoke-DeviceInspectorInventoryRepair', 'Invoke-DeviceInspectorUpdateInstall', 'Invoke-DeviceInspectorApplicationAction', 'Invoke-DeviceInspectorCollectionChange', 'ConvertTo-DeviceInspectorActionText', 'Write-DeviceInspectorActionLog', 'New-DeviceInspectorActionRecord', 'New-DeviceInspectorActionId', 'New-DeviceInspectorActionRun', 'Get-DeviceInspectorRunningAction', 'Get-DeviceInspectorRunBlock', 'Get-DeviceInspectorDeviceKey', 'Test-DeviceInspectorRunFinished', 'Resolve-DeviceInspectorRunResult', 'Register-DeviceInspectorActionRun', 'Unregister-DeviceInspectorActionRun', 'Add-DeviceInspectorActionId', 'Write-DeviceInspectorCloseLog', 'Get-DeviceInspectorCloseWarningText', 'Get-DeviceInspectorApplicationLabel', 'Test-DeviceInspectorProcessOwner', 'Test-DeviceInspectorExitNeeded'
